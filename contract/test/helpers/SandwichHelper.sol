@@ -3,7 +3,7 @@ pragma solidity ^0.8.15;
 
 import "./GeneralHelper.sol";
 import "forge-std/Test.sol";
-//import "forge-std/console.sol";
+import "forge-std/console.sol";
 
 contract SandwichHelper is Test {
     mapping(string => uint8) internal functionSigsToJumpLabel;
@@ -197,10 +197,67 @@ contract SandwichHelper is Test {
         encodedValue = amountIn / wethEncodeMultiple();
     }
 
+    // Create payload for when weth is input
+    function v2CreateSandwichPayloadInput(
+        address token0,
+        uint256 amountIn,
+        address token1
+    ) public view returns (bytes memory payload) {
+        // Declare uniswapv2 types
+        IUniswapV2Factory univ2Factory = IUniswapV2Factory(
+            0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+        );
+        address pair = address(
+            IUniswapV2Pair(univ2Factory.getPair(token0, address(token1)))
+        );
+        (
+            uint256 encodedAmountIn,
+            uint256 memoryOffset0,
+            uint256 amountInActual
+        ) = encodeNumToByteAndOffset2(
+            amountIn,
+            4,
+            token0 > token1
+        );
+
+        (
+            uint256 encodedAmountOut,
+            uint256 memoryOffset1,
+            
+        ) = encodeNumToByteAndOffset2(
+            GeneralHelper.getAmountOut(token0,token1,amountInActual),
+            4,
+            token1 > token0
+        );
+
+        uint8 swapType = _v2FindFunctionSig2(token0, token1);
+
+        payload = abi.encodePacked(
+            uint8(swapType), // type of swap to make
+            address(pair), // univ2 pair
+            uint8(memoryOffset1), // memoryOffset to store amountOut
+            uint32(encodedAmountOut), // amountOut
+            uint8(memoryOffset0),
+            uint32(encodedAmountIn) 
+        );
+    }
+
     function wethEncodeMultiple() public pure returns (uint256) {
         return 1e5;
     }
 
+    function _v2FindFunctionSig2(
+        address token0,
+        address token1
+    ) internal view returns (uint8 encodeAmount) {
+        if (token0 < token1) {
+            // weth is input and token0
+            return functionSigsToJumpLabel["v2_input0"];
+        } else {
+            // weth is input and token1
+            return functionSigsToJumpLabel["v2_input1"];
+        }
+    }
     function _v2FindFunctionSig(
         bool isWethInput,
         address otherToken
@@ -226,6 +283,32 @@ contract SandwichHelper is Test {
         }
     }
 
+    function encodeNumToByteAndOffset2(
+        uint256 amount,
+        uint256 numBytesToEncodeTo,
+        bool isToken0
+    ) public pure returns (uint256 encodedAmount, uint256 encodedByteOffset, uint256 amountAfterEncoding) {
+        for (uint256 i = 0; i < 32; i++) {
+            uint256 _encodedAmount = amount / 2**(8 * i);
+
+            // If we can fit the value in numBytesToEncodeTo bytes, we can encode it
+            if (_encodedAmount <= 2**(numBytesToEncodeTo * (8)) - 1) {
+                //uint encodedAmount = amountOutAfter * 2**(8*i);
+                encodedByteOffset = i;
+                encodedAmount = _encodedAmount;
+                amountAfterEncoding = encodedAmount << (encodedByteOffset*8);
+                break;
+            }
+        }
+
+        if (isToken0) {
+            encodedByteOffset = 68 - numBytesToEncodeTo - encodedByteOffset;
+        } else {
+            encodedByteOffset = 36 - numBytesToEncodeTo - encodedByteOffset;
+        }
+        
+    }
+
     function encodeNumToByteAndOffset(
         uint256 amount,
         uint256 numBytesToEncodeTo,
@@ -244,6 +327,7 @@ contract SandwichHelper is Test {
                 break;
             }
         }
+        
 
         if (!isWethInput) {
             // find byte placement for Transfer(address,uint256)

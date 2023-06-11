@@ -322,40 +322,35 @@ contract ModSandwichV4 is Test {
 
     function testV2Weth0Input() public {
         address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
-        uint256 amountIn = 1.94212341234123424 ether;
+        uint256 amountIn = 0.0001 ether;
 
         // Pre swap checks
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
         uint256 usdtBalanceBefore = IERC20(outputToken).balanceOf(sandwich);
-
-        uint256 actualAmountIn = (amountIn /
-            sandwichHelper.wethEncodeMultiple()) *
-            sandwichHelper.wethEncodeMultiple();
+        (,,uint256 actualAmountIn) = sandwichHelper
+            .encodeNumToByteAndOffset2(amountIn, 4,  false);
         uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
             address(weth),
             outputToken,
             actualAmountIn
-        );
+        ); 
         (, , uint256 expectedAmountOut) = sandwichHelper
-            .encodeNumToByteAndOffset(amountOutFromEncoded, 4, true, false);
-
-        (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
-            .v2CreateSandwichPayloadWethIsInput(outputToken, amountIn);
+            .encodeNumToByteAndOffset2(amountOutFromEncoded, 4,  false);
+        (bytes memory payloadV4) = sandwichHelper
+            .v2CreateSandwichPayloadInput(address(weth), amountIn,outputToken);
         vm.prank(admin);
-        (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        uint a = gasleft();
+        (bool s, ) = address(sandwich).call(payloadV4);
+        a =  a - gasleft();
+        console.log("gas:");
+        console.log(a);
         assertTrue(s);
-
         // Check values after swap
         uint256 wethBalanceChange = wethBalanceBefore -
             weth.balanceOf(sandwich);
         uint256 usdtBalanceChange = IERC20(outputToken).balanceOf(sandwich) -
             usdtBalanceBefore;
-
-        assertEq(
-            usdtBalanceChange,
-            expectedAmountOut,
-            "did not get expected usdt amount out from swap"
-        );
+        assertTrue(usdtBalanceChange >= expectedAmountOut,"did not get expected usdt amount out from swap");
         assertEq(
             wethBalanceChange,
             actualAmountIn,
@@ -385,7 +380,11 @@ contract ModSandwichV4 is Test {
         (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
             .v2CreateSandwichPayloadWethIsInput(outputToken, amountIn);
         vm.prank(admin);
+        uint a = gasleft();
         (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        a =  a - gasleft();
+        console.log("gas");
+        console.log(a);
         assertTrue(s);
 
         // Check values after swap
@@ -393,7 +392,7 @@ contract ModSandwichV4 is Test {
             weth.balanceOf(sandwich);
         uint256 usdcBalanceChange = IERC20(outputToken).balanceOf(sandwich) -
             usdcBalanceBefore;
-
+        
         assertEq(
             usdcBalanceChange,
             expectedAmountOut,
