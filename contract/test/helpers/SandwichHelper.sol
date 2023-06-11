@@ -199,16 +199,16 @@ contract SandwichHelper is Test {
 
     // Create payload for when weth is input
     function v2CreateSandwichPayloadInput(
-        address token0,
+        address tokenIn,
         uint256 amountIn,
-        address token1
+        address tokenOut
     ) public view returns (bytes memory payload) {
         // Declare uniswapv2 types
         IUniswapV2Factory univ2Factory = IUniswapV2Factory(
             0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
         );
         address pair = address(
-            IUniswapV2Pair(univ2Factory.getPair(token0, address(token1)))
+            IUniswapV2Pair(univ2Factory.getPair(tokenIn, address(tokenOut)))
         );
         (
             uint256 encodedAmountIn,
@@ -217,7 +217,7 @@ contract SandwichHelper is Test {
         ) = encodeNumToByteAndOffset2(
             amountIn,
             4,
-            token0 > token1
+            tokenIn > tokenOut
         );
 
         (
@@ -225,12 +225,12 @@ contract SandwichHelper is Test {
             uint256 memoryOffset1,
             
         ) = encodeNumToByteAndOffset2(
-            GeneralHelper.getAmountOut(token0,token1,amountInActual),
+            GeneralHelper.getAmountOut(tokenIn,tokenOut,amountInActual),
             4,
-            token1 > token0
+            tokenOut > tokenIn
         );
 
-        uint8 swapType = _v2FindFunctionSig2(token0, token1);
+        uint8 swapType = _v2FindFunctionSig2(tokenIn, tokenOut);
 
         payload = abi.encodePacked(
             uint8(swapType), // type of swap to make
@@ -287,7 +287,7 @@ contract SandwichHelper is Test {
         uint256 amount,
         uint256 numBytesToEncodeTo,
         bool isToken0
-    ) public pure returns (uint256 encodedAmount, uint256 encodedByteOffset, uint256 amountAfterEncoding) {
+    ) public view returns (uint256 encodedAmount, uint256 encodedByteOffset, uint256 amountAfterEncoding) {
         for (uint256 i = 0; i < 32; i++) {
             uint256 _encodedAmount = amount / 2**(8 * i);
 
@@ -306,6 +306,9 @@ contract SandwichHelper is Test {
         } else {
             encodedByteOffset = 36 - numBytesToEncodeTo - encodedByteOffset;
         }
+        console.log(isToken0);
+        console.log(encodedAmount, encodedByteOffset, amountAfterEncoding);
+
         
     }
 

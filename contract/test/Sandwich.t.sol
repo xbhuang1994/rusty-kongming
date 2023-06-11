@@ -360,32 +360,45 @@ contract ModSandwichV4 is Test {
 
     function testV2Weth1Input() public {
         address outputToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-        uint256 amountIn = 0.942 ether;
+        uint256 amountIn = 0.00942 ether;
 
         // Pre swap checks
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
         uint256 usdcBalanceBefore = IERC20(outputToken).balanceOf(sandwich);
 
-        uint256 actualAmountIn = (amountIn /
-            sandwichHelper.wethEncodeMultiple()) *
-            sandwichHelper.wethEncodeMultiple();
+        // uint256 actualAmountIn = (amountIn /
+        //     sandwichHelper.wethEncodeMultiple()) *
+        //     sandwichHelper.wethEncodeMultiple();
+        // uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
+        //     address(weth),
+        //     outputToken,
+        //     actualAmountIn
+        // );
+        // (, , uint256 expectedAmountOut) = sandwichHelper
+        //     .encodeNumToByteAndOffset(amountOutFromEncoded, 4, true, false);
+
+        // (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
+        //     .v2CreateSandwichPayloadWethIsInput(outputToken, amountIn);
+        (,,uint256 actualAmountIn) = sandwichHelper
+            .encodeNumToByteAndOffset2(amountIn, 4,  false);
         uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
             address(weth),
             outputToken,
             actualAmountIn
-        );
+        ); 
         (, , uint256 expectedAmountOut) = sandwichHelper
-            .encodeNumToByteAndOffset(amountOutFromEncoded, 4, true, false);
-
-        (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
-            .v2CreateSandwichPayloadWethIsInput(outputToken, amountIn);
+            .encodeNumToByteAndOffset2(amountOutFromEncoded, 4,  false);
+        (bytes memory payloadV4) = sandwichHelper
+            .v2CreateSandwichPayloadInput(address(weth), amountIn,outputToken);
+        emit log_bytes(payloadV4);
         vm.prank(admin);
         uint a = gasleft();
-        (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        (bool s, bytes memory r) = address(sandwich).call(payloadV4);
         a =  a - gasleft();
         console.log("gas");
         console.log(a);
         assertTrue(s);
+        emit log_bytes(r);
 
         // Check values after swap
         uint256 wethBalanceChange = wethBalanceBefore -

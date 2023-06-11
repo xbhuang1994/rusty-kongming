@@ -588,7 +588,10 @@ v2_input1:
     [TRANSFER_FROM_SIG] returndatasize mstore   // [*token_transfer_args, *pair_swap_args] - mstore(0, 0x23b872dd)
     address 0x04 mstore                         // [*token_transfer_args, *pair_swap_args] - mstore(4, address(this))
     dup3 0x24 mstore                            // [*token_transfer_args, *pair_swap_args] - mstore(36, pair_address)
-    0x0186a0 callvalue mul 0x44 mstore          // [*token_transfer_args, *pair_swap_args] - mstore(68, callvalue * 100000)
+    // 0x0186a0 callvalue mul 0x44 mstore          // [*token_transfer_args, *pair_swap_args] - mstore(68, callvalue * 100000)
+    0x1a calldataload dup1
+    0x08 shl swap1
+    0x00 byte 0x20 add mstore
 
     // call weth transferFrom
     0x64    // 100 (4+32+32+32)                 // [argsize, retoffset, retsize, *pair_swap_args] !expanded token_transfer_args
