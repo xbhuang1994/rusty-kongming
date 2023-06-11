@@ -436,7 +436,6 @@ contract ModSandwichV4 is Test {
         // Perform swap
         (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
             .v2CreateSandwichPayloadWethIsOutput(inputToken, amountIn);
-        emit log_bytes(payloadV4);
         vm.prank(admin);
         (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
         assertTrue(s, "swap failed");
@@ -462,9 +461,6 @@ contract ModSandwichV4 is Test {
     function testV2Weth1Output() public {
         address inputToken = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI
         uint256 amountIn = 4722.366481770134 ether; // encoded as 0xFFFFFFFF0000000000
-
-        console.log("amountIn:", amountIn);
-
         // Fund sandwich
         vm.prank(0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503);
         IERC20(inputToken).transfer(sandwich, amountIn);
@@ -491,7 +487,6 @@ contract ModSandwichV4 is Test {
         // Perform swap
         (bytes memory payload, uint256 encodedValue) = sandwichHelper
             .v2CreateSandwichPayloadWethIsOutput(inputToken, amountIn);
-        emit log_bytes(payload);
         vm.prank(admin);
         (bool s, ) = address(sandwich).call{value: encodedValue}(payload);
         assertTrue(s, "swap failed");
