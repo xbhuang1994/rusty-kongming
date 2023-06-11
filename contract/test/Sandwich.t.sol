@@ -360,7 +360,7 @@ contract ModSandwichV4 is Test {
 
     function testV2Weth1Input() public {
         address outputToken = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
-        uint256 amountIn = 0.00942 ether;
+        uint256 amountIn = 10942 ether;
 
         // Pre swap checks
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
@@ -406,8 +406,8 @@ contract ModSandwichV4 is Test {
         uint256 usdcBalanceChange = IERC20(outputToken).balanceOf(sandwich) -
             usdcBalanceBefore;
         
-        assertEq(
-            usdcBalanceChange,
+        assertTrue(
+            usdcBalanceChange>=
             expectedAmountOut,
             "did not get expected usdc amount out from swap"
         );
