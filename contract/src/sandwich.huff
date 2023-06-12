@@ -485,7 +485,7 @@ v2_output1:
     [TRANSFER_SIG] returndatasize mstore        // [*token_transfer_args, *pair_swap_args] - mstore(0, 0x23b872dd)
     dup3 0x04 mstore                            // [*token_transfer_args, *pair_swap_args] - mstore(36, pair_address)
     // get amountIn and store at memOffset
-    0x29 calldataload dup1
+    0x29 calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
 
@@ -501,10 +501,13 @@ v2_output1:
     // setup calldata for swap(0, wethOut, address(this), "")
     [V2_Swap_Sig] 0x00 mstore                   // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
     0x00 0x04 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(4, amount1Out)
-    0x0186a0 callvalue mul 0x24 mstore          // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(36, callvalue * 100000)
+    0x00 0x24 mstore // token0 val clean
+    0x2e calldataload dup1
+    0x08 shl swap1                              // extract encodedValue by removing memOffset
+    0x00 byte 0x20 add mstore                   // extract memOffset and perform mstore
     address 0x44 mstore                         // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(68, address(this))
     0x80 0x64 mstore // 100                     // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, 0x80) 4 + 32 + 32 + 32, 0x80 because bytes is dynamic
-
+    // 0xf0 0x00 return
     // call pair.swap
     gas                                         // [gas, pair_address, value, argoffset, argsize, retoffset, retsize]
     call iszero gtfo jumpi                      // [] *did swap succeed without failure?
