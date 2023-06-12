@@ -22,8 +22,8 @@ contract ModSandwichV4 is Test {
     address keeperdao = 0x9a67F1940164d0318612b497E8e6038f902a00a4;
 
     // serachers
-    address constant admin = 0x7E5F4552091A69125d5DfCb7b8C2659029395Bdf;
-    address constant helper = 0x2B5AD5c4795c026514f8317c7a215E218DcCD6cF;
+    address constant admin = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
+    address constant helper = 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266;
 
     IWETH weth = IWETH(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
     uint256 wethFundAmount = 1000000000 ether;
@@ -321,7 +321,7 @@ contract ModSandwichV4 is Test {
     // could add fuzzing / testing to test values at limits/boundary
 
     function testV2Weth0Input() public {
-        address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
+        address outputToken = 0xC76D53F988820fe70E01eCCb0248B312c2f1c7cA; // Tether
         uint256 amountIn = 10 ether;
 
         // Pre swap checks
