@@ -430,11 +430,12 @@ v2_output0:
     // setup calldata (in memory) for transfer(to,value)
     [TRANSFER_SIG] returndatasize mstore        // [*token_transfer_args, *pair_swap_args] - mstore(0, 0x23b872dd)
     dup3 0x04 mstore                            // [*token_transfer_args, *pair_swap_args] - mstore(36, pair_address)
+    
     // get amountIn and store at memOffset
-    0x29 calldataload dup1
+    0x29 calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
-
+    
     // call tokenIn transferFrom
     0x44    // 68 (4+32+32)                     // [argsize, retoffset, retsize, *pair_swap_args] !expanded token_transfer_args
     returndatasize                              // [argoffset, argsize, retoffset, retsize, *pair_swap_args]
@@ -446,11 +447,14 @@ v2_output0:
 
     // setup calldata for swap(wethOut, 0, address(this), "")
     [V2_Swap_Sig] 0x00 mstore                      // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
-    0x0186a0 callvalue mul 0x04 mstore          // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(4, callvalue * 100000)
+    // 0x0186a0 callvalue add 0x04 mstore          // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(4, callvalue * 100000)
+    0x2e calldataload dup1
+    0x08 shl swap1                              // extract encodedValue by removing memOffset
+    0x00 byte mstore                            // extract memOffset and perform mstore
     0x00 0x24 mstore // in adr                  // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(32, 0)
     address 0x44 mstore                         // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(68, address(this))
     0x80 0x64 mstore // 100                     // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, 0x80) 4 + 32 + 32 + 32, 0x80 because bytes is dynamic
-
+    // 0xf0 0x00 return
     // call pair.swap
     gas                                         // [gas, pair_address, value, argoffset, argsize, retoffset, retsize]
     call iszero gtfo jumpi                      // [] *did swap succeed without failure?
@@ -548,7 +552,7 @@ v2_input0:
     0x00 0x24 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(36, 0) **Clear Memory**
     
     // get amountIn and store at memOffset
-    0x15 calldataload dup1
+    0x15 calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
     
@@ -606,7 +610,7 @@ v2_input1:
     0x00 0x04 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(4, 0) **Clear Memory**
 
     // get amountIn and store at memOffset
-    0x15 calldataload dup1
+    0x15 calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
 

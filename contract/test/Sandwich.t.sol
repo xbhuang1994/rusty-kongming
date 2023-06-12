@@ -322,7 +322,7 @@ contract ModSandwichV4 is Test {
 
     function testV2Weth0Input() public {
         address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
-        uint256 amountIn = 0.0001 ether;
+        uint256 amountIn = 10 ether;
 
         // Pre swap checks
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
@@ -350,7 +350,7 @@ contract ModSandwichV4 is Test {
             weth.balanceOf(sandwich);
         uint256 usdtBalanceChange = IERC20(outputToken).balanceOf(sandwich) -
             usdtBalanceBefore;
-        assertTrue(usdtBalanceChange >= expectedAmountOut,"did not get expected usdt amount out from swap");
+        assertEq(usdtBalanceChange , expectedAmountOut,"did not get expected usdt amount out from swap");
         assertEq(
             wethBalanceChange,
             actualAmountIn,
@@ -406,8 +406,8 @@ contract ModSandwichV4 is Test {
         uint256 usdcBalanceChange = IERC20(outputToken).balanceOf(sandwich) -
             usdcBalanceBefore;
         
-        assertTrue(
-            usdcBalanceChange>=
+        assertEq(
+            usdcBalanceChange,
             expectedAmountOut,
             "did not get expected usdc amount out from swap"
         );
@@ -429,28 +429,31 @@ contract ModSandwichV4 is Test {
         // Pre swap checks
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
         uint256 superFarmBalanceBefore = IERC20(inputToken).balanceOf(sandwich);
+        (,, uint256 actualAmountIn) = sandwichHelper.encodeNumToByteAndOffset2(superFarmBalanceBefore,4,true);
+        // (, , uint256 actualAmountIn) = sandwichHelper.encodeNumToByteAndOffset(
+        //     superFarmBalanceBefore,
+        //     4,
+        //     false,
+        //     true
+        // );
 
-        (, , uint256 actualAmountIn) = sandwichHelper.encodeNumToByteAndOffset(
-            superFarmBalanceBefore,
-            4,
-            false,
-            true
-        );
         uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
             inputToken,
             address(weth),
             actualAmountIn
         );
-        uint256 expectedAmountOut = (amountOutFromEncoded /
-            sandwichHelper.wethEncodeMultiple()) *
-            sandwichHelper.wethEncodeMultiple();
-
+        // uint256 expectedAmountOut = (amountOutFromEncoded /
+        //     sandwichHelper.wethEncodeMultiple()) *
+        //     sandwichHelper.wethEncodeMultiple();
+        (,,uint256 expectedAmountOut) = sandwichHelper.encodeNumToByteAndOffset2(amountOutFromEncoded,4,false);
         // Perform swap
-        (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
-            .v2CreateSandwichPayloadWethIsOutput(inputToken, amountIn);
+        (bytes memory payloadV4) = sandwichHelper
+            .v2CreateSandwichPayloadOutput(inputToken, amountIn,address(weth));
+        emit log_bytes(payloadV4);
         vm.prank(admin);
-        (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        (bool s, bytes memory r) = address(sandwich).call{value:expectedAmountOut/10000}(payloadV4);
         assertTrue(s, "swap failed");
+        emit log_bytes(r);
 
         // Check values after swap
         uint256 wethBalanceChange = weth.balanceOf(sandwich) -

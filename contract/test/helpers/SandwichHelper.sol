@@ -177,6 +177,7 @@ contract SandwichHelper is Test {
         (
             uint256 encodedAmountOut,
             uint256 memoryOffset,
+
         ) = encodeNumToByteAndOffset(
                 GeneralHelper.getAmountOut(weth, otherToken, amountInActual),
                 4,
@@ -198,6 +199,54 @@ contract SandwichHelper is Test {
     }
 
     // Create payload for when weth is input
+    function v2CreateSandwichPayloadOutput(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut
+    ) public view returns (bytes memory payload) {
+        // Declare uniswapv2 types
+        IUniswapV2Factory univ2Factory = IUniswapV2Factory(
+            0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+        );
+
+        address pair = address(
+            IUniswapV2Pair(univ2Factory.getPair(tokenOut, address(tokenIn)))
+        );
+
+        // Libary function starts here
+        uint8 swapType = _v2FindFunctionSig(false, tokenIn);
+
+        // encode amountIn
+        (
+            uint256 encodedAmountIn,
+            uint256 memoryOffset,
+            uint256 amountInActual
+        ) = encodeNumToByteAndOffset2(amountIn, 4, true);
+
+        uint256 amountOut = GeneralHelper.getAmountOut(
+            tokenIn,
+            tokenOut,
+            amountInActual
+        );
+        (
+            uint256 encodedAmountOut,
+            uint256 memoryOffsetOut,
+            
+        ) = encodeNumToByteAndOffset2(amountOut, 4, false);
+        payload = abi.encodePacked(
+            uint8(swapType), // token we're giving
+            address(pair), // univ2 pair
+            address(tokenIn), // inputToken
+            uint8(memoryOffset), // memoryOffset to store amountIn
+            uint32(encodedAmountIn), // amountIn
+            uint8(memoryOffsetOut),
+            uint32(encodedAmountOut)
+        );
+
+        // encodedValue = amountOut / wethEncodeMultiple();
+    }
+
+    // Create payload for when weth is input
     function v2CreateSandwichPayloadInput(
         address tokenIn,
         uint256 amountIn,
@@ -214,21 +263,17 @@ contract SandwichHelper is Test {
             uint256 encodedAmountIn,
             uint256 memoryOffset0,
             uint256 amountInActual
-        ) = encodeNumToByteAndOffset2(
-            amountIn,
-            4,
-            tokenIn > tokenOut
-        );
+        ) = encodeNumToByteAndOffset2(amountIn, 4, tokenIn > tokenOut);
 
         (
             uint256 encodedAmountOut,
             uint256 memoryOffset1,
-            
+
         ) = encodeNumToByteAndOffset2(
-            GeneralHelper.getAmountOut(tokenIn,tokenOut,amountInActual),
-            4,
-            tokenOut > tokenIn
-        );
+                GeneralHelper.getAmountOut(tokenIn, tokenOut, amountInActual),
+                4,
+                tokenOut > tokenIn
+            );
 
         uint8 swapType = _v2FindFunctionSig2(tokenIn, tokenOut);
 
@@ -238,7 +283,7 @@ contract SandwichHelper is Test {
             uint8(memoryOffset1), // memoryOffset to store amountOut
             uint32(encodedAmountOut), // amountOut
             uint8(memoryOffset0),
-            uint32(encodedAmountIn) 
+            uint32(encodedAmountIn)
         );
     }
 
@@ -258,6 +303,7 @@ contract SandwichHelper is Test {
             return functionSigsToJumpLabel["v2_input1"];
         }
     }
+
     function _v2FindFunctionSig(
         bool isWethInput,
         address otherToken
@@ -287,16 +333,24 @@ contract SandwichHelper is Test {
         uint256 amount,
         uint256 numBytesToEncodeTo,
         bool isToken0
-    ) public view returns (uint256 encodedAmount, uint256 encodedByteOffset, uint256 amountAfterEncoding) {
+    )
+        public
+        view
+        returns (
+            uint256 encodedAmount,
+            uint256 encodedByteOffset,
+            uint256 amountAfterEncoding
+        )
+    {
         for (uint256 i = 0; i < 32; i++) {
-            uint256 _encodedAmount = amount / 2**(8 * i);
+            uint256 _encodedAmount = amount / 2 ** (8 * i);
 
             // If we can fit the value in numBytesToEncodeTo bytes, we can encode it
-            if (_encodedAmount <= 2**(numBytesToEncodeTo * (8)) - 1) {
+            if (_encodedAmount <= 2 ** (numBytesToEncodeTo * (8)) - 1) {
                 //uint encodedAmount = amountOutAfter * 2**(8*i);
                 encodedByteOffset = i;
                 encodedAmount = _encodedAmount;
-                amountAfterEncoding = encodedAmount << (encodedByteOffset*8);
+                amountAfterEncoding = encodedAmount << (encodedByteOffset * 8);
                 break;
             }
         }
@@ -308,8 +362,6 @@ contract SandwichHelper is Test {
         }
         console.log(isToken0);
         console.log(encodedAmount, encodedByteOffset, amountAfterEncoding);
-
-        
     }
 
     function encodeNumToByteAndOffset(
@@ -317,20 +369,27 @@ contract SandwichHelper is Test {
         uint256 numBytesToEncodeTo,
         bool isWethInput,
         bool isWethToken0
-    ) public pure returns (uint256 encodedAmount, uint256 encodedByteOffset, uint256 amountAfterEncoding) {
+    )
+        public
+        pure
+        returns (
+            uint256 encodedAmount,
+            uint256 encodedByteOffset,
+            uint256 amountAfterEncoding
+        )
+    {
         for (uint256 i = 0; i < 32; i++) {
-            uint256 _encodedAmount = amount / 2**(8 * i);
+            uint256 _encodedAmount = amount / 2 ** (8 * i);
 
             // If we can fit the value in numBytesToEncodeTo bytes, we can encode it
-            if (_encodedAmount <= 2**(numBytesToEncodeTo * (8)) - 1) {
+            if (_encodedAmount <= 2 ** (numBytesToEncodeTo * (8)) - 1) {
                 //uint encodedAmount = amountOutAfter * 2**(8*i);
                 encodedByteOffset = i;
                 encodedAmount = _encodedAmount;
-                amountAfterEncoding = encodedAmount << (encodedByteOffset*8);
+                amountAfterEncoding = encodedAmount << (encodedByteOffset * 8);
                 break;
             }
         }
-        
 
         if (!isWethInput) {
             // find byte placement for Transfer(address,uint256)
@@ -344,11 +403,9 @@ contract SandwichHelper is Test {
         }
     }
 
-    function getJumpLabelFromSig(string calldata sig)
-        public
-        view
-        returns (uint8)
-    {
+    function getJumpLabelFromSig(
+        string calldata sig
+    ) public view returns (uint8) {
         return functionSigsToJumpLabel[sig];
     }
 
