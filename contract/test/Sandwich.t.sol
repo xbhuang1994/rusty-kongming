@@ -321,7 +321,7 @@ contract ModSandwichV4 is Test {
     // could add fuzzing / testing to test values at limits/boundary
 
     function testV2Weth0Input() public {
-        address outputToken = 0xC76D53F988820fe70E01eCCb0248B312c2f1c7cA; // Tether
+        address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
         uint256 amountIn = 10 ether;
 
         // Pre swap checks
