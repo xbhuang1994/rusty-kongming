@@ -484,20 +484,6 @@ contract ModSandwichV4 is Test {
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
         uint256 daiBalanceBefore = IERC20(inputToken).balanceOf(sandwich);
 
-        // (, , uint256 actualAmountIn) = sandwichHelper.encodeNumToByteAndOffset(
-        //     daiBalanceBefore,
-        //     4,
-        //     false,
-        //     false
-        // );
-        // uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
-        //     inputToken,
-        //     address(weth),
-        //     actualAmountIn
-        // );
-        // uint256 expectedAmountOut = (amountOutFromEncoded /
-        //     sandwichHelper.wethEncodeMultiple()) *
-        //     sandwichHelper.wethEncodeMultiple();
         (,, uint256 actualAmountIn) = sandwichHelper.encodeNumToByteAndOffset2(daiBalanceBefore,4,true);
         uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
             inputToken,
@@ -533,5 +519,56 @@ contract ModSandwichV4 is Test {
             actualAmountIn,
             "unexpected amount of dai used in swap"
         );
+    }
+
+    function testMultiCall() public{
+        address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
+        uint256 amountIn = 1 ether;
+
+        address output2 = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; //USDC
+        uint256 in2 = 1 ether;
+
+        // Pre swap checks
+        uint256 wethBalanceBefore = weth.balanceOf(sandwich);
+        uint256 usdtBalanceBefore = IERC20(outputToken).balanceOf(sandwich);
+        (,,uint256 actualAmountIn) = sandwichHelper
+            .encodeNumToByteAndOffset2(amountIn, 4,  false);
+        uint256 amountOutFromEncoded = GeneralHelper.getAmountOut(
+            address(weth),
+            outputToken,
+            actualAmountIn
+        ); 
+        (, , uint256 expectedAmountOut) = sandwichHelper
+            .encodeNumToByteAndOffset2(amountOutFromEncoded, 4,  false);
+        (bytes memory payloadV4) = sandwichHelper.v2CreateSandwichPayloadInput(address(weth), amountIn,outputToken);
+        (bytes memory payloadV42) = sandwichHelper.v2CreateSandwichPayloadInput(address(weth), in2,output2);
+        
+
+
+        bytes memory payloadMulti = abi.encodePacked(payloadV42, payloadV4);
+        
+        emit log_bytes(payloadV4);
+
+
+        vm.prank(admin);
+        uint a = gasleft();
+        (bool s,  bytes memory res) = address(sandwich).call(payloadMulti);
+        a =  a - gasleft();
+        emit log_bytes(res);
+        console.log("gas:");
+        console.log(a);
+        assertTrue(s);
+        // Check values after swap
+        uint256 wethBalanceChange = wethBalanceBefore -
+            weth.balanceOf(sandwich);
+        uint256 usdtBalanceChange = IERC20(0xdAC17F958D2ee523a2206206994597C13D831ec7).balanceOf(sandwich) -
+            usdtBalanceBefore;
+        assertEq(usdtBalanceChange , expectedAmountOut,"did not get expected usdt amount out from swap");
+        assertEq(
+            wethBalanceChange,
+            actualAmountIn * 2,
+            "unexpected amount of weth used in swap"
+        );
+
     }
 }

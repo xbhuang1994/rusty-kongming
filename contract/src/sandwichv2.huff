@@ -126,11 +126,11 @@ stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
-stop stop stop stop stop
-
-multi_call_astral_gate:
-    multi_call
-    jump
+stop stop stop stop stop stop stop stop stop stop
+// 0xf5
+// multi_call_astral_gate:
+//     multi_call
+//     jump
 
 // calldata: int256 amount0Delta, int256 amount1Delta, bytes data
 uniswap_v3_callback:
@@ -524,24 +524,27 @@ v2_input0:
     iszero                                      // [!is_caller_searcher]
     gtfo                                        // [gtfo_label, is_caller_searcher]
     jumpi                                       // []
-
+    0x00 mload                                  // [data_offset]
+    
     // ***Preset the stack for when we call pair.swap(token0Out, token1Out, to, data)***
     returndatasize                              // [retsize]
     returndatasize                              // [retoffset, retsize]
     0xA4  // 164 (4 + 32 + 32 + 32 + {32 + 32}) // [argsize, retoffset, retsize]
     returndatasize                              // [argoffset, argsize, retoffset, retsize]
     returndatasize                              // [value, argoffset, argsize, retoffset, retsize]
-    chainid calldataload 0x60 shr               // [pair_address, value, argoffset, argsize, retoffset, retsize] = pair_swap_args
-
+    
+    dup6 chainid add calldataload 0x60 shr      // [pair_address, value, argoffset, argsize, retoffset, retsize] = pair_swap_args
+    
     // ***Preset the stack for when we call token.transfer***
     returndatasize                              // [retsize, *pair_swap_args]
     returndatasize                              // [retoffset, retsize, *pair_swap_args] = token_transfer_args
-
+    
     // setup calldata for transferFrom(from,to,value)
     [TRANSFER_FROM_SIG] returndatasize mstore   // [*token_transfer_args, *pair_swap_args] - mstore(0, 0x23b872dd)
     address 0x04 mstore                         // [*token_transfer_args, *pair_swap_args] - mstore(4, address(this))
     dup3 0x24 mstore                            // [*token_transfer_args, *pair_swap_args] - mstore(36, pair_address)
-    0x1a calldataload dup1
+    
+    dup9 0x1a add calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1
     0x00 byte 0x40 add mstore
     // call weth transferFrom
@@ -559,7 +562,7 @@ v2_input0:
     0x00 0x24 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(36, 0) **Clear Memory**
     
     // get amountIn and store at memOffset
-    0x15 calldataload 0xd8 shr 0xd8 shl dup1
+    dup7 0x15 add calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
     
@@ -568,12 +571,23 @@ v2_input0:
     
 
     0x80 0x64 mstore // 100                     // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, 0x80) 4 + 32 + 32 + 32, 0x80 because bytes is dynamic
-    // 0x00 mstore
-
+    
     // call pair.swap
     gas                                         // [gas, pair_address, value, argoffset, argsize, retoffset, retsize]
     call iszero gtfo jumpi                      // [] *did swap succeed without failure?
-    stop
+    // stop
+    // clean memory
+    0x00
+    dup1 0x20 mstore
+    dup1 0x40 mstore
+    dup1 0x60 mstore
+    dup1 0x80 mstore
+    dup1 0xa0 mstore
+    0xc0 mstore
+    0x1f add                                    // [data_offset] + offset of 0x1f
+    0x00 mstore
+    next_call
+    jump
 
 // Make swap when Weth is token1 && input
 v2_input1:
@@ -582,15 +596,16 @@ v2_input1:
     iszero                                      // [!is_caller_searcher]
     gtfo                                        // [gtfo_label, is_caller_searcher]
     jumpi                                       // []
-
+    0x00 mload
     // ***Preset the stack for when we call pair.swap(token0Out, token1Out, to, data)***
     returndatasize                              // [retsize]
     returndatasize                              // [retoffset, retsize]
     0xA4  // 164 (4 + 32 + 32 + 32 + {32 + 32}) // [argsize, retoffset, retsize]
     returndatasize                              // [argoffset, argsize, retoffset, retsize]
     returndatasize                              // [value, argoffset, argsize, retoffset, retsize]
-    chainid calldataload 0x60 shr               // [pair_address, value, argoffset, argsize, retoffset, retsize] = pair_swap_args
-
+    
+    dup6 chainid add calldataload 0x60 shr               // [pair_address, value, argoffset, argsize, retoffset, retsize] = pair_swap_args
+    
     // ***Preset the stack for when we call token.transfer***
     returndatasize                              // [retsize, *pair_swap_args]
     returndatasize                              // [retoffset, retsize, *pair_swap_args] = token_transfer_args
@@ -600,9 +615,10 @@ v2_input1:
     address 0x04 mstore                         // [*token_transfer_args, *pair_swap_args] - mstore(4, address(this))
     dup3 0x24 mstore                            // [*token_transfer_args, *pair_swap_args] - mstore(36, pair_address)
     // 0x0186a0 callvalue mul 0x44 mstore          // [*token_transfer_args, *pair_swap_args] - mstore(68, callvalue * 100000)
-    0x1a calldataload dup1
+    dup9 0x1a add calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1
     0x00 byte 0x20 add mstore
+    // 0x00 mstore
 
     // call weth transferFrom
     0x64    // 100 (4+32+32+32)                 // [argsize, retoffset, retsize, *pair_swap_args] !expanded token_transfer_args
@@ -612,23 +628,36 @@ v2_input1:
     gas                                         // [gas, weth_addr, value, argoffset, argsize, retoffset, retsize, *pair_swap_args]
     call pop                                    // [*pair_swap_args]
 
+    
     // setup calldata for swap(otherTokenOut, 0, address(this), "")
     [V2_Swap_Sig] 0x00 mstore                   // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
     0x00 0x04 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(4, 0) **Clear Memory**
 
     // get amountIn and store at memOffset
-    0x15 calldataload 0xd8 shr 0xd8 shl dup1
+    dup7 0x15 add calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
 
     0x00 0x24 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(36, 0)
     address 0x44 mstore                         // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(68, address(this))
     0x80 0x64 mstore // 100                     // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, 0x80) 4 + 32 + 32 + 32, 0x80 because bytes is dynamic
-
+    
     // call pair.swap
     gas                                         // [gas, pair_address, value, argoffset, argsize, retoffset, retsize]
     call iszero gtfo jumpi                      // [] *did swap succeed without failure?
-    stop
+    //clear memory
+    0x00
+    dup1 0x20 mstore
+    dup1 0x40 mstore
+    dup1 0x60 mstore
+    dup1 0x80 mstore
+    dup1 0xa0 mstore
+    0xc0 mstore
+
+    0x1f add                                    // [data_offset] + offset of 0x1f
+    0x00 mstore
+    next_call
+    jump
 
 // incase you deploy with metamorphic factory
 seppuku:
@@ -692,23 +721,16 @@ gtfo:
     0x03                                        // [3]
     dup1                                        // [3, 3]
     revert                                      // revert (3,3) for wagmi
-// multi call
-multi_call:     // []
-    0x20        // [func_offset]
-    multi_call_loop
-    jump
 
-multi_call_loop:// [func_offset]
-    0x01
-    swap1
-    sub         // [func_offset] func_offset - 1
-    callvalue
-    dup2 
+next_call:
+    0x00 mload                                  // load data_offset
+    calldataload                                
+    0x00 
     byte
-    dup1 iszero multi_call_loop_break jumpi
+    dup1
+    iszero next_call_stop jumpi          // if is last data , break
     jump
 
-multi_call_loop_break:
-    0x20 0x00 return
-
+next_call_stop:
+    stop
 }

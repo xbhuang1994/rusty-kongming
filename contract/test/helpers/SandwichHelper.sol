@@ -285,13 +285,13 @@ contract SandwichHelper is Test {
             uint8(memoryOffset0),
             uint32(encodedAmountIn)
         );
-        console.log(".............................");
-        console.log(swapType);
-        console.log(pair);
-        console.log(memoryOffset1);
-        console.log(encodedAmountOut);
-        console.log(memoryOffset0);
-        console.log(encodedAmountIn);
+        // console.log(".............................");
+        // console.log(swapType);
+        // console.log(pair);
+        // console.log(memoryOffset1);
+        // console.log(encodedAmountOut);
+        // console.log(memoryOffset0);
+        // console.log(encodedAmountIn);
         
 
     }
@@ -369,8 +369,8 @@ contract SandwichHelper is Test {
         } else {
             encodedByteOffset = 36 - numBytesToEncodeTo - encodedByteOffset;
         }
-        console.log(isToken0);
-        console.log(encodedAmount, encodedByteOffset, amountAfterEncoding);
+        // console.log(isToken0);
+        // console.log(encodedAmount, encodedByteOffset, amountAfterEncoding);
     }
 
     function encodeNumToByteAndOffset(
