@@ -33,7 +33,7 @@ contract ModSandwichV4 is Test {
 
     function setUp() public {
         sandwichHelper = new SandwichHelper();
-        sandwich = HuffDeployer.deploy("sandwich");
+        sandwich = HuffDeployer.deploy("sandwichv2");
 
         // fund sandwich
         weth.deposit{value: wethFundAmount}();
