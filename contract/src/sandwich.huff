@@ -115,8 +115,8 @@ multi_call_v2_input0_astral_gate:
     multi_call_v2_input0
     jump
 
-multi_call_v2_input1_astral_gate:
-    multi_call_v2_input1
+multi_call_v2_output_astral_gate:
+    multi_call_v2_output
     jump
 
 // wall of stops used so that the jumpdest of callback label equals 0xfa
@@ -717,6 +717,7 @@ multi_call_v2_input0:
     returndatasize
     returndatasize
 
+    // setup calldata for transferFrom(from,to,value)
     [TRANSFER_FROM_SIG] returndatasize mstore
     address 0x04 mstore
     dup3 0x24 mstore
@@ -733,6 +734,7 @@ multi_call_v2_input0:
     gas
     call pop
 
+    // setup calldata for swap(0, otherTokenOut, address(this), "")
     [V2_Swap_Sig] 0x00 mstore               // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
     0x00 0x04 mstore
     0x00 0x24 mstore
@@ -757,15 +759,64 @@ multi_call_v2_input0:
     multi_call_next
     jump
     
-multi_call_v2_input1:
+multi_call_v2_output:
+    stop
     // validate msg.sender
-    [SEARCHER] caller eq                        // [is_caller_searcher]
-    iszero                                      // [!is_caller_searcher]
-    gtfo                                        // [gtfo_label, is_caller_searcher]
-    jumpi                                       // []
-    0x00 mload
-    0x01 add
-    multi_call_next
-    jump
+    // [SEARCHER] caller eq                        // [is_caller_searcher]
+    // iszero                                      // [!is_caller_searcher]
+    // gtfo                                        // [gtfo_label, is_caller_searcher]
+    // jumpi                                       // []
+
+    // 0x00 mload                                  // [calldata_offset]
+
+    // returndatasize                              
+    // returndatasize
+    // 0xA4
+    // returndatasize
+    // returndatasize
+    // dup6 0x01 add calldataload 0x60 shr               // [pair_address, value, argoffset, argsize, retoffset, retsize,calldata_offset] = pair_swap_args
+
+    // returndatasize
+    // returndatasize
+    // // setup calldata for transferFrom(from,to,value)
+    // [TRANSFER_FROM_SIG] returndatasize mstore
+    // address 0x04 mstore
+    // dup3 0x24 mstore
+    
+    // dup9 0x15 add calldataload 0xd8 shr 0xd8 shl dup1
+    // 0x08 shl swap1
+    // 0x00 byte 0x40 add mstore
+
+    // // call weth transferfrom
+    // 0x64    //100(4+32+32+32)
+    // returndatasize
+    // returndatasize
+    // [WETH]
+    // gas
+    // call pop
+
+    // [V2_Swap_Sig] 0x00 mstore               // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
+    // 0x00 0x04 mstore
+    // 0x00 0x24 mstore
+
+
+    // // get amountOut and store at memOffset
+    // dup7 0x1a add calldataload 0xd8 shr 0xd8 shl dup1
+    // 0x08 shl swap1
+    // 0x00 byte mstore
+
+    // address 0x44 mstore
+    // 0x80 0x64 mstore
+
+    // //call pair.swap
+    // gas
+    // call iszero gtfo jumpi
+    
+    // 0x00 0x24 mstore
+    // 0x00 0x44 mstore
+    // 0x00 0x64 mstore
+    // 0x1f add                                  // this func  call data len
+    // multi_call_next
+    // jump
 
 }

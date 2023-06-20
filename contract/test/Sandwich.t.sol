@@ -515,13 +515,24 @@ contract ModSandwichV4 is Test {
         uint256 amountIn = 1.94212341234123424 ether;
         address outputToken2 = 0xe53EC727dbDEB9E2d5456c3be40cFF031AB40A55;
         uint256 amountIn2 = 1.94212341234123424 ether;
+        
+        // input1
+        address outputToken3 = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // USDC
+        uint256 amountIn3 = 0.942 ether;
+
+        // output1
+        
+
         bytes memory payload = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken,amountIn);
         bytes memory payload2 = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken2,amountIn2);
+        bytes memory payload3 = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken3,amountIn3);
         bytes memory payloadMulticall = abi.encodePacked(
-            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input0"),
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
             payload,
-            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input0"),
-            payload2
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
+            payload2,
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
+            payload3
         );
         emit log_bytes(payloadMulticall);
         vm.prank(admin);

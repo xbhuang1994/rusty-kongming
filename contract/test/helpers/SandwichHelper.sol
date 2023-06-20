@@ -343,8 +343,8 @@ contract SandwichHelper is Test {
             "seppuku",
             "recoverEth",
             "recoverWeth",
-            "multi_call_v2_input0",
-            "multi_call_v2_input1"
+            "multi_call_v2_input",
+            "multi_call_v2_output"
         ];
 
         for (uint256 i = 0; i < functionNames.length; i++) {
