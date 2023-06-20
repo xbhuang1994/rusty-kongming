@@ -508,4 +508,28 @@ contract ModSandwichV4 is Test {
             "unexpected amount of dai used in swap"
         );
     }
+
+    function testMulticall() public{
+        vm.prank(admin);
+        address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
+        uint256 amountIn = 1.94212341234123424 ether;
+        address outputToken2 = 0xe53EC727dbDEB9E2d5456c3be40cFF031AB40A55;
+        uint256 amountIn2 = 1.94212341234123424 ether;
+        bytes memory payload = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken,amountIn);
+        bytes memory payload2 = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken2,amountIn2);
+        bytes memory payloadMulticall = abi.encodePacked(
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input0"),
+            payload,
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_input0"),
+            payload2
+        );
+        emit log_bytes(payloadMulticall);
+        vm.prank(admin);
+        uint256 before = gasleft();
+        (bool s, bytes memory res) = address(sandwich).call{value: 0}(payloadMulticall);
+        before = before - gasleft();
+        assertTrue(s, "swap failed");
+        emit log_uint(before);
+        emit log_bytes(res);
+    }
 }

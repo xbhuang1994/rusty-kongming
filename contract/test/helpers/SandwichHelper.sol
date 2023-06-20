@@ -3,6 +3,7 @@ pragma solidity ^0.8.15;
 
 import "./GeneralHelper.sol";
 import "forge-std/Test.sol";
+
 //import "forge-std/console.sol";
 
 contract SandwichHelper is Test {
@@ -177,6 +178,7 @@ contract SandwichHelper is Test {
         (
             uint256 encodedAmountOut,
             uint256 memoryOffset,
+
         ) = encodeNumToByteAndOffset(
                 GeneralHelper.getAmountOut(weth, otherToken, amountInActual),
                 4,
@@ -195,6 +197,58 @@ contract SandwichHelper is Test {
         );
 
         encodedValue = amountIn / wethEncodeMultiple();
+    }
+
+    // Create payload for when weth is input
+    function v2CreateSandwichPayloadWethIsInputMultiCall(
+        address otherToken,
+        uint256 amountIn
+    ) public view returns (bytes memory payload) {
+        // Declare uniswapv2 types
+        IUniswapV2Factory univ2Factory = IUniswapV2Factory(
+            0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+        );
+        address weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+
+        address pair = address(
+            IUniswapV2Pair(univ2Factory.getPair(weth, address(otherToken)))
+        );
+
+        // get amounts in ad encode it
+
+        (uint256 encodedAmountIn, uint256 memoryOffsetIn, uint256 amountAfterEncoding) = encodeNumToByteAndOffset(
+            amountIn,
+            4,
+            true,
+            false
+        );
+        // Get amounts out and encode it
+        (
+            uint256 encodedAmountOut,
+            uint256 memoryOffsetOut,
+
+        ) = encodeNumToByteAndOffset(
+                GeneralHelper.getAmountOut(
+                    weth,
+                    otherToken,
+                    amountAfterEncoding
+                ),
+                4,
+                true,
+                weth < otherToken
+            );
+
+        // Libary function starts here
+        // uint8 swapType = _v2FindFunctionSig(true, otherToken);
+
+        payload = abi.encodePacked(
+            // uint8(swapType), // type of swap to make
+            address(pair), // univ2 pair
+            uint8(memoryOffsetIn),
+            uint32(encodedAmountIn),
+            uint8(memoryOffsetOut), // memoryOffset to store amountOut
+            uint32(encodedAmountOut) // amountOut
+        );
     }
 
     function wethEncodeMultiple() public pure returns (uint256) {
@@ -231,16 +285,24 @@ contract SandwichHelper is Test {
         uint256 numBytesToEncodeTo,
         bool isWethInput,
         bool isWethToken0
-    ) public pure returns (uint256 encodedAmount, uint256 encodedByteOffset, uint256 amountAfterEncoding) {
+    )
+        public
+        pure
+        returns (
+            uint256 encodedAmount,
+            uint256 encodedByteOffset,
+            uint256 amountAfterEncoding
+        )
+    {
         for (uint256 i = 0; i < 32; i++) {
-            uint256 _encodedAmount = amount / 2**(8 * i);
+            uint256 _encodedAmount = amount / 2 ** (8 * i);
 
             // If we can fit the value in numBytesToEncodeTo bytes, we can encode it
-            if (_encodedAmount <= 2**(numBytesToEncodeTo * (8)) - 1) {
+            if (_encodedAmount <= 2 ** (numBytesToEncodeTo * (8)) - 1) {
                 //uint encodedAmount = amountOutAfter * 2**(8*i);
                 encodedByteOffset = i;
                 encodedAmount = _encodedAmount;
-                amountAfterEncoding = encodedAmount << (encodedByteOffset*8);
+                amountAfterEncoding = encodedAmount << (encodedByteOffset * 8);
                 break;
             }
         }
@@ -257,11 +319,9 @@ contract SandwichHelper is Test {
         }
     }
 
-    function getJumpLabelFromSig(string calldata sig)
-        public
-        view
-        returns (uint8)
-    {
+    function getJumpLabelFromSig(
+        string calldata sig
+    ) public view returns (uint8) {
         return functionSigsToJumpLabel[sig];
     }
 
@@ -269,7 +329,7 @@ contract SandwichHelper is Test {
         //uint startingIndex = 0x35;
         uint256 startingIndex = 0x06;
 
-        string[13] memory functionNames = [
+        string[15] memory functionNames = [
             "v2_output0",
             "v2_input0",
             "v2_output1",
@@ -282,7 +342,9 @@ contract SandwichHelper is Test {
             "v3_input1",
             "seppuku",
             "recoverEth",
-            "recoverWeth"
+            "recoverWeth",
+            "multi_call_v2_input0",
+            "multi_call_v2_input1"
         ];
 
         for (uint256 i = 0; i < functionNames.length; i++) {
