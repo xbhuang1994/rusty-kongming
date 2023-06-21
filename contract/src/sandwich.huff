@@ -111,8 +111,8 @@ recover_weth_astral_gate:
     recover_weth                                // [recover_weth_label]
     jump                                        // []
 
-multi_call_v2_input0_astral_gate:
-    multi_call_v2_input0
+multi_call_v2_input_astral_gate:
+    multi_call_v2_input
     jump
 
 multi_call_v2_output_astral_gate:
@@ -698,7 +698,7 @@ multi_call_stop:
     0xf0 0x00 return
     stop
 
-multi_call_v2_input0:
+multi_call_v2_input:
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
