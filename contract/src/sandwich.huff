@@ -747,11 +747,11 @@ multi_call_v2_input0:
 
     address 0x44 mstore
     0x80 0x64 mstore
-
-    //call pair.swap
     gas
+    //call pair.swap
     call iszero gtfo jumpi
-    
+
+    // clean memory
     0x00 0x24 mstore
     0x00 0x44 mstore
     0x00 0x64 mstore
@@ -808,9 +808,10 @@ multi_call_v2_output:
 
     address 0x44 mstore
     0x80 0x64 mstore
-    //call pair.swap
     gas
+    //call pair.swap
     call iszero gtfo jumpi
+    // clean memory
     0x00 0x24 mstore
     0x00 0x44 mstore
     0x00 0x64 mstore
