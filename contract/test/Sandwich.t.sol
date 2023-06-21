@@ -510,7 +510,6 @@ contract ModSandwichV4 is Test {
     }
 
     function testMulticall() public{
-        vm.prank(admin);
         address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
         uint256 amountIn = 1.94212341234123424 ether;
         address outputToken2 = 0xe53EC727dbDEB9E2d5456c3be40cFF031AB40A55;
@@ -521,18 +520,34 @@ contract ModSandwichV4 is Test {
         uint256 amountIn3 = 0.942 ether;
 
         // output1
-        
+        address inputToken = 0xe53EC727dbDEB9E2d5456c3be40cFF031AB40A55; // superfarm
+        uint256 amountIn4 = 1000000 * 10 ** 18;
+        // output0
+        address inputToken2 = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // dai
+        uint256 amountIn5 = 4722.366481770134 ether; // encoded as 0xFFFFFFFF0000000000
+        // Fund sandwich
+        vm.prank(binance8);
+        IUSDT(inputToken).transfer(sandwich, amountIn4);
+        vm.prank(0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503);
+        IUSDT(inputToken2).transfer(sandwich, amountIn5);
 
         bytes memory payload = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken,amountIn);
         bytes memory payload2 = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken2,amountIn2);
         bytes memory payload3 = sandwichHelper.v2CreateSandwichPayloadWethIsInputMultiCall(outputToken3,amountIn3);
+
+        bytes memory payload4 = sandwichHelper.v2CreateSandwichPayloadWethIsOutputMultiCall(inputToken,amountIn4);
+        bytes memory payload5 = sandwichHelper.v2CreateSandwichPayloadWethIsOutputMultiCall(inputToken2,amountIn5);
         bytes memory payloadMulticall = abi.encodePacked(
             sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
             payload,
             sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
             payload2,
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_output"),
+            payload4,
             sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
-            payload3
+            payload3,
+            sandwichHelper.getJumpLabelFromSig("multi_call_v2_output"),
+            payload5
         );
         emit log_bytes(payloadMulticall);
         vm.prank(admin);

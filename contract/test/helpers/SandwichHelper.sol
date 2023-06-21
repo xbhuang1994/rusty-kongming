@@ -156,6 +156,53 @@ contract SandwichHelper is Test {
     }
 
     // Create payload for when weth is input
+    function v2CreateSandwichPayloadWethIsOutputMultiCall(
+        address otherToken,
+        uint256 amountIn
+    ) public view returns (bytes memory payload) {
+        // Declare uniswapv2 types
+        IUniswapV2Factory univ2Factory = IUniswapV2Factory(
+            0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f
+        );
+        address weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+
+        address pair = address(
+            IUniswapV2Pair(univ2Factory.getPair(weth, address(otherToken)))
+        );
+
+        // Libary function starts here
+        // uint8 swapType = _v2FindFunctionSig(false, otherToken);
+
+        // encode amountIn
+        (
+            uint256 encodedAmountIn,
+            uint256 memoryOffset,
+            uint256 amountInActual
+        ) = encodeNumToByteAndOffset(amountIn, 4, false, false);
+
+        uint256 amountOut = GeneralHelper.getAmountOut(
+            otherToken,
+            weth,
+            amountInActual
+        );
+        (
+            uint256 encodedAmountOut,
+            uint256 memoryOffsetOut,
+
+        ) = encodeNumToByteAndOffset(amountOut, 4, true, weth < otherToken);
+
+        payload = abi.encodePacked(
+            // uint8(swapType), // token we're giving
+            address(pair), // univ2 pair
+            address(otherToken), // inputToken
+            uint8(memoryOffset), // memoryOffset to store amountIn
+            uint32(encodedAmountIn), // amountIn
+            uint8(memoryOffsetOut),
+            uint32(encodedAmountOut)
+        );
+    }
+
+    // Create payload for when weth is input
     function v2CreateSandwichPayloadWethIsInput(
         address otherToken,
         uint256 amountIn
@@ -216,12 +263,11 @@ contract SandwichHelper is Test {
 
         // get amounts in ad encode it
 
-        (uint256 encodedAmountIn, uint256 memoryOffsetIn, uint256 amountAfterEncoding) = encodeNumToByteAndOffset(
-            amountIn,
-            4,
-            true,
-            false
-        );
+        (
+            uint256 encodedAmountIn,
+            uint256 memoryOffsetIn,
+            uint256 amountAfterEncoding
+        ) = encodeNumToByteAndOffset(amountIn, 4, true, false);
         // Get amounts out and encode it
         (
             uint256 encodedAmountOut,
