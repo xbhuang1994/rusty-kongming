@@ -550,6 +550,7 @@ contract ModSandwichV4 is Test {
             payload5
         );
         emit log_bytes(payloadMulticall);
+        emit log_uint(payloadMulticall.length);
         vm.prank(admin);
         uint256 before = gasleft();
         (bool s, bytes memory res) = address(sandwich).call{value: 0}(payloadMulticall);
