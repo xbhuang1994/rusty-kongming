@@ -559,4 +559,33 @@ contract ModSandwichV4 is Test {
         emit log_uint(before);
         emit log_bytes(res);
     }
+
+
+    function testMulticallV3() public {
+        address pool = 0x7379e81228514a1D2a6Cf7559203998E20598346; // ETH - STETH
+        (address token0, address token1, uint24 fee) = _getV3PoolInfo(pool);
+        uint256 amountIn = 1.2345678912341234 ether;
+
+        (address outputToken, address inputToken) = (token1, token0);
+        uint8 jumplabel = sandwichHelper.getJumpLabelFromSig('multi_call_v3_input');
+
+        (bytes memory payload) = sandwichHelper
+            .v3CreateSandwichPayloadWethIsInputMultiCall(
+                pool,
+                inputToken,
+                outputToken,
+                fee,
+                amountIn
+            );
+        bytes memory payloadMulticall = abi.encodePacked(
+            jumplabel,
+            payload
+        );
+        emit log_bytes(payloadMulticall);
+        vm.prank(admin, admin);
+        (bool s, bytes memory res) = address(sandwich).call(payloadMulticall);
+        emit log_bytes(res);
+
+        // assertTrue(s, "calling swap failed");
+    }
 }
