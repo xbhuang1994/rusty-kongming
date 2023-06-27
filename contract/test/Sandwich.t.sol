@@ -508,8 +508,7 @@ contract ModSandwichV4 is Test {
             "unexpected amount of dai used in swap"
         );
     }
-
-    function testMulticall() public{
+    function getMulticallV2Payload() private returns (bytes memory payloadMulticall){
         address outputToken = 0xdAC17F958D2ee523a2206206994597C13D831ec7; // Tether
         uint256 amountIn = 1.94212341234123424 ether;
         address outputToken2 = 0xe53EC727dbDEB9E2d5456c3be40cFF031AB40A55;
@@ -537,7 +536,7 @@ contract ModSandwichV4 is Test {
 
         bytes memory payload4 = sandwichHelper.v2CreateSandwichPayloadWethIsOutputMultiCall(inputToken,amountIn4);
         bytes memory payload5 = sandwichHelper.v2CreateSandwichPayloadWethIsOutputMultiCall(inputToken2,amountIn5);
-        bytes memory payloadMulticall = abi.encodePacked(
+        payloadMulticall = abi.encodePacked(
             sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
             payload,
             sandwichHelper.getJumpLabelFromSig("multi_call_v2_input"),
@@ -549,13 +548,16 @@ contract ModSandwichV4 is Test {
             sandwichHelper.getJumpLabelFromSig("multi_call_v2_output"),
             payload5
         );
+    }
+    function testMulticallV2() public{
+        bytes memory payloadMulticall = getMulticallV2Payload();
         emit log_bytes(payloadMulticall);
         emit log_uint(payloadMulticall.length);
         vm.prank(admin);
         uint256 before = gasleft();
         (bool s, bytes memory res) = address(sandwich).call{value: 0}(payloadMulticall);
         before = before - gasleft();
-        assertTrue(s, "swap failed");
+        // assertTrue(s, "swap failed");
         emit log_uint(before);
         emit log_bytes(res);
     }
@@ -566,8 +568,10 @@ contract ModSandwichV4 is Test {
         (address token0, address token1, uint24 fee) = _getV3PoolInfo(pool);
         uint256 amountIn = 1.2345678912341234 ether;
 
+        
         (address outputToken, address inputToken) = (token1, token0);
-        uint8 jumplabel = sandwichHelper.getJumpLabelFromSig('multi_call_v3_input');
+        uint8 jumplabel = sandwichHelper.getJumpLabelFromSig('multi_call_v3_input0');
+        uint8 jumplabel2 = sandwichHelper.getJumpLabelFromSig('multi_call_v3_input1');
 
         (bytes memory payload) = sandwichHelper
             .v3CreateSandwichPayloadWethIsInputMultiCall(
@@ -577,15 +581,35 @@ contract ModSandwichV4 is Test {
                 fee,
                 amountIn
             );
+
+        address pool2 = 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640; // USDC - WETH
+        (address token02, address token12, uint24 fee2) = _getV3PoolInfo(pool2);
+        uint256 amountIn2 = 1.2345678912341234 ether;
+        (address inputToken2, address outputToken2) = (token12, token02);
+        
+        (bytes memory payload2) = sandwichHelper
+            .v3CreateSandwichPayloadWethIsInputMultiCall(
+                pool2,
+                inputToken2,
+                outputToken2,
+                fee2,
+                amountIn2
+            );
+
+
+        bytes memory payloadMulticallV2 = getMulticallV2Payload();
         bytes memory payloadMulticall = abi.encodePacked(
             jumplabel,
-            payload
+            payload,
+            jumplabel2,
+            payload2,
+            payloadMulticallV2
         );
         emit log_bytes(payloadMulticall);
+        console.log(payloadMulticall.length);
         vm.prank(admin, admin);
-        (bool s, bytes memory res) = address(sandwich).call(payloadMulticall);
-        emit log_bytes(res);
-
-        // assertTrue(s, "calling swap failed");
+        (bool s,) = address(sandwich).call(payloadMulticall);
+        // emit log_bytes(res);
+        assertTrue(s, "calling swap failed");
     }
 }

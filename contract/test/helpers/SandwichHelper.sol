@@ -226,8 +226,7 @@ contract SandwichHelper is Test {
             address(pool),
             pairInitHash,
             uint8(memoryOffset),
-            uint32(encodedAmountIn),
-            bool(token0 < token1)
+            uint32(encodedAmountIn)
         );
     }
 
@@ -404,7 +403,7 @@ contract SandwichHelper is Test {
         //uint startingIndex = 0x35;
         uint256 startingIndex = 0x06;
 
-        string[16] memory functionNames = [
+        string[17] memory functionNames = [
             "v2_output0",
             "v2_input0",
             "v2_output1",
@@ -420,7 +419,8 @@ contract SandwichHelper is Test {
             "recoverWeth",
             "multi_call_v2_input",
             "multi_call_v2_output",
-            "multi_call_v3_input"
+            "multi_call_v3_input0",
+            "multi_call_v3_input1"
         ];
 
         for (uint256 i = 0; i < functionNames.length; i++) {
