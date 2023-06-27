@@ -851,7 +851,7 @@ multi_call_v3_input:
     0x35 calldataload 0xd8 shr 0xd8 shl dup1    //  0x01 + 0x14 + 0x20 = 0x35
     0x08 shl swap1
     callvalue byte 0x20 add mstore
-    
+
     [MIN_SQRT_PRICE_LIMIT_X96] 0x64 mstore      // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, address(this))
     
     // data part used for callback
@@ -859,13 +859,17 @@ multi_call_v3_input:
     0x35 0xa4 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(164, 0x02) *dynamic byte length
     // ** abi.encodePacked(isZeroForOne, input_token, pair_address)
     0x0100000000000000000000000000000000000000000000000000000000000000
+    0x3a calldataload 0x00 byte mul
+
+
     [WETH] 0x58 shl add 0xc4 mstore             // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(196, isZeroForOne_&_InputTokenAddr)
     0x15 calldataload 0xd9 mstore               // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(217, pool_key_hash)
     
     // call pool.swap
     gas                                         // [gas, pair_address, value, argoffset, argsize, retoffset, retsize]
     call iszero gtfo jumpi                      // [] *did swap succeed without failure?
-    stop
+    // stop
+    0xff 0x00 return
 
 
 

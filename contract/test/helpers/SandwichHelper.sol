@@ -226,7 +226,8 @@ contract SandwichHelper is Test {
             address(pool),
             pairInitHash,
             uint8(memoryOffset),
-            uint32(encodedAmountIn)
+            uint32(encodedAmountIn),
+            bool(token0 < token1)
         );
     }
 
