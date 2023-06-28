@@ -622,7 +622,7 @@ contract ModSandwichV4 is Test {
         // fund sandwich contract
         vm.startPrank(0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643);
         IERC20(inputToken).transfer(sandwich, uint256(amountIn));
-
+        // vm.stopPrank();
         bytes memory payload = sandwichHelper
             .v3CreateSandwichPayloadWethIsOutputMultiCall(
                 pool,
@@ -632,9 +632,36 @@ contract ModSandwichV4 is Test {
                 amountIn
             );
         uint8 jumplabel = sandwichHelper.getJumpLabelFromSig('multi_call_v3_output1');
+
+
+
+
+        address pool2 = 0x64A078926AD9F9E88016c199017aea196e3899E1;
+        (address token02, address token12, uint24 fee2) = _getV3PoolInfo(pool2);
+        (address inputToken2, address outputToken2) = (token12, token02);
+
+        uint256 amountIn2 = 100000 ether; // 100000 btt
+
+        // fund sandwich contract
+        vm.startPrank(0x9277a463A508F45115FdEaf22FfeDA1B16352433);
+        IUSDT(inputToken2).transfer(sandwich, uint256(amountIn2));
+        // vm.stopPrank();
+        bytes memory payload2 = sandwichHelper
+            .v3CreateSandwichPayloadWethIsOutputMultiCall(
+                pool2,
+                inputToken2,
+                outputToken2,
+                fee2,
+                amountIn2
+            );
+        uint8 jumplabel2 = sandwichHelper.getJumpLabelFromSig('multi_call_v3_output0');
+
+
         bytes memory payloadMulticall = abi.encodePacked(
             jumplabel,
-            payload
+            payload,
+            jumplabel2,
+            payload2
         );
         emit log_bytes(payloadMulticall);
         console.log(payloadMulticall.length);
