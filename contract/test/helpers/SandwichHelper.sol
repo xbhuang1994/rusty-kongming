@@ -79,6 +79,8 @@ contract SandwichHelper is Test {
         }
     }
 
+    
+
     function _v3FindSwapType(
         bool isWethInput,
         address inputToken,
@@ -228,6 +230,33 @@ contract SandwichHelper is Test {
             uint8(memoryOffset),
             uint32(encodedAmountIn)
         );
+    }
+    function v3CreateSandwichPayloadWethIsOutputMultiCall(
+        address pool,
+        address inputToken,
+        address outputToken,
+        uint24 fee,
+        uint256 amountIn
+    ) public pure returns (bytes memory payload) {
+        (address token0, address token1) = inputToken < outputToken
+            ? (inputToken, outputToken)
+            : (outputToken, inputToken);
+        bytes32 pairInitHash = keccak256(abi.encode(token0, token1, fee));
+
+        (
+            uint256 encodedAmountIn,
+            uint256 memoryOffset,
+            
+        ) = encodeNumToByteAndOffset(amountIn, 4, false, false);
+            // use small method
+            payload = abi.encodePacked(
+                // uint8(swapType),
+                address(pool),
+                pairInitHash,
+                uint8(memoryOffset),
+                uint32(encodedAmountIn),
+                address(inputToken)
+            );
     }
 
     // Create payload for when weth is input
@@ -403,7 +432,7 @@ contract SandwichHelper is Test {
         //uint startingIndex = 0x35;
         uint256 startingIndex = 0x06;
 
-        string[17] memory functionNames = [
+        string[19] memory functionNames = [
             "v2_output0",
             "v2_input0",
             "v2_output1",
@@ -420,7 +449,9 @@ contract SandwichHelper is Test {
             "multi_call_v2_input",
             "multi_call_v2_output",
             "multi_call_v3_input0",
-            "multi_call_v3_input1"
+            "multi_call_v3_input1",
+            "multi_call_v3_output0",
+            "multi_call_v3_output1"
         ];
 
         for (uint256 i = 0; i < functionNames.length; i++) {
