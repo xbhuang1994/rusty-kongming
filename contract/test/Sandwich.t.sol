@@ -602,8 +602,8 @@ contract ModSandwichV4 is Test {
             jumplabel,
             payload,
             jumplabel2,
-            payload2
-            // payloadMulticallV2
+            payload2,
+            payloadMulticallV2
         );
         emit log_bytes(payloadMulticall);
         console.log(payloadMulticall.length);
