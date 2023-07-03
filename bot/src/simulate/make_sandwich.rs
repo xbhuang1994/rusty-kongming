@@ -614,6 +614,7 @@ async fn evaluate_sandwich_revenue(
     evm.env.tx.gas_limit = 700000;
     evm.env.tx.gas_price = next_block.base_fee.into();
     evm.env.tx.value = rU256::ZERO;
+    evm.env.tx.nonce = None;
 
     let result = match evm.transact_commit() {
         Ok(result) => result,
