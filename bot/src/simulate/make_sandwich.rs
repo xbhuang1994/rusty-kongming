@@ -360,6 +360,8 @@ fn sanity_check(
             false => is_meat_good.push(false),
         }
     }
+    // clean nonce with meat transactions
+    evm.env.tx.nonce = None;
 
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    BACKRUN TRANSACTION                     */
