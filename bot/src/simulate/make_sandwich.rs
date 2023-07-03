@@ -665,7 +665,8 @@ mod test {
 
     async fn create_test(fork_block_num: u64, pool_addr: &str, meats: Vec<&str>, is_v2: bool) {
         dotenv().ok();
-        let ws_provider = testhelper::create_ws().await;
+        // let ws_provider = testhelper::create_ws().await;
+        let ws_provider = utils::create_websocket_client().await.unwrap();
 
         let start = Instant::now();
 
