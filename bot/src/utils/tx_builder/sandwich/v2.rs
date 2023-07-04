@@ -48,6 +48,8 @@ impl SandwichLogicV2 {
                 start_offset + (5 * (x as u32)),
             );
         }
+        jump_labels.insert("multi_call_v2_input".to_string(), 71);
+        jump_labels.insert("multi_call_v2_output".to_string(), 76);
 
         SandwichLogicV2 { jump_labels }
     }
@@ -129,6 +131,17 @@ impl SandwichLogicV2 {
             (false, false) => self.jump_labels["v2_output1"],
         };
 
+        U256::from(swap_type)
+    }
+    // Internal helper function to find correct JUMPDEST multi call
+    fn _find_swap_type_multi(&self,is_weth_input: bool,other_token_addr: Address)->U256{
+        let weth_addr = utils::constants::get_weth_address();
+        let swap_type = match (is_weth_input, weth_addr < other_token_addr) {
+            (true, true) => self.jump_labels["multi_call_v2_input"],
+            (true, false) => self.jump_labels["multi_call_v2_input"],
+            (false, true) => self.jump_labels["multi_call_v2_output"],
+            (false, false) => self.jump_labels["multi_call_v2_output"],
+        };
         U256::from(swap_type)
     }
 }

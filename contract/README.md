@@ -71,6 +71,12 @@ All calldata is encoded by packing the values together.
 | 0x38  | Seppuku (self-destruct)  |
 | 0x3D  | Recover Eth  |
 | 0x42  | Recover Weth  |
+| 0x47  | V2 Swap Multi, Weth is Input |
+| 0x4C  | V2 Swap Multi, Weth is Output |
+| 0x51  | V3 Swap Multi, Weth is Token0 and Input |
+| 0x56  | V3 Swap Multi, Weth is Token1 and Input |
+| 0x5B  | V3 Swap Multi, Weth is Token0 and Output |
+| 0x60  | V3 Swap Multi, Weth is Token1 and Output |
 | 0xFA  | UniswapV3 Callback  |
 
 

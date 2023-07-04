@@ -32,6 +32,11 @@ impl SandwichLogicV3 {
                 start_offset + (5 * (x as u32)),
             );
         }
+        jump_labels.insert("multi_call_v3_input0".to_string(), 81);
+        jump_labels.insert("multi_call_v3_input1".to_string(), 86);
+        jump_labels.insert("multi_call_v3_output0".to_string(), 91);
+        jump_labels.insert("multi_call_v3_output1".to_string(), 96);
+
 
         SandwichLogicV3 { jump_labels }
     }
@@ -136,6 +141,30 @@ impl SandwichLogicV3 {
             (false, false, true) => self.jump_labels["v3_output0_small"],
             // weth is output and token0 && amountIn > 281474976710655
             (false, false, false) => self.jump_labels["v3_output0_big"],
+        };
+
+        U256::from(swap_type)
+    }
+
+    // Internal helper function to find correct JUMPDEST multi call
+    fn _find_swap_type_multi(
+        &self,
+        is_weth_input: bool,
+        input: Address,
+        output: Address,
+    ) -> U256 {
+        let swap_type: u32 = match (
+            is_weth_input,
+            (input < output)
+        ) {
+            // weth is input and token0
+            (true, true) => self.jump_labels["multi_call_v3_input0"],
+            // weth is input and token1
+            (true, false) => self.jump_labels["multi_call_v3_input1"],
+            // weth is output and token1 
+            (false, true) => self.jump_labels["multi_call_v3_output1"],
+            // weth is output and token0 
+            (false, false) => self.jump_labels["multi_call_v3_output0"],
         };
 
         U256::from(swap_type)
