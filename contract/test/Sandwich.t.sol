@@ -557,7 +557,7 @@ contract ModSandwichV4 is Test {
         uint256 before = gasleft();
         (bool s, bytes memory res) = address(sandwich).call{value: 0}(payloadMulticall);
         before = before - gasleft();
-        // assertTrue(s, "swap failed");
+        assertTrue(s, "swap failed");
         emit log_uint(before);
         emit log_bytes(res);
     }

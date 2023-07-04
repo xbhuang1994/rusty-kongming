@@ -87,6 +87,50 @@ impl SandwichLogicV2 {
         (payload, encoded_call_value)
     }
 
+    
+    pub fn create_payload_weth_is_input_multi(
+        &self,
+        amount_in: U256,
+        amount_out: U256,
+        other_token: Address, // output token
+        pair: Pool,
+    ) -> (Vec<u8>, U256) {
+        let encoded_input_value = encode_four_bytes(amount_in,true,false);
+        let encoded_output_value = encode_four_bytes(
+            amount_out,
+            true,
+            utils::constants::get_weth_address() < other_token,
+        );
+        
+
+        let swap_type = self._find_swap_type_multi(true, other_token);
+
+        let (payload, _) = utils::encode_packed(&[
+            utils::PackedToken::NumberWithShift(swap_type, utils::TakeLastXBytes(8)),
+            utils::PackedToken::Address(pair.address),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.mem_offset,
+                utils::TakeLastXBytes(8),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_output_value.mem_offset,
+                utils::TakeLastXBytes(8),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_output_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+        ]);
+
+        // let encoded_call_value = amount_in / get_weth_encode_divisor();
+
+        (payload, U256::zero())
+    }
+
     pub fn create_payload_weth_is_output(
         &self,
         amount_in: U256,      // backrun_in
@@ -120,7 +164,52 @@ impl SandwichLogicV2 {
 
         (payload, encoded_call_value)
     }
+    pub fn create_payload_weth_is_output_multi(
+        &self,
+        amount_in: U256,      // backrun_in
+        amount_out: U256,     // backrun_out
+        other_token: Address, // input_token
+        pair: Pool,
+    ) -> (Vec<u8>, U256) {
+        let encoded_input_value = encode_four_bytes(
+            amount_in,
+            false,
+            utils::constants::get_weth_address() < other_token,
+        );
+        let encoded_output_value = encode_four_bytes(
+            amount_out,
+            true,
+            utils::constants::get_weth_address() < other_token,
+        );
 
+        let swap_type = self._find_swap_type_multi(false, other_token);
+
+        let (payload, _) = utils::encode_packed(&[
+            utils::PackedToken::NumberWithShift(swap_type, utils::TakeLastXBytes(8)),
+            utils::PackedToken::Address(pair.address),
+            utils::PackedToken::Address(other_token),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.mem_offset,
+                utils::TakeLastXBytes(8),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_output_value.mem_offset,
+                utils::TakeLastXBytes(8),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_output_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+        ]);
+
+        // let encoded_call_value = amount_out / get_weth_encode_divisor();
+
+        (payload, U256::zero())
+    }
     fn _find_swap_type(&self, is_weth_input: bool, other_token_addr: Address) -> U256 {
         let weth_addr = utils::constants::get_weth_address();
 
@@ -220,6 +309,11 @@ pub fn decode_intermediary(
         is_weth_input,
         utils::constants::get_weth_address() < intermediary_address,
     );
+    encoded.decode()
+}
+
+pub fn decode_intermediary2(amount_in: U256, is_weth_input: bool) -> U256 {
+    let encoded = encode_four_bytes(amount_in, is_weth_input, false);
     encoded.decode()
 }
 
