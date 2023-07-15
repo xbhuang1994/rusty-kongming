@@ -12,10 +12,10 @@ pub struct SandwichLogicV2 {
 
 /// Encoded swap value used by other token
 pub struct EncodedSwapValue {
-    four_byte_value: U256,
-    mem_offset: U256,
+    pub four_byte_value: U256,
+    pub mem_offset: U256,
     // real value after encoding
-    byte_shift: U256,
+    pub byte_shift: U256,
 }
 
 impl EncodedSwapValue {
@@ -87,7 +87,6 @@ impl SandwichLogicV2 {
         (payload, encoded_call_value)
     }
 
-    
     pub fn create_payload_weth_is_input_multi(
         &self,
         amount_in: U256,
@@ -95,13 +94,12 @@ impl SandwichLogicV2 {
         other_token: Address, // output token
         pair: Pool,
     ) -> (Vec<u8>, U256) {
-        let encoded_input_value = encode_four_bytes(amount_in,true,false);
+        let encoded_input_value = encode_four_bytes(amount_in, true, false);
         let encoded_output_value = encode_four_bytes(
             amount_out,
             true,
             utils::constants::get_weth_address() < other_token,
         );
-        
 
         let swap_type = self._find_swap_type_multi(true, other_token);
 
@@ -171,15 +169,11 @@ impl SandwichLogicV2 {
         other_token: Address, // input_token
         pair: Pool,
     ) -> (Vec<u8>, U256) {
-        let encoded_input_value = encode_four_bytes(
-            amount_in,
-            false,
-            utils::constants::get_weth_address() < other_token,
-        );
+        let encoded_input_value = encode_four_bytes(amount_in, false, false);
         let encoded_output_value = encode_four_bytes(
             amount_out,
             true,
-            utils::constants::get_weth_address() < other_token,
+            utils::constants::get_weth_address() > other_token,
         );
 
         let swap_type = self._find_swap_type_multi(false, other_token);
@@ -223,7 +217,7 @@ impl SandwichLogicV2 {
         U256::from(swap_type)
     }
     // Internal helper function to find correct JUMPDEST multi call
-    fn _find_swap_type_multi(&self,is_weth_input: bool,other_token_addr: Address)->U256{
+    fn _find_swap_type_multi(&self, is_weth_input: bool, other_token_addr: Address) -> U256 {
         let weth_addr = utils::constants::get_weth_address();
         let swap_type = match (is_weth_input, weth_addr < other_token_addr) {
             (true, true) => self.jump_labels["multi_call_v2_input"],

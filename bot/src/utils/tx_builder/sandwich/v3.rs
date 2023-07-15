@@ -37,7 +37,6 @@ impl SandwichLogicV3 {
         jump_labels.insert("multi_call_v3_output0".to_string(), 91);
         jump_labels.insert("multi_call_v3_output1".to_string(), 96);
 
-
         SandwichLogicV3 { jump_labels }
     }
 
@@ -66,6 +65,37 @@ impl SandwichLogicV3 {
         let encoded_call_value = U256::from(amount_in.as_u128()) / get_weth_encode_divisor();
 
         (payload, encoded_call_value)
+    }
+
+    pub fn create_payload_weth_is_input_multi_call(
+        &self,
+        amount_in: U256,
+        input: Address,
+        output: Address,
+        pool: Pool,
+    ) -> (Vec<u8>, U256) {
+        let (token_0, token_1, fee) = (pool.token_0, pool.token_1, pool.swap_fee);
+        let swap_type = self._find_swap_type_multi(true, input, output);
+        let pool_key_hash = ethers::utils::keccak256(abi::encode(&[
+            abi::Token::Address(token_0),
+            abi::Token::Address(token_1),
+            abi::Token::Uint(fee),
+        ]));
+        let encoded_input_value = v2::encode_four_bytes(amount_in, false, false);
+        let (payload, _) = utils::encode_packed(&[
+            utils::PackedToken::NumberWithShift(swap_type, utils::TakeLastXBytes(8)),
+            utils::PackedToken::Address(pool.address),
+            utils::PackedToken::Bytes(&pool_key_hash),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.mem_offset,
+                utils::TakeLastXBytes(8),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+        ]);
+        (payload, U256::zero())
     }
 
     // Handles creation of tx data field when weth is output
@@ -116,6 +146,43 @@ impl SandwichLogicV3 {
         payload
     }
 
+     // Handles creation of tx data field when weth is output
+     pub fn create_payload_weth_is_output_multi_call(
+        &self,
+        amount_in: U256,
+        input: Address,
+        output: Address,
+        pool: Pool,
+    ) -> Vec<u8> {
+        let (token_0, token_1, fee) = (pool.token_0, pool.token_1, pool.swap_fee);
+        let swap_type = self._find_swap_type_multi(false, input, output);
+        let pool_key_hash = ethers::utils::keccak256(abi::encode(&[
+            abi::Token::Address(token_0),
+            abi::Token::Address(token_1),
+            abi::Token::Uint(fee),
+        ]));
+
+        let payload;
+        let encoded_input_value = v2::encode_four_bytes(amount_in, false, false);
+        // use big encoding method (encode amount_in by dividing by 1e13 and storing result into 9 bytes)
+        // let encoded_amount_in = amount_in / I256::from_dec_str("10000000000000").unwrap();
+        (payload, _) = utils::encode_packed(&vec![
+            utils::PackedToken::NumberWithShift(swap_type, utils::TakeLastXBytes(8)),
+            utils::PackedToken::Address(pool.address),
+            utils::PackedToken::Bytes(&pool_key_hash),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.mem_offset,
+                utils::TakeLastXBytes(8),
+            ),
+            utils::PackedToken::NumberWithShift(
+                encoded_input_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+            utils::PackedToken::Address(input),
+        ]);
+
+        payload
+    }
     // Internal helper function to find correct JUMPDEST
     fn _find_swap_type(
         &self,
@@ -147,23 +214,15 @@ impl SandwichLogicV3 {
     }
 
     // Internal helper function to find correct JUMPDEST multi call
-    fn _find_swap_type_multi(
-        &self,
-        is_weth_input: bool,
-        input: Address,
-        output: Address,
-    ) -> U256 {
-        let swap_type: u32 = match (
-            is_weth_input,
-            (input < output)
-        ) {
+    fn _find_swap_type_multi(&self, is_weth_input: bool, input: Address, output: Address) -> U256 {
+        let swap_type: u32 = match (is_weth_input, (input < output)) {
             // weth is input and token0
             (true, true) => self.jump_labels["multi_call_v3_input0"],
             // weth is input and token1
             (true, false) => self.jump_labels["multi_call_v3_input1"],
-            // weth is output and token1 
+            // weth is output and token1
             (false, true) => self.jump_labels["multi_call_v3_output1"],
-            // weth is output and token0 
+            // weth is output and token0
             (false, false) => self.jump_labels["multi_call_v3_output0"],
         };
 
