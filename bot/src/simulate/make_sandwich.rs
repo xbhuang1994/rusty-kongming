@@ -529,7 +529,7 @@ fn sanity_check_multi(
     // encode frontrun_in before passing to sandwich contract
     let frontrun_in = match pool_variant {
         PoolVariant::UniswapV2 => tx_builder::v2::decode_intermediary2(frontrun_in,true),
-        PoolVariant::UniswapV3 => tx_builder::v3::encode_weth(frontrun_in),
+        PoolVariant::UniswapV3 => frontrun_in,
     };
 
     // caluclate frontrun_out using encoded frontrun_in
@@ -667,7 +667,7 @@ fn sanity_check_multi(
         PoolVariant::UniswapV2 => {
             tx_builder::v2::encode_intermediary_with_dust(balance, false, token_in)
         }
-        PoolVariant::UniswapV3 => tx_builder::v3::encode_intermediary_token(balance),
+        PoolVariant::UniswapV3 => balance,
     };
 
     // caluclate backrun_out using encoded backrun_in
