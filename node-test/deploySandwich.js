@@ -15,7 +15,7 @@ async function main() {
     console.log(balance.toString());
     console.log("my wallet address:", wallet.address);
     const contractFactory = new ethers.Contract(contractAddress, contractFactoryABI, wallet);
-    const slat = "0x30ce0df88936ecd176af29f63ba3f3c8b978bfda58091a98ea2f6b00c30caf04";
+    const slat = process.env.DEPOLY_SLAT;
     if (!shell.which('huffc')) {
         shell.echo('huffc is not installed');
         shell.exit(1);
