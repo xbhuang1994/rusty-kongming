@@ -4,7 +4,7 @@ const shell = require('shelljs');
 // const wethContractABI = require('./abi/IWETH.json');
 const contractFactoryABI = require('./abi/IMetamorphicContractFactory.json');
 // Create an ethers provider instance
-const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL_WSS);
+const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL);
 const wallet = new ethers.Wallet(process.env.DEPOLY_KEY, provider);
 // Create a contract instance
 const contractAddress = '0x00000000e82eb0431756271F0d00CFB143685e7B'; // Replace with the actual contract address
