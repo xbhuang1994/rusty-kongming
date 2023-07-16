@@ -4,24 +4,18 @@ const shell = require('shelljs');
 // const wethContractABI = require('./abi/IWETH.json');
 const contractFactoryABI = require('./abi/IMetamorphicContractFactory.json');
 // Create an ethers provider instance
-const provider = new ethers.providers.JsonRpcProvider('http://localhost:8545');
-const wallet = new ethers.Wallet('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80', provider);
-const mywallet = new ethers.Wallet(process.env.DEPOLY_KEY, provider);
+const provider = new ethers.providers.JsonRpcProvider(process.env.RPC_URL_WSS);
+const wallet = new ethers.Wallet(process.env.DEPOLY_KEY, provider);
 // Create a contract instance
 const contractAddress = '0x00000000e82eb0431756271F0d00CFB143685e7B'; // Replace with the actual contract address
 
 
 async function main() {
-    const sendAmount = ethers.utils.parseEther('1'); // 发送的ETH数量，此处为0.1 ETH
-    const transaction = {
-        to: mywallet.address,
-        value: sendAmount,
-    };
-    await wallet.sendTransaction(transaction);
-    let balance = await mywallet.getBalance();
+    let balance = await wallet.getBalance();
     console.log(balance.toString());
-    const contractFactory = new ethers.Contract(contractAddress, contractFactoryABI, mywallet);
-    const slat = "0x30ce0df88936ecd176af29f63ba3f3c8b978bfdaa05c91e9d6dfe501c745a809";
+    console.log("my wallet address:", wallet.address);
+    const contractFactory = new ethers.Contract(contractAddress, contractFactoryABI, wallet);
+    const slat = "0x30ce0df88936ecd176af29f63ba3f3c8b978bfda58091a98ea2f6b00c30caf04";
     if (!shell.which('huffc')) {
         shell.echo('huffc is not installed');
         shell.exit(1);
