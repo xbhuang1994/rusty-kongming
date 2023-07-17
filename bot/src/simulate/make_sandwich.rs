@@ -49,8 +49,10 @@ pub async fn create_optimal_sandwich(
     {
         println!("Optimal amount in: {}", optimal);
     }
-
-    sanity_check(
+    if optimal.is_zero() {
+        return Err(SimulationError::ZeroOptimal());
+    }
+    sanity_check_multi(
         sandwich_balance,
         optimal,
         ingredients,
@@ -486,7 +488,6 @@ fn sanity_check(
     ))
 }
 
-
 // Perform simulation using sandwich contract and check for salmonella
 //
 // Arguments:
@@ -508,11 +509,6 @@ fn sanity_check_multi(
     sandwich_maker: &SandwichMaker,
     fork_db: ForkDB,
 ) -> Result<OptimalRecipe, SimulationError> {
-    let other_token = ingredients.intermediary_token;
-    let weth_is_token0 = crate::utils::constants::get_weth_address() < other_token;
-    println!("sanity_check_multi: otherToken: {:?}", other_token);
-    println!("sanity_check_multi: wethIsToken0: {:?}", weth_is_token0);
-
     // setup evm simulation
     let mut evm = revm::EVM::new();
     evm.database(fork_db);
@@ -528,7 +524,7 @@ fn sanity_check_multi(
     //
     // encode frontrun_in before passing to sandwich contract
     let frontrun_in = match pool_variant {
-        PoolVariant::UniswapV2 => tx_builder::v2::decode_intermediary2(frontrun_in,true),
+        PoolVariant::UniswapV2 => tx_builder::v2::decode_intermediary2(frontrun_in, true),
         PoolVariant::UniswapV3 => frontrun_in,
     };
 
@@ -547,7 +543,6 @@ fn sanity_check_multi(
         }
         PoolVariant::UniswapV3 => U256::zero(),
     };
-    println!("frontrun_out: {:?}", frontrun_out);
 
     // create tx.data and tx.value for frontrun_in
     let (frontrun_data, frontrun_value) = match pool_variant {
@@ -658,11 +653,8 @@ fn sanity_check_multi(
     let token_in = ingredients.intermediary_token;
     let token_out = ingredients.startend_token;
     let balance = get_balance_of_evm(token_in, sandwich_contract, next_block, &mut evm)?;
-    println!("token in balance: {}", balance);
 
-    let weth_balance = get_balance_of_evm(token_out, sandwich_contract, next_block, &mut evm)?;
 
-    println!("weth balance: {}", weth_balance);
     let backrun_in = match pool_variant {
         PoolVariant::UniswapV2 => {
             tx_builder::v2::encode_intermediary_with_dust(balance, false, token_in)
@@ -675,12 +667,10 @@ fn sanity_check_multi(
         PoolVariant::UniswapV2 => {
             let target_pool = ingredients.target_pool.address;
             let out = get_amount_out_evm(backrun_in, target_pool, token_in, token_out, &mut evm)?;
-            tx_builder::v2::decode_intermediary(out,true, token_out)
+            tx_builder::v2::decode_intermediary(out, true, token_out)
         }
         PoolVariant::UniswapV3 => U256::zero(),
     };
-    println!("backrun_in: {}", backrun_in);
-    println!("backrun_out: {}", backrun_out);
 
     // create tx.data and tx.value for backrun_in
     let (backrun_data, backrun_value) = match pool_variant {
@@ -722,14 +712,11 @@ fn sanity_check_multi(
     let mut salmonella_inspector = SalmonellaInspectoooor::new();
     let backrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
         Ok(result) => result,
-        Err(e) => {
-            println!("backrun error: {:?}", e);
-            return Err(SimulationError::BackrunEvmError(e))},
+        Err(e) => return Err(SimulationError::BackrunEvmError(e)),
     };
     match backrun_result {
         ExecutionResult::Success { .. } => { /* continue */ }
         ExecutionResult::Revert { output, .. } => {
-            println!(" backrun reverted: {:?}", output);
             return Err(SimulationError::BackrunReverted(output))
         }
         ExecutionResult::Halt { reason, .. } => return Err(SimulationError::BackrunHalted(reason)),
@@ -740,7 +727,6 @@ fn sanity_check_multi(
             return Err(SimulationError::BackrunNotSafu(not_safu_opcodes))
         }
     }
-
 
     let backrun_gas_used = backrun_result.gas_used();
 
@@ -755,8 +741,6 @@ fn sanity_check_multi(
         next_block,
         &mut evm,
     )?;
-    println!("post sandwich balance: {}", post_sandwich_balance);
-    println!("startend balance: {}", sandwich_start_balance);
     let revenue = post_sandwich_balance
         .checked_sub(sandwich_start_balance)
         .unwrap_or_default();
