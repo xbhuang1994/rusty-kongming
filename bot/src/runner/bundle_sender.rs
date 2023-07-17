@@ -358,7 +358,7 @@ fn calculate_bribe_for_max_fee(
     // overpay to get dust onto sandwich contractIf
     // more info: https://twitter.com/libevm/status/1474870661373779969
     let bribe_amount = if !recipe.has_dust {
-        revenue_minus_frontrun_tx_fee + ethers::utils::parse_ether("0.00015").unwrap()
+        revenue_minus_frontrun_tx_fee + ethers::utils::parse_ether("0.0001611").unwrap()
     } else {
         let mut rng = rand::thread_rng();
 

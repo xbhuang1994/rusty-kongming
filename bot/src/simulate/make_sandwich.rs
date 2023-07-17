@@ -50,7 +50,7 @@ pub async fn create_optimal_sandwich(
         println!("Optimal amount in: {}", optimal);
     }
 
-    sanity_check_multi(
+    sanity_check(
         sandwich_balance,
         optimal,
         ingredients,
