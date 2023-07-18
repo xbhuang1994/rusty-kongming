@@ -119,7 +119,7 @@ impl Bot {
             // enhancement: simulate all txs, store result, and use result when tx can included
             if victim_tx.max_fee_per_gas.unwrap_or(U256::zero()) < block_oracle.next_block.base_fee
             {
-                log::info!("{}", format!("{:?} mf<nbf", victim_tx.hash).cyan());
+                // log::info!("{}", format!("{:?} mf<nbf", victim_tx.hash).cyan());
                 continue;
             }
 
@@ -145,7 +145,7 @@ impl Bot {
             {
                 sd
             } else {
-                log::info!("{:?}", victim_tx.hash);
+                // log::info!("{:?}", victim_tx.hash);
                 continue;
             };
 
@@ -154,7 +154,7 @@ impl Bot {
                 if let Some(sp) = utils::state_diff::extract_pools(&state_diffs, &all_pools) {
                     sp
                 } else {
-                    log::info!("{:?}", victim_tx.hash);
+                    // log::info!("{:?}", victim_tx.hash);
                     continue;
                 };
 

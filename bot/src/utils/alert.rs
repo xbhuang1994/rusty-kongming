@@ -11,6 +11,7 @@ pub async fn alert_bundle<'a>(
     target_block: U64,
     is_bundle_included: bool,
     recipe: &OptimalRecipe,
+    max_fee:U256,
     profit: U256,
 ) {
     let bundle_hash = format!("{:?}", bundle_hash);
@@ -36,6 +37,7 @@ pub async fn alert_bundle<'a>(
         ----------
         fr gas: {}
         br gas: {}
+        max fee: {}
         ----------
         ----------
         revenue: {}
@@ -47,6 +49,7 @@ pub async fn alert_bundle<'a>(
         meat_hashes,
         recipe.frontrun_gas_used,
         recipe.backrun_gas_used,
+        max_fee,
         recipe.revenue.as_u128(),
         profit
     );

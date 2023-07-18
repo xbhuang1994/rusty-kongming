@@ -298,6 +298,7 @@ pub async fn send_bundle(
                     target_block.number,
                     is_bundle_included,
                     &recipe,
+                    max_fee,
                     profit,
                 )
                 .await;
@@ -358,18 +359,18 @@ fn calculate_bribe_for_max_fee(
     // overpay to get dust onto sandwich contractIf
     // more info: https://twitter.com/libevm/status/1474870661373779969
     let bribe_amount = if !recipe.has_dust {
-        revenue_minus_frontrun_tx_fee + ethers::utils::parse_ether("0.0001611").unwrap()
+        revenue_minus_frontrun_tx_fee + ethers::utils::parse_ether("0.0005861").unwrap()
     } else {
         let mut rng = rand::thread_rng();
 
         // enchanement: make bribe adaptive based on competitors
         match recipe.target_pool.pool_variant {
             PoolVariant::UniswapV2 => {
-                (revenue_minus_frontrun_tx_fee * (990000000 + rng.gen_range(0..10000000)))
+                (revenue_minus_frontrun_tx_fee * (999000000 + rng.gen_range(0..1000000)))
                     / 1000000000
             }
             PoolVariant::UniswapV3 => {
-                (revenue_minus_frontrun_tx_fee * (970000000 + rng.gen_range(0..30000000)))
+                (revenue_minus_frontrun_tx_fee * (997000000 + rng.gen_range(0..3000000)))
                     / 1000000000
             }
         }

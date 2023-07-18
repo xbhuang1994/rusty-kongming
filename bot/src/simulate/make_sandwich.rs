@@ -52,7 +52,7 @@ pub async fn create_optimal_sandwich(
     if optimal.is_zero() {
         return Err(SimulationError::ZeroOptimal());
     }
-    sanity_check_multi(
+    sanity_check(
         sandwich_balance,
         optimal,
         ingredients,
@@ -222,7 +222,7 @@ async fn juiced_quadratic_search(
 // Ok(OptimalRecipe): params to pass to sandwich contract to capture opportunity
 // Err(SimulationError): error encountered during simulation
 fn sanity_check(
-    sandwich_start_balance: U256,
+    _: U256,
     frontrun_in: U256,
     ingredients: &RawIngredients,
     next_block: &BlockInfo,
@@ -237,6 +237,13 @@ fn sanity_check(
     let searcher = dotenv::get_searcher_wallet().address();
     let sandwich_contract = dotenv::get_sandwich_contract_address();
     let pool_variant = ingredients.target_pool.pool_variant;
+
+    let sandwich_start_balance = get_balance_of_evm(
+        ingredients.startend_token,
+        sandwich_contract,
+        next_block,
+        &mut evm,
+    )?;
 
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    FRONTRUN TRANSACTION                    */
@@ -502,7 +509,7 @@ fn sanity_check(
 // Ok(OptimalRecipe): params to pass to sandwich contract to capture opportunity
 // Err(SimulationError): error encountered during simulation
 fn sanity_check_multi(
-    sandwich_start_balance: U256,
+    _: U256,
     frontrun_in: U256,
     ingredients: &RawIngredients,
     next_block: &BlockInfo,
@@ -517,7 +524,12 @@ fn sanity_check_multi(
     let searcher = dotenv::get_searcher_wallet().address();
     let sandwich_contract = dotenv::get_sandwich_contract_address();
     let pool_variant = ingredients.target_pool.pool_variant;
-
+    let sandwich_start_balance = get_balance_of_evm(
+        ingredients.startend_token,
+        sandwich_contract,
+        next_block,
+        &mut evm,
+    )?;
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    FRONTRUN TRANSACTION                    */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -1023,9 +1035,9 @@ mod test {
         let rt = Runtime::new().unwrap();
         rt.block_on(async {
             create_test(
-                16873147,
-                "0xB84C45174Bfc6b8F3EaeCBae11deE63114f5c1b2",
-                vec!["0xb344fdc6a3b7c65c5dd971cb113567e2ee6d0636f261c3b8d624627b90694cdb"],
+                17721757,
+                "0x7fdeb46b3a0916630f36e886d675602b1007fcbb",
+                vec!["0xbf5aaafe4d8e1eba3dfb1d05e9b45e9532bd8cb58e1e00a0679041e4bee6c1d0"],
                 true,
             )
             .await;
