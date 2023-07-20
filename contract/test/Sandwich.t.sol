@@ -342,9 +342,11 @@ contract ModSandwichV4 is Test {
         (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
             .v2CreateSandwichPayloadWethIsInput(outputToken, amountIn);
         vm.prank(admin);
-        (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        (bool s, bytes memory res) = address(sandwich).call{value: encodedValue}(payloadV4);
         assertTrue(s);
 
+        emit log_bytes(payloadV4);
+        emit log_bytes(res);
         // Check values after swap
         uint256 wethBalanceChange = wethBalanceBefore -
             weth.balanceOf(sandwich);
@@ -385,15 +387,17 @@ contract ModSandwichV4 is Test {
         (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
             .v2CreateSandwichPayloadWethIsInput(outputToken, amountIn);
         vm.prank(admin);
-        (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        (bool s, bytes memory res) = address(sandwich).call{value: encodedValue}(payloadV4);
         assertTrue(s);
 
+        emit log_bytes(payloadV4);
+        emit log_bytes(res);
         // Check values after swap
         uint256 wethBalanceChange = wethBalanceBefore -
             weth.balanceOf(sandwich);
         uint256 usdcBalanceChange = IERC20(outputToken).balanceOf(sandwich) -
             usdcBalanceBefore;
-
+    
         assertEq(
             usdcBalanceChange,
             expectedAmountOut,
@@ -413,7 +417,6 @@ contract ModSandwichV4 is Test {
         // Fund sandwich
         vm.prank(binance8);
         IUSDT(inputToken).transfer(sandwich, amountIn);
-
         // Pre swap checks
         uint256 wethBalanceBefore = weth.balanceOf(sandwich);
         uint256 superFarmBalanceBefore = IERC20(inputToken).balanceOf(sandwich);
@@ -437,8 +440,11 @@ contract ModSandwichV4 is Test {
         (bytes memory payloadV4, uint256 encodedValue) = sandwichHelper
             .v2CreateSandwichPayloadWethIsOutput(inputToken, amountIn);
         vm.prank(admin);
-        (bool s, ) = address(sandwich).call{value: encodedValue}(payloadV4);
+        (bool s, bytes memory res) = address(sandwich).call{value: encodedValue}(payloadV4);
         assertTrue(s, "swap failed");
+        emit log_bytes(payloadV4);
+        emit log_bytes(res);
+
 
         // Check values after swap
         uint256 wethBalanceChange = weth.balanceOf(sandwich) -
@@ -550,7 +556,13 @@ contract ModSandwichV4 is Test {
         );
     }
     function testMulticallV2() public{
-        bytes memory payloadMulticall = getMulticallV2Payload();
+        bytes memory payloadMulticallV2 = getMulticallV2Payload();
+
+        bytes memory payloadMulticall =  abi.encodePacked(
+            sandwichHelper.getJumpLabelFromSig('check_block_number'),
+            uint32(block.number),
+            payloadMulticallV2
+        );
         emit log_bytes(payloadMulticall);
         emit log_uint(payloadMulticall.length);
         vm.prank(admin);
@@ -599,6 +611,9 @@ contract ModSandwichV4 is Test {
 
         bytes memory payloadMulticallV2 = getMulticallV2Payload();
         bytes memory payloadMulticall = abi.encodePacked(
+            
+            sandwichHelper.getJumpLabelFromSig('check_block_number'),
+            uint32(block.number),
             jumplabel,
             payload,
             jumplabel2,
@@ -658,6 +673,9 @@ contract ModSandwichV4 is Test {
 
 
         bytes memory payloadMulticall = abi.encodePacked(
+
+            sandwichHelper.getJumpLabelFromSig('check_block_number'),
+            uint32(block.number),
             jumplabel,
             payload,
             jumplabel2,

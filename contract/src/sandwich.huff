@@ -134,9 +134,13 @@ multi_call_v3_output0_astral_gate:
 multi_call_v3_output1_astral_gate:
     multi_call_v3_output1
     jump
+
+check_block_number_astral_gate:
+    check_block_number
+    jump
 // wall of stops used so that the jumpdest of callback label equals 0xfa
 // 0xfa = first two bytes of function sig 0xfa461e33
-stop stop stop stop stop stop
+stop 
 stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
@@ -219,6 +223,11 @@ isZeroForOne:
 
 
 v3_input1:
+    // valiblocknumer
+    0x35 calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -253,6 +262,11 @@ v3_input1:
 
 // (UniswapV3) Weth is token0 && input && has an offset of 0
 v3_input0:
+    // valiblocknumer
+    0x35 calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -530,6 +544,12 @@ v2_output1:
 
 // Make swap when Weth is token0 && input
 v2_input0:
+    // valiblocknumer
+    0x1a calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
+
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -583,6 +603,11 @@ v2_input0:
 
 // Make swap when Weth is token1 && input
 v2_input1:
+    // valiblocknumer
+    0x1a calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -1066,4 +1091,14 @@ multi_call_v3_output1:
     0x4e add
     multi_call_next
     jump
+check_block_number:
+    // valiblocknumer
+    chainid calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
+    0x05
+    multi_call_next
+    jump
+
 }

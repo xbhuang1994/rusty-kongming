@@ -34,7 +34,8 @@ contract SandwichHelper is Test {
         payload = abi.encodePacked(
             uint8(swapType),
             address(pool),
-            pairInitHash
+            pairInitHash,
+            uint32(block.number)
         );
         encodedValue = uint256(amountIn) / wethEncodeMultiple();
     }
@@ -297,7 +298,8 @@ contract SandwichHelper is Test {
             uint8(swapType), // type of swap to make
             address(pair), // univ2 pair
             uint8(memoryOffset), // memoryOffset to store amountOut
-            uint32(encodedAmountOut) // amountOut
+            uint32(encodedAmountOut), // amountOut
+            uint32(block.number)
         );
 
         encodedValue = amountIn / wethEncodeMultiple();
@@ -432,7 +434,7 @@ contract SandwichHelper is Test {
         //uint startingIndex = 0x35;
         uint256 startingIndex = 0x06;
 
-        string[19] memory functionNames = [
+        string[20] memory functionNames = [
             "v2_output0",
             "v2_input0",
             "v2_output1",
@@ -451,7 +453,8 @@ contract SandwichHelper is Test {
             "multi_call_v3_input0",
             "multi_call_v3_input1",
             "multi_call_v3_output0",
-            "multi_call_v3_output1"
+            "multi_call_v3_output1",
+            "check_block_number"
         ];
 
         for (uint256 i = 0; i < functionNames.length; i++) {
