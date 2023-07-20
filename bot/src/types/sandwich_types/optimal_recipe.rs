@@ -53,6 +53,7 @@ impl OptimalRecipe {
             state_diffs,
         }
     }
+    
 
     // Does contract have dust for the target token associated with this opportunity
     pub fn set_has_dust(&mut self, dust: bool) {

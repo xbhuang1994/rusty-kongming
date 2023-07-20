@@ -59,116 +59,183 @@ impl BundleSender {
         sandwich_state: Arc<BotState>,
         sandwich_maker: Arc<SandwichMaker>,
     ) {
+        let mut handles = Vec::new();
         for (target_pool, recipes) in self.pending_sandwiches.iter() {
-            let mut recipes = {
+            let recipes = {
                 let read_lock = recipes.read().await;
                 (*read_lock).clone()
             };
 
             // we alr sent this tx
-            if recipes.len() <= 1 {
-                continue;
-            }
+            // if recipes.len() <= 1 {
+            //     continue;
+            // }
 
             let sandwich_state = sandwich_state.clone();
             let next_block = next_block.clone();
             let sandwich_maker = sandwich_maker.clone();
             let target_pool = target_pool.clone();
             // could cleanup this code because a lot of copy + pasting from runner/mod.rs
-            tokio::spawn(async move {
-                // sort recipes by revenue
-                recipes.sort_by(|a, b| a.revenue.cmp(&b.revenue));
-
-                let has_dust = recipes[0].has_dust;
-                let combined_state_diffs = {
-                    let mut combined: BTreeMap<H160, AccountDiff> = BTreeMap::new();
-
-                    for recipe in recipes.iter() {
-                        for (key, value) in recipe.state_diffs.clone() {
-                            combined.insert(key, value);
-                        }
-                    }
-
-                    combined
-                };
-
-                let client = utils::create_websocket_client().await.unwrap();
-                let fork_block = Some(BlockId::Number(BlockNumber::Number(next_block.number)));
-
-                // create evm simulation handler by setting up `fork_factory`
-                let initial_db =
-                    utils::state_diff::to_cache_db(&combined_state_diffs, fork_block, &client)
-                        .await
-                        .unwrap();
-                let mut fork_factory =
-                    ForkFactory::new_sandbox_factory(client.clone(), initial_db, fork_block);
-
-                // create raw ingredients
-                let meats = recipes
-                    .iter()
-                    .flat_map(|recipe| recipe.meats.clone())
+            let handle = tokio::spawn(prepare_and_send_sandwich(
+                recipes,
+                sandwich_state,
+                next_block,
+                sandwich_maker,
+                target_pool,
+            ));
+            handles.push(handle);
+        }
+        let results = futures::future::try_join_all(handles).await;
+        let optimal_sandwiches = match results {
+            Ok(optimal_sandwiches) => {
+                let optimal_sandwiches: Vec<_> = optimal_sandwiches
+                    .into_iter()
+                    .filter_map(|optimal_sandwich| optimal_sandwich)
                     .collect();
+                optimal_sandwiches
+            }
+            Err(e) => {
+                eprintln!("One of the tasks panicked: {:?}", e);
+                vec![]
+            }
+        };
 
-                let raw_ingredients = match RawIngredients::new(
-                    &target_pool,
-                    meats,
-                    utils::constants::get_weth_address(),
-                    combined_state_diffs,
-                )
-                .await
-                {
-                    Ok(recipe) => recipe,
-                    Err(_) => return,
-                };
-
-                let weth_balance = {
-                    let read_lock = sandwich_state.weth_balance.read().await;
-                    (*read_lock).clone()
-                };
-
-                //// find optimal input to for multi sandwich
-                let mut optimal_sandwich = match make_sandwich::create_optimal_sandwich(
-                    &raw_ingredients,
-                    weth_balance,
-                    &next_block,
-                    &mut fork_factory,
-                    &sandwich_maker,
-                )
-                .await
-                {
-                    Ok(optimal) => optimal,
-                    Err(_) => {
-                        return;
+        println!("optimal_sandwiches size: {:?}", optimal_sandwiches.len());
+        if optimal_sandwiches.len() <= 1 {
+            return;
+        }
+        let mut frontrun_data = Vec::new();
+        let mut backrun_data = Vec::new();
+        let mut meats: Vec<Transaction> = Vec::new();
+        // let mut frontrun_access_list = Vec::new();
+        // let mut backrun_access_list = Vec::new();
+        let mut combined_state_diffs: BTreeMap<H160, AccountDiff> = BTreeMap::new();
+        let target_pool = optimal_sandwiches[0].target_pool.clone();
+        for optimal_sandwich in &optimal_sandwiches {
+            let max_fee = calculate_bribe_for_max_fee(optimal_sandwich, &next_block);
+            match max_fee {
+                Ok(_) => {
+                    frontrun_data.extend(optimal_sandwich.frontrun_data.clone());
+                    backrun_data.extend(optimal_sandwich.backrun_data.clone());
+                    meats.extend(optimal_sandwich.meats.clone());
+                    // frontrun_access_list.extend(optimal_sandwich.frontrun_access_list.0.clone());
+                    // backrun_access_list.extend(optimal_sandwich.backrun_access_list.0.clone());
+                    for (key, value) in optimal_sandwich.state_diffs.clone() {
+                        combined_state_diffs.insert(key, value);
                     }
-                };
-
-                optimal_sandwich.set_has_dust(has_dust);
-
-                // if revenue is non zero send multi-meat sandwich to relays
-                if optimal_sandwich.revenue != U256::zero() {
-                    match send_bundle(
-                        &optimal_sandwich,
-                        next_block,
-                        sandwich_maker,
-                        sandwich_state,
-                    )
-                    .await
-                    {
-                        Ok(_) => { /* all reporting already done inside of send_bundle */ }
-                        Err(e) => {
-                            log::info!(
-                                "{}",
-                                format!(
-                                    "{:?} failed to send bundle, due to {:?}",
-                                    optimal_sandwich.print_meats(),
-                                    e
-                                )
-                                .bright_magenta()
-                            );
-                        }
-                    };
                 }
-            });
+                Err(e) => {
+                    eprintln!("Error calculating max fee: {:?}", e);
+                }
+            }
+        }
+        println!("frontrun_data: {:?}", hex::encode(&frontrun_data));
+        println!("backrun_data: {:?}", hex::encode(&backrun_data));
+        // println!("frontrun_access_list: {:?}", &frontrun_access_list);
+        // println!("meats: {:?}", meats);
+        let client = utils::create_websocket_client().await.unwrap();
+        let fork_block = Some(BlockId::Number(BlockNumber::Number(next_block.number)));
+
+        let initial_db = utils::state_diff::to_cache_db(&combined_state_diffs, fork_block, &client)
+            .await
+            .unwrap();
+        let fork_factory = ForkFactory::new_sandbox_factory(client.clone(), initial_db, fork_block);
+        let fork_db = fork_factory.new_sandbox_fork();
+
+        let repice = make_sandwich::sanity_check_mega(
+            &next_block,
+            fork_db,
+            frontrun_data.into(),
+            backrun_data.into(),
+            meats,
+            combined_state_diffs,
+            target_pool,
+        );
+
+        match repice {
+            Ok(r) => {
+                println!("total revenue: {:?}", r.revenue);
+                // println!("repice: {:?}", r);
+            }
+            Err(e) => {
+                eprintln!("Error: {:?}", e);
+            }
+        }
+
+        async fn prepare_and_send_sandwich(
+            mut recipes: Vec<OptimalRecipe>,
+            sandwich_state: Arc<BotState>,
+            next_block: BlockInfo,
+            sandwich_maker: Arc<SandwichMaker>,
+            target_pool: Pool,
+        ) -> Option<OptimalRecipe> {
+            // sort recipes by revenue
+            recipes.sort_by(|a, b| a.revenue.cmp(&b.revenue));
+
+            let has_dust = recipes[0].has_dust;
+            let combined_state_diffs = {
+                let mut combined: BTreeMap<H160, AccountDiff> = BTreeMap::new();
+
+                for recipe in recipes.iter() {
+                    for (key, value) in recipe.state_diffs.clone() {
+                        combined.insert(key, value);
+                    }
+                }
+
+                combined
+            };
+
+            let client = utils::create_websocket_client().await.unwrap();
+            let fork_block = Some(BlockId::Number(BlockNumber::Number(next_block.number)));
+
+            // create evm simulation handler by setting up `fork_factory`
+            let initial_db =
+                utils::state_diff::to_cache_db(&combined_state_diffs, fork_block, &client)
+                    .await
+                    .unwrap();
+            let mut fork_factory =
+                ForkFactory::new_sandbox_factory(client.clone(), initial_db, fork_block);
+
+            // create raw ingredients
+            let meats = recipes
+                .iter()
+                .flat_map(|recipe| recipe.meats.clone())
+                .collect();
+
+            let raw_ingredients = match RawIngredients::new(
+                &target_pool,
+                meats,
+                utils::constants::get_weth_address(),
+                combined_state_diffs,
+            )
+            .await
+            {
+                Ok(recipe) => recipe,
+                Err(_) => return None,
+            };
+
+            let weth_balance = {
+                let read_lock = sandwich_state.weth_balance.read().await;
+                (*read_lock).clone()
+            };
+
+            //// find optimal input to for multi sandwich
+            let mut optimal_sandwich = match make_sandwich::create_optimal_sandwich_multi(
+                &raw_ingredients,
+                weth_balance,
+                &next_block,
+                &mut fork_factory,
+                &sandwich_maker,
+            )
+            .await
+            {
+                Ok(optimal) => optimal,
+                Err(_) => {
+                    return None;
+                }
+            };
+            optimal_sandwich.set_has_dust(has_dust);
+            Some(optimal_sandwich)
         }
     }
 }
@@ -359,18 +426,18 @@ fn calculate_bribe_for_max_fee(
     // overpay to get dust onto sandwich contractIf
     // more info: https://twitter.com/libevm/status/1474870661373779969
     let bribe_amount = if !recipe.has_dust {
-        revenue_minus_frontrun_tx_fee + ethers::utils::parse_ether("0.0005861").unwrap()
+        revenue_minus_frontrun_tx_fee + ethers::utils::parse_ether("0.0003861").unwrap()
     } else {
         let mut rng = rand::thread_rng();
 
         // enchanement: make bribe adaptive based on competitors
         match recipe.target_pool.pool_variant {
             PoolVariant::UniswapV2 => {
-                (revenue_minus_frontrun_tx_fee * (999000000 + rng.gen_range(0..1000000)))
+                (revenue_minus_frontrun_tx_fee * (999900000 + rng.gen_range(0..100000)))
                     / 1000000000
             }
             PoolVariant::UniswapV3 => {
-                (revenue_minus_frontrun_tx_fee * (997000000 + rng.gen_range(0..3000000)))
+                (revenue_minus_frontrun_tx_fee * (999900000 + rng.gen_range(0..100000)))
                     / 1000000000
             }
         }

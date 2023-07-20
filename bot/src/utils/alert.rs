@@ -21,6 +21,7 @@ pub async fn alert_bundle<'a>(
     } else {
         String::from("🟥")
     };
+    
 
     let webhook = match recipe.target_pool.pool_variant {
         PoolVariant::UniswapV2 => utils::dotenv::get_v2_alert_webhook(),
@@ -33,6 +34,7 @@ pub async fn alert_bundle<'a>(
         bundle hash: {}
         target block: {}
         meats: {}
+        has dust: {}
         ----------
         ----------
         fr gas: {}
@@ -47,6 +49,7 @@ pub async fn alert_bundle<'a>(
         bundle_hash,
         target_block,
         meat_hashes,
+        recipe.has_dust,
         recipe.frontrun_gas_used,
         recipe.backrun_gas_used,
         max_fee,
