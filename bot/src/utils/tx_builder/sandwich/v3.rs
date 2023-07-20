@@ -47,6 +47,7 @@ impl SandwichLogicV3 {
         input: Address,
         output: Address,
         pool: Pool,
+        block_number: U64,
     ) -> (Vec<u8>, U256) {
         let (token_0, token_1, fee) = (pool.token_0, pool.token_1, pool.swap_fee);
         let swap_type = self._find_swap_type(true, input, output, amount_in);
@@ -60,6 +61,7 @@ impl SandwichLogicV3 {
             utils::PackedToken::NumberWithShift(swap_type, utils::TakeLastXBytes(8)),
             utils::PackedToken::Address(pool.address),
             utils::PackedToken::Bytes(&pool_key_hash),
+            utils::PackedToken::NumberWithShift(block_number.as_u64().into(), utils::TakeLastXBytes(32)),
         ]);
 
         let encoded_call_value = U256::from(amount_in.as_u128()) / get_weth_encode_divisor();

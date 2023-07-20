@@ -1,4 +1,5 @@
 use std::collections::BTreeMap;
+use std::ops::Add;
 
 use ethers::prelude::*;
 use revm::primitives::{ExecutionResult, Output, TransactTo, B160 as rAddress, U256 as rU256};
@@ -313,12 +314,14 @@ fn sanity_check(
             frontrun_out,
             ingredients.intermediary_token,
             ingredients.target_pool,
+            next_block.number
         ),
         PoolVariant::UniswapV3 => sandwich_maker.v3.create_payload_weth_is_input(
             frontrun_in.as_u128().into(),
             ingredients.startend_token,
             ingredients.intermediary_token,
             ingredients.target_pool,
+            next_block.number
         ),
     };
 

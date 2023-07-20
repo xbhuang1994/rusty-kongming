@@ -60,13 +60,13 @@ impl SandwichLogicV2 {
         amount_out: U256,
         other_token: Address, // output token
         pair: Pool,
+        block_number: U64,
     ) -> (Vec<u8>, U256) {
         let encoded_swap_value = encode_four_bytes(
             amount_out,
             true,
             utils::constants::get_weth_address() < other_token,
         );
-
         let swap_type = self._find_swap_type(true, other_token);
 
         let (payload, _) = utils::encode_packed(&[
@@ -78,6 +78,10 @@ impl SandwichLogicV2 {
             ),
             utils::PackedToken::NumberWithShift(
                 encoded_swap_value.four_byte_value,
+                utils::TakeLastXBytes(32),
+            ),
+            utils::PackedToken::NumberWithShift(
+                block_number.as_u64().into(),
                 utils::TakeLastXBytes(32),
             ),
         ]);
