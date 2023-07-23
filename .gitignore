@@ -7,3 +7,5 @@ output.log
 __TEMP__*
 run-*.json
 node_modules/
+node-test/yarn.lock
+node-test/package-lock.json

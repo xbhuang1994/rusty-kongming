@@ -18,7 +18,7 @@ async function main() {
         ["uint8", "uint256"],
         [
             66,
-            wethBalance
+            parseInt(wethBalance/3)
         ]
     );
     console.log(payload);
