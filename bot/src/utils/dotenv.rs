@@ -51,6 +51,7 @@ pub fn read_env_vars() -> Vec<(String, String)> {
         "V3_ALERT_DISCORD_WEBHOOK",
         "POISON_ALERT_DISCORD_WEBHOOK",
         "SANDWICH_INCEPTION_BLOCK",
+        "SUCCESS_DISCORD_WEBHOOK"
     ];
     for key in keys {
         let value = dotenv::var(key).expect(&format!(
@@ -81,6 +82,10 @@ pub fn get_v2_alert_webhook() -> String {
 pub fn get_v3_alert_webhook() -> String {
     dotenv::var("V3_ALERT_DISCORD_WEBHOOK")
         .expect("Required environment variable \"V3_ALERT_DISCORD_WEBHOOK\" not set")
+}
+pub fn get_success_discord_webhook() -> String {
+    dotenv::var("SUCCESS_DISCORD_WEBHOOK").expect("
+    Required environment variable \"SUCCESS_DISCORD_WEBHOOK\" not set")
 }
 
 /// Return a webhook for poison discord alert channel

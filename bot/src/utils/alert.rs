@@ -27,6 +27,7 @@ pub async fn alert_bundle<'a>(
         PoolVariant::UniswapV2 => utils::dotenv::get_v2_alert_webhook(),
         PoolVariant::UniswapV3 => utils::dotenv::get_v3_alert_webhook(),
     };
+    let webhook_success = utils::dotenv::get_success_discord_webhook();
 
     let msg = format!(
         "
@@ -42,8 +43,8 @@ pub async fn alert_bundle<'a>(
         max fee: {}
         ----------
         ----------
-        revenue: {}
-        profit: {}
+        revenue: {} ether
+        profit: {} ether
         ",
         response_status.repeat(8),
         bundle_hash,
@@ -53,8 +54,9 @@ pub async fn alert_bundle<'a>(
         recipe.frontrun_gas_used,
         recipe.backrun_gas_used,
         max_fee,
-        recipe.revenue.as_u128(),
-        profit
+        // recipe.revenue.as_u128()
+        ethers::utils::format_ether(recipe.revenue),
+        ethers::utils::format_ether(profit)
     );
 
     let max_length = 1900.min(msg.len());
@@ -73,9 +75,22 @@ pub async fn alert_bundle<'a>(
                 log::error!("Message: {}", message);
             }
         }
+        if is_bundle_included{
+            let res = client.post(webhook_success).json(&bundle_notif).send().await;
+            match res {
+                Ok(_) => {}
+                Err(err) => {
+                    log::error!("Could not send alert to discord, err: {}", err);
+                    log::error!("Message: {}", message);
+                }
+            }
+        }
+        
     })
     .await
     .unwrap();
+
+    
 }
 
 /// Alerts discord channel, via webhook about found a poison token
