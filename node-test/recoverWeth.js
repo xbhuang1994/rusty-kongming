@@ -18,7 +18,7 @@ async function main() {
         ["uint8", "uint256"],
         [
             66,
-            parseInt(wethBalance/3)
+            ethers.BigNumber.from(wethBalance).div(3)
         ]
     );
     console.log(payload);
