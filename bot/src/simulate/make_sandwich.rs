@@ -8,7 +8,9 @@ use crate::prelude::fork_db::ForkDB;
 use crate::prelude::fork_factory::ForkFactory;
 use crate::prelude::is_sando_safu::{IsSandoSafu, SalmonellaInspectoooor};
 use crate::prelude::sandwich_types::RawIngredients;
-use crate::prelude::{convert_access_list, get_amount_out_evm, get_balance_of_evm, PoolVariant, Pool};
+use crate::prelude::{
+    convert_access_list, get_amount_out_evm, get_balance_of_evm, Pool, PoolVariant,
+};
 use crate::types::sandwich_types::OptimalRecipe;
 use crate::types::{BlockInfo, SimulationError};
 use crate::utils::tx_builder::{self, braindance, SandwichMaker};
@@ -313,14 +315,14 @@ fn sanity_check(
             frontrun_out,
             ingredients.intermediary_token,
             ingredients.target_pool,
-            next_block.number
+            next_block.number,
         ),
         PoolVariant::UniswapV3 => sandwich_maker.v3.create_payload_weth_is_input(
             frontrun_in.as_u128().into(),
             ingredients.startend_token,
             ingredients.intermediary_token,
             ingredients.target_pool,
-            next_block.number
+            next_block.number,
         ),
     };
 
@@ -878,7 +880,6 @@ pub fn sanity_check_mega(
 
     let frontrun_gas_used = frontrun_result.gas_used();
 
-
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                     MEAT TRANSACTION/s                     */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -929,7 +930,6 @@ pub fn sanity_check_mega(
     evm.env.tx.gas_limit = 700000;
     evm.env.tx.gas_price = next_block.base_fee.into();
     evm.env.tx.value = backrun_value.into();
-
 
     // create access list
     let mut access_list_inspector = AccessListInspector::new(searcher, sandwich_contract);
@@ -991,7 +991,6 @@ pub fn sanity_check_mega(
         state_diffs,
     ))
 
-    
     // return Err(SimulationError::FrontrunReverted("output".into()));
 }
 /// Sandwich simulation using BrainDance contract (modified router contract)
@@ -1174,6 +1173,15 @@ mod test {
     use ethers::prelude::*;
     use tokio::{runtime::Runtime, time::Instant};
 
+    async fn create_test_reverse(
+        fork_block_num: u64,
+        pool_addr: &str,
+        meats: Vec<&str>,
+        is_v2: bool,
+    ) {
+        //TODO
+        panic!("not implemented yet");
+    }
     async fn create_test(fork_block_num: u64, pool_addr: &str, meats: Vec<&str>, is_v2: bool) {
         dotenv().ok();
         // let ws_provider = testhelper::create_ws().await;
@@ -1239,7 +1247,19 @@ mod test {
         };
         println!("total_duration took: {:?}", start.elapsed());
     }
-
+    #[test]
+    fn sandv2_uniswap_router_reverse() {
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            create_test_reverse(
+                17760866,
+                "0x33af110e648c5b8acb21e93ed2fab7d361309014",
+                vec!["0x4e4309001648bc1660bdb86218af4c1428662ed7fd27d1fc8ec6732afb40c6bb"],
+                true,
+            )
+            .await;
+        });
+    }
     #[test]
     fn sandv2_sushi_router() {
         // Can't use [tokio::test] attr with `global_backed` for some reason
