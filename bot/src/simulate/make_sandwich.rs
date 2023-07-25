@@ -1258,6 +1258,14 @@ mod test {
                 true,
             )
             .await;
+
+            create_test_reverse(
+                17773300,
+                "0x60e5d1afef2d253366e87d8298090b7d0ea5d827",
+                vec!["0xfa792db28c3c56842155a188a69717f79cdad828ab1d0d8b1adea53e6e5ab84a"],
+                true,
+            )
+            .await;
         });
     }
     #[test]
