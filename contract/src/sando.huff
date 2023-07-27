@@ -648,7 +648,64 @@ multi_call_next:
     jump            // [] * memory 0x00 [dataoffset]
 
 v2_backrun_multi:
-    stop
+    // validate msg.sender
+    [SEARCHER] caller eq                        // [is_caller_searcher]
+    iszero                                      // [!is_caller_searcher]
+    gtfo                                        // [gtfo_label, is_caller_searcher]
+    jumpi                                       // []
+
+    push0 mload                                  // [calldata_offset]
+
+    push0                              
+    push0
+    0xA4
+    push0
+    push0
+    dup6 chainid add calldataload 0x60 shr               // [pair_address, value, argoffset, argsize, retoffset, retsize,calldata_offset] = pair_swap_args
+
+    push0
+    push0
+
+    // setup calldata (in memory) for transfer(to,value)
+    [TRANSFER_SIG] push0 mstore
+    // address 0x04 mstore
+    dup3 0x04 mstore
+    
+    dup9 0x29 add calldataload 0xd8 shr 0xd8 shl dup1
+    0x08 shl swap1
+    push0 byte mstore
+
+    // call tokenIn transferfrom
+    0x44    //68(4+32+32)
+    push0
+    push0
+    dup12 0x15 add calldataload 0x60 shr // [token_in_addr, value, argoffset, argsize, retoffset, retsize, *pair_swap_args]
+    gas
+    call pop
+
+    // setup calldata for swap(wethOut, 0, address(this), "")
+    [V2_Swap_Sig] push0 mstore               // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
+    push0 0x04 mstore
+    push0 0x24 mstore
+
+
+    // get amountOut and store at memOffset
+    dup7 0x2e add calldataload 0xd8 shr 0xd8 shl dup1
+    0x08 shl swap1
+    push0 byte mstore
+
+    address 0x44 mstore
+    0x80 0x64 mstore
+    gas
+    //call pair.swap
+    call iszero gtfo jumpi
+    // clean memory
+    push0 0x24 mstore
+    push0 0x44 mstore
+    push0 0x64 mstore
+    0x33 add                                  // this func  call data len
+    multi_call_next
+    jump
 
 v2_frontrun_multi:
     // validate msg.sender

@@ -40,6 +40,31 @@ library V2SandoUtility {
         uint256 amountOut = GeneralHelper.getAmountOut(otherToken, weth, amountInActual);
         encodedValue = WethEncodingUtils.encode(amountOut);
     }
+    function v2CreateBackrunPayloadMulti(address otherToken, uint256 amountIn)
+        public
+        view
+        returns (bytes memory payload)
+    {
+        // Declare uniswapv2 types
+        address weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        IUniswapV2Factory univ2Factory = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f);
+        address pair = address(IUniswapV2Pair(univ2Factory.getPair(weth, address(otherToken))));
+
+        // encode amountIn
+        FiveBytesEncodingUtils.EncodingMetaData memory fiveByteParams = FiveBytesEncodingUtils.encode(amountIn);
+        uint256 amountInActual = FiveBytesEncodingUtils.decode(fiveByteParams);
+        uint256 amountOut = GeneralHelper.getAmountOut(otherToken, weth, amountInActual);
+        FiveBytesEncodingUtils.EncodingMetaData memory fiveByteParamsOutput = FiveBytesEncodingUtils.encode(amountOut);
+        uint8 jumpDest = SandoCommon.getJumpDestFromSig("v2_backrun_multi");
+        bool weth_is_zero = weth > otherToken;
+        payload = abi.encodePacked(
+            jumpDest,
+            address(pair), // univ2 pair
+            address(otherToken), // inputToken
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParams, 1),
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParamsOutput, weth_is_zero ? 1 : 0)
+        );
+    }
 
     /**
      * @notice Utility function to create payload for our v2 frontruns
