@@ -477,4 +477,55 @@ contract SandoTest is Test {
             "unexpected amount of daiFarm used in swap"
         );
     }
+
+    function testV2MultiCall(uint256 inputAmount)public {
+        address usdtAddress = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+        uint256 inputWethAmount = bound(inputAmount, WethEncodingUtils.encodeMultiple(), weth.balanceOf(sando));
+
+        // calculate expected values
+
+        uint256 expectedWethInput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(inputWethAmount));
+        uint256 actualUsdtOutput = GeneralHelper.getAmountOut(address(weth), usdtAddress, expectedWethInput);
+        uint256 expectedUsdtOutput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(actualUsdtOutput));
+
+        vm.assume(expectedUsdtOutput > 0);
+
+        bytes memory calldataPayload_usdt = V2SandoUtility.v2CreateFrontrunPayloadMulti(usdtAddress, inputWethAmount);
+
+
+        address daiAddress = 0x6B175474E89094C44Da98b954EedeAC495271d0F; // DAI token
+        address sugarDaddy = 0x47ac0Fb4F2D84898e4D9E7b4DaB3C24507a6D503;
+
+        // make sure fuzzed value is within bounds
+        uint256 inputDaiAmount = bound(inputAmount, 1, ERC20(daiAddress).balanceOf(sugarDaddy));
+
+        // fund sando
+        vm.prank(sugarDaddy);
+        IUSDT(daiAddress).transfer(sando, inputDaiAmount);
+
+        // capture pre swap state
+        // uint256 preSwapWethBalance = weth.balanceOf(sando);
+        uint256 preSwapDaiBalance = ERC20(daiAddress).balanceOf(sando);
+
+        // calculate expected values
+        uint256 actualFarmInput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(preSwapDaiBalance));
+        uint256 actualWethOutput = GeneralHelper.getAmountOut(daiAddress, address(weth), actualFarmInput);
+        // uint256 expectedWethOutput = WethEncodingUtils.decode(WethEncodingUtils.encode(actualWethOutput));
+        uint256 expectedWethOutput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(actualWethOutput));
+
+        // need this to pass because: https://github.com/Uniswap/v2-core/blob/master/contracts/UniswapV2Pair.sol#L160
+        vm.assume(expectedWethOutput > 0);
+
+        // perform swap
+        bytes memory calldataPayload_dai =
+            V2SandoUtility.v2CreateBackrunPayloadMulti(daiAddress, inputDaiAmount);
+
+        bytes memory calldataPayload = abi.encodePacked(
+            calldataPayload_usdt,
+            calldataPayload_dai
+        );
+        vm.prank(searcher);
+        (bool s,) = address(sando).call{value: 0}(calldataPayload);
+        assertTrue(s);
+    }   
 }
