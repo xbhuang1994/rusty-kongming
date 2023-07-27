@@ -74,4 +74,33 @@ library V2SandoUtility {
 
         encodedValue = WethEncodingUtils.encode(amountIn);
     }
+
+    function v2CreateFrontrunPayloadMulti(address outputToken,uint256 amountIn)
+        public
+        view
+        returns (bytes memory payload)
+    {
+        // Declare uniswapv2 types
+        address weth = address(0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2);
+        IUniswapV2Factory univ2Factory = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f);
+        address pair = address(IUniswapV2Pair(univ2Factory.getPair(weth, address(outputToken))));
+
+        FiveBytesEncodingUtils.EncodingMetaData memory fiveByteParamsInput = FiveBytesEncodingUtils.encode(amountIn);
+        // Encode amountIn here (so we can use it for next step)
+        uint256 amountInActual = FiveBytesEncodingUtils.decode(fiveByteParamsInput);
+
+         // Get amounts out and encode it
+        FiveBytesEncodingUtils.EncodingMetaData memory fiveByteParamsOutput =
+            FiveBytesEncodingUtils.encode(GeneralHelper.getAmountOut(weth, outputToken, amountInActual));
+        bool weth_is_zero = weth < outputToken;
+        uint8 jumpDest = SandoCommon.getJumpDestFromSig("v2_frontrun_multi");
+        
+        payload = abi.encodePacked(
+            jumpDest, // type of swap to make
+            address(pair), // univ2 pair
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParamsInput, 0),
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParamsOutput, weth_is_zero ? 1 : 0)
+        );
+
+    }
 }

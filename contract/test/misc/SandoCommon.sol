@@ -113,7 +113,7 @@ library SandoCommon {
         uint8 startingIndex = 0x05;
 
         // array mapped in same order as on sando contract
-        string[11] memory functionNames = [
+        string[17] memory functionNames = [
             "v2_backrun0",
             "v2_frontrun0",
             "v2_backrun1",
@@ -124,7 +124,13 @@ library SandoCommon {
             "v3_frontrun1",
             "seppuku",
             "recoverEth",
-            "recoverWeth"
+            "recoverWeth",
+            "v2_backrun_multi",
+            "v2_frontrun_multi",
+            "v3_backrun0_multi",
+            "v3_frontrun0_multi",
+            "v3_backrun1_multi",
+            "v3_frontrun1_multi"
         ];
 
         // find index of associated JUMPDEST (sig)

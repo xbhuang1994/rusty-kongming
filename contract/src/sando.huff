@@ -99,6 +99,37 @@ recover_weth_astral_gate:
     recover_weth                                // [recover_weth_label]
     jump                                        // []
 
+// (UniswapV2) Weth is token0 && output
+v2_backrun_astral_gate_multi:
+    v2_backrun_multi                                 // [v2_backrun0_label]
+    jump                                        // []
+
+// (UniswapV2) Weth is token0 && input
+v2_frontrun_astral_gate_multi:
+    v2_frontrun_multi                                // [v2_frontrun0_label]
+    jump                                        // []                                     // []
+
+// (UniswapV3) Weth is token0 && output
+v3_backrun0_astral_gate_multi:
+    v3_backrun0_multi                                 // [v3_backrun0_label]
+    jump                                        // []
+
+// (UniswapV3) Weth is token0 && input
+v3_frontrun0_astral_gate_multi:
+    v3_frontrun0_multi                                // [v3_frontrun0_label]
+    jump                                        // []
+
+// (UniswapV3) Weth is token1 && output
+v3_backrun1_astral_gate_multi:
+    v3_backrun1_multi                                 // [v3_backrun1_label]
+    jump                                        // []
+
+// (UniswapV3) Weth is token1 && input
+v3_frontrun1_astral_gate_multi:
+    v3_frontrun1_multi                                // [v3_frontrun1_label]
+    jump                                        // []
+
+
 // wall of stops used so that the jumpdest of callback JUMPDEST equals 0xfa
 // 0xfa = first byte of function sig 0xfa461e33
 stop stop stop stop stop stop stop stop stop stop stop stop stop
@@ -112,10 +143,8 @@ stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
 stop stop stop stop stop stop stop stop stop stop stop stop stop
-stop stop stop stop stop stop stop stop stop stop stop stop stop
-stop stop stop stop stop stop stop stop stop stop stop stop stop
-stop stop stop stop stop stop stop stop stop stop stop stop stop
-stop stop stop stop stop stop stop stop
+stop stop stop stop stop stop stop stop stop stop stop stop stop 
+stop stop stop stop
 
 // calldata: int256 amount0Delta, int256 amount1Delta, bytes data
 uniswap_v3_callback:
@@ -597,4 +626,102 @@ gtfo:
     0x03                                        // [3]
     dup1                                        // [3, 3]
     revert                                      // revert (3,3) for wagmi
+
+multi_call_stop:
+    // 0x00 mstore
+    // 0xf0 0x00 return
+    stop
+
+multi_call_next:
+                    // [dataoffset]
+    dup1            // [dataoffset, dataoffset]
+    calldatasize eq 
+    multi_call_stop 
+    jumpi // [dataoffset]
+    
+    dup1            // [dataoffset,dataoffset]
+    push0 mstore// store offset to mem 0x00 // [dataoffset] * memory 0x00 [dataoffset]
+
+    calldataload    //load jumpLabel
+    push0   
+    byte            // [jumpLabel] * memory 0x00 [dataoffset]
+    jump            // [] * memory 0x00 [dataoffset]
+
+v2_backrun_multi:
+    stop
+
+v2_frontrun_multi:
+    // validate msg.sender
+    [SEARCHER] caller eq                        // [is_caller_searcher]
+    iszero                                      // [!is_caller_searcher]
+    gtfo                                        // [gtfo_label, is_caller_searcher]
+    jumpi                                       // []
+
+    push0 mload                                  // [calldata_offset]
+
+    push0                              
+    push0
+    0xA4
+    push0
+    push0
+    dup6 chainid add calldataload 0x60 shr               // [pair_address, value, argoffset, argsize, retoffset, retsize,calldata_offset] = pair_swap_args
+
+    push0
+    push0
+
+    // setup calldata for transferFrom(from,to,value)
+    [TRANSFER_FROM_SIG] push0 mstore
+    address 0x04 mstore
+    dup3 0x24 mstore
+    
+    dup9 0x15 add calldataload 0xd8 shr 0xd8 shl dup1
+    0x08 shl swap1
+    push0 byte 0x40 add mstore
+
+    // call weth transferfrom
+    0x64    //100(4+32+32+32)
+    push0
+    push0
+    [WETH]
+    gas
+    call pop
+
+    // setup calldata for swap(0, otherTokenOut, address(this), "")
+    [V2_Swap_Sig] push0 mstore               // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(0, 0x022c0d9f)
+    push0 0x04 mstore
+    push0 0x24 mstore
+
+
+    // get amountOut and store at memOffset
+    dup7 0x1a add calldataload 0xd8 shr 0xd8 shl dup1
+    0x08 shl swap1
+    push0 byte mstore
+
+    address 0x44 mstore
+    0x80 0x64 mstore
+    gas
+    //call pair.swap
+    call iszero gtfo jumpi
+
+    // clean memory
+    push0 0x24 mstore
+    push0 0x44 mstore
+    push0 0x64 mstore
+    0x1f add                                  // this func  call data len
+    multi_call_next
+    jump
+
+
+v3_backrun0_multi:
+    stop
+
+v3_frontrun0_multi:
+    stop
+
+v3_backrun1_multi:
+    stop
+
+v3_frontrun1_multi:
+    stop
+
 }

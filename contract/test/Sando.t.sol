@@ -321,4 +321,71 @@ contract SandoTest is Test {
             "unexpected amount of dai used in swap"
         );
     }
+
+    // multi call test
+    function testV2FrontrunWeth0Multi(uint256 inputWethAmount) public {
+        address usdtAddress = 0xdAC17F958D2ee523a2206206994597C13D831ec7;
+        // make sure fuzzed value is within bounds
+        inputWethAmount = bound(inputWethAmount, WethEncodingUtils.encodeMultiple(), weth.balanceOf(sando));
+        
+        // capture pre swap state
+        uint256 preSwapWethBalance = weth.balanceOf(sando);
+        uint256 preSwapUsdtBalance = ERC20(usdtAddress).balanceOf(sando);
+
+        // calculate expected values
+
+        uint256 expectedWethInput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(inputWethAmount));
+        uint256 actualUsdtOutput = GeneralHelper.getAmountOut(address(weth), usdtAddress, expectedWethInput);
+        uint256 expectedUsdtOutput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(actualUsdtOutput));
+
+        vm.assume(expectedUsdtOutput > 0);
+        
+        bytes memory calldataPayload =
+            V2SandoUtility.v2CreateFrontrunPayloadMulti(usdtAddress, inputWethAmount);
+        vm.prank(searcher);
+        (bool s,) = address(sando).call{value: 0}(calldataPayload);
+        assertTrue(s);
+
+        // check values after swap
+        assertEq(
+            ERC20(usdtAddress).balanceOf(sando) - preSwapUsdtBalance,
+            expectedUsdtOutput,
+            "did not get expected usdt amount out from swap"
+        );
+        assertEq(preSwapWethBalance - weth.balanceOf(sando), expectedWethInput, "unexpected amount of weth used in swap");
+    }
+
+
+    // multi call test
+    function testV2FrontrunWeth1Multi(uint256 inputWethAmount) public {
+        address usdcAddress = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+        // make sure fuzzed value is within bounds
+        inputWethAmount = bound(inputWethAmount, WethEncodingUtils.encodeMultiple(), weth.balanceOf(sando));
+        
+        // capture pre swap state
+        uint256 preSwapWethBalance = weth.balanceOf(sando);
+        uint256 preSwapUsdtBalance = ERC20(usdcAddress).balanceOf(sando);
+
+        // calculate expected values
+
+        uint256 expectedWethInput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(inputWethAmount));
+        uint256 actualUsdtOutput = GeneralHelper.getAmountOut(address(weth), usdcAddress, expectedWethInput);
+        uint256 expectedUsdtOutput = FiveBytesEncodingUtils.decode(FiveBytesEncodingUtils.encode(actualUsdtOutput));
+
+        vm.assume(expectedUsdtOutput > 0);
+        
+        bytes memory calldataPayload =
+            V2SandoUtility.v2CreateFrontrunPayloadMulti(usdcAddress, inputWethAmount);
+        vm.prank(searcher);
+        (bool s,) = address(sando).call{value: 0}(calldataPayload);
+        assertTrue(s);
+
+        // check values after swap
+        assertEq(
+            ERC20(usdcAddress).balanceOf(sando) - preSwapUsdtBalance,
+            expectedUsdtOutput,
+            "did not get expected usdc amount out from swap"
+        );
+        assertEq(preSwapWethBalance - weth.balanceOf(sando), expectedWethInput, "unexpected amount of weth used in swap");
+    }
 }
