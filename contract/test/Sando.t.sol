@@ -600,7 +600,44 @@ contract SandoTest is Test {
         assertTrue(s, "calling swap failed");
     }
 
-    // testV3MultiCall testV3MultiFrontrunWeth0 + testV3MultiFrontrunWeth1 + testV3MultiBackrunWeth0 + testV3MultiBackrunWeth1
+    function testV3MultiCall()  public {
+        uint256 inputAmount = 1e6;
+        IUniswapV3Pool pool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640); // USDC - WETH
+        (, address outputToken) = (pool.token1(), pool.token0());
+
+        // make sure fuzzed value is within bounds
+        inputAmount = bound(inputAmount, WethEncodingUtils.encodeMultiple(), weth.balanceOf(sando));
+
+        bytes memory payload1 =
+            V3SandoUtility.v3CreateFrontrunPayloadMulti(pool, outputToken, inputAmount);
+
+        pool = IUniswapV3Pool(0x64A078926AD9F9E88016c199017aea196e3899E1);
+        (address inputToken,) = (pool.token1(), pool.token0());
+
+        // make sure fuzzed value is within bounds
+        address sugarDaddy = 0x9277a463A508F45115FdEaf22FfeDA1B16352433;
+        inputAmount = bound(inputAmount, 1, ERC20(inputToken).balanceOf(sugarDaddy));
+
+        // fund sando contract
+        vm.startPrank(sugarDaddy);
+        IUSDT(inputToken).transfer(sando, uint256(inputAmount));
+
+        bytes memory payload2 = V3SandoUtility.v3CreateBackrunPayloadMulti(pool, inputToken, inputAmount);
+
+        uint8 jumpDest = SandoCommon.getJumpDestFromSig("check_block_number");
+        bytes memory payload = abi.encodePacked(
+            jumpDest,
+            uint32(block.number),
+            payload1,
+            payload2
+        );
+
+        changePrank(searcher, searcher);
+        (bool s,) = address(sando).call(payload);
+        assertTrue(s, "calling swap failed");
+
+        
+    }
     
     // testMultiCall check_block_number + V2 + V3
 
