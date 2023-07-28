@@ -961,7 +961,7 @@ v3_frontrun1_multi:
     
     dup7 0x35 add calldataload 0xd8 shr 0xd8 shl dup1    //  0x01 + 0x14 + 0x20 = 0x35
     0x08 shl swap1
-    push0 byte 0x20 add mstore
+    push0 byte mstore
 
     [MAX_SQRT_PRICE_LIMIT_X96] 0x64 mstore      // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, address(this))
     

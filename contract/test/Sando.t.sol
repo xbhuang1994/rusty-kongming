@@ -546,6 +546,21 @@ contract SandoTest is Test {
      * 
      **/
     // testV3MultiFrontrunWeth1
+    function testV3MultiFrontrunWeth1(uint256 inputWethAmount) public{
+        IUniswapV3Pool pool = IUniswapV3Pool(0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640); // USDC - WETH
+        (, address outputToken) = (pool.token1(), pool.token0());
+
+        // make sure fuzzed value is within bounds
+        inputWethAmount = bound(inputWethAmount, WethEncodingUtils.encodeMultiple(), weth.balanceOf(sando));
+
+        bytes memory payload =
+            V3SandoUtility.v3CreateFrontrunPayloadMulti(pool, outputToken, inputWethAmount);
+
+        vm.prank(searcher, searcher);
+        (bool s,) = address(sando).call{value: 0}(payload);
+
+        assertTrue(s, "calling swap failed");
+    }
 
     // testV3MultiBackrunWeth0
 
