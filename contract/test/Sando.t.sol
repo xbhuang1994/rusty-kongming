@@ -562,12 +562,46 @@ contract SandoTest is Test {
         assertTrue(s, "calling swap failed");
     }
 
-    // testV3MultiBackrunWeth0
+    function testV3MultiBackrunWeth0(uint256 inputBttAmount) public {
+        IUniswapV3Pool pool = IUniswapV3Pool(0x64A078926AD9F9E88016c199017aea196e3899E1);
+        (address inputToken,) = (pool.token1(), pool.token0());
 
-    // testV3MultiBackrunWeth1
+        // make sure fuzzed value is within bounds
+        address sugarDaddy = 0x9277a463A508F45115FdEaf22FfeDA1B16352433;
+        inputBttAmount = bound(inputBttAmount, 1, ERC20(inputToken).balanceOf(sugarDaddy));
+
+        // fund sando contract
+        vm.startPrank(sugarDaddy);
+        IUSDT(inputToken).transfer(sando, uint256(inputBttAmount));
+
+        bytes memory payload = V3SandoUtility.v3CreateBackrunPayloadMulti(pool, inputToken, inputBttAmount);
+
+        changePrank(searcher, searcher);
+        (bool s,) = address(sando).call(payload);
+        assertTrue(s, "calling swap failed");
+    }
+
+    function testV3MultiBackrunWeth1(uint256 inputDaiAmount) public {
+        IUniswapV3Pool pool = IUniswapV3Pool(0xC2e9F25Be6257c210d7Adf0D4Cd6E3E881ba25f8);
+        (address inputToken,) = (pool.token0(), pool.token1());
+
+        // make sure fuzzed value is within bounds
+        address sugarDaddy = 0x5d3a536E4D6DbD6114cc1Ead35777bAB948E3643;
+        inputDaiAmount = bound(inputDaiAmount, 1, ERC20(inputToken).balanceOf(sugarDaddy));
+
+        // fund sando contract
+        vm.startPrank(sugarDaddy);
+        ERC20(inputToken).transfer(sando, uint256(inputDaiAmount));
+
+        bytes memory payload = V3SandoUtility.v3CreateBackrunPayloadMulti(pool, inputToken, inputDaiAmount);
+
+        changePrank(searcher, searcher);
+        (bool s,) = address(sando).call(payload);
+        assertTrue(s, "calling swap failed");
+    }
 
     // testV3MultiCall testV3MultiFrontrunWeth0 + testV3MultiFrontrunWeth1 + testV3MultiBackrunWeth0 + testV3MultiBackrunWeth1
-
+    
     // testMultiCall check_block_number + V2 + V3
 
 }

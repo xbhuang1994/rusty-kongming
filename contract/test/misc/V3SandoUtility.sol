@@ -79,4 +79,27 @@ library V3SandoUtility {
             FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParams, 2)
         );
     }
+
+    function v3CreateBackrunPayloadMulti(IUniswapV3Pool pool, address inputToken, uint256 amountIn)
+        public
+        view
+        returns (bytes memory payload)
+    {
+        address weth = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+        (address token0, address token1) = inputToken < weth ? (inputToken, weth) : (weth, inputToken);
+        bytes32 poolKeyHash = keccak256(abi.encode(token0, token1, pool.fee()));
+
+        string memory functionSignature = weth < inputToken ? "v3_backrun0_multi" : "v3_backrun1_multi";
+        uint8 jumpDest = SandoCommon.getJumpDestFromSig(functionSignature);
+
+        FiveBytesEncodingUtils.EncodingMetaData memory fiveByteParams = FiveBytesEncodingUtils.encode(amountIn);
+
+        payload = abi.encodePacked(
+            jumpDest,
+            address(pool),
+            poolKeyHash,
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParams, 2),
+            address(inputToken)
+        );
+    }
 }

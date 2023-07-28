@@ -794,7 +794,7 @@ v3_backrun0_multi:
     // 0x0186a0 push0 mul 0x44 mstore          // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(68, push0 * 100000)
     dup7 0x35 add calldataload 0xd8 shr 0xd8 shl dup1    //  0x01 + 0x14 + 0x20 = 0x35
     0x08 shl swap1
-    push0 byte 0x20 add mstore
+    push0 byte mstore
 
     [MAX_SQRT_PRICE_LIMIT_X96] 0x64 mstore      // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, address(this))
     
@@ -849,7 +849,7 @@ v3_backrun1_multi:
     // 0x0186a0 push0 mul 0x44 mstore          // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(68, push0 * 100000)
     dup7 0x35 add calldataload 0xd8 shr 0xd8 shl dup1    //  0x01 + 0x14 + 0x20 = 0x35
     0x08 shl swap1
-    push0 byte 0x20 add mstore
+    push0 byte mstore
 
     [MIN_SQRT_PRICE_LIMIT_X96] 0x64 mstore      // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(100, address(this))
     
