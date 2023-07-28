@@ -7,7 +7,8 @@ use tokio::sync::RwLock;
 use crate::{
     prelude::{
         fork_factory::ForkFactory,
-        make_sandwich,
+        /*make_sandwich,*/
+        sandwich::sandwich_final_judge,
         sandwich_types::{OptimalRecipe, RawIngredients},
         BlockInfo, Pool, PoolVariant, SendBundleError,
     },
@@ -142,7 +143,7 @@ impl BundleSender {
         let fork_factory = ForkFactory::new_sandbox_factory(client.clone(), initial_db, fork_block);
         let fork_db = fork_factory.new_sandbox_fork();
 
-        let repice = make_sandwich::sanity_check_mega(
+        let repice = sandwich_final_judge::sanity_check_mega(
             &next_block,
             fork_db,
             frontrun_data.into(),
@@ -220,7 +221,7 @@ impl BundleSender {
             };
 
             //// find optimal input to for multi sandwich
-            let mut optimal_sandwich = match make_sandwich::create_optimal_sandwich_multi(
+            let mut optimal_sandwich = match sandwich_final_judge::create_optimal_sandwich_multi(
                 &raw_ingredients,
                 weth_balance,
                 &next_block,

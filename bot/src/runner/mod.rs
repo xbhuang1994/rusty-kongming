@@ -3,11 +3,12 @@ use std::sync::Arc;
 
 use crate::prelude::fork_factory::ForkFactory;
 use crate::prelude::sandwich_types::RawIngredients;
-use crate::prelude::{make_sandwich, Dex, Pool};
+use crate::prelude::{/*make_sandwich,*/Dex, Pool};
 use crate::rpc_extensions;
 use crate::types::BlockOracle;
 use crate::utils;
 use crate::utils::tx_builder::SandwichMaker;
+use crate::simulate::sandwich::sandwich_cook_keeper;
 use colored::Colorize;
 use ethers::prelude::*;
 use eyre::Result;
@@ -16,11 +17,12 @@ use log;
 mod oracles;
 use tokio::sync::RwLock;
 
-mod state;
+pub mod state;
 use state::BotState;
 
-mod bundle_sender;
+pub mod bundle_sender;
 use bundle_sender::*;
+
 
 pub struct Bot {
     sandwich_state: Arc<BotState>,
@@ -212,80 +214,17 @@ impl Bot {
                         return;
                     };
 
-                    // find optimal input to sandwich tx
-                    let mut optimal_sandwich = match make_sandwich::create_optimal_sandwich(
+                    // dispatch to many sandwich cooks
+                    sandwich_cook_keeper::create_sandwich_by_cooks(
                         &raw_ingredients,
                         sandwich_balance,
                         &block_oracle.next_block,
                         &mut fork_factory,
                         &sandwich_maker,
-                    )
-                    .await
-                    {
-                        Ok(optimal) => optimal,
-                        Err(e) => {
-                            log::info!(
-                                "{}",
-                                format!("{:?} sim failed due to {:?}", &victim_hash, e).yellow()
-                            );
-                            return;
-                        }
-                    };
-
-                    // check if has dust
-                    let other_token = if optimal_sandwich.target_pool.token_0
-                        != utils::constants::get_weth_address()
-                    {
-                        optimal_sandwich.target_pool.token_0
-                    } else {
-                        optimal_sandwich.target_pool.token_1
-                    };
-
-                    if sandwich_state.has_dust(&other_token).await {
-                        optimal_sandwich.has_dust = true;
-                    }
-
-                    // spawn thread to send tx to builders
-                    let optimal_sandwich = optimal_sandwich.clone();
-                    let optimal_sandwich_two = optimal_sandwich.clone();
-                    let sandwich_maker = sandwich_maker.clone();
-                    let sandwich_state = sandwich_state.clone();
-
-                    if optimal_sandwich.revenue > U256::zero() {
-                        tokio::spawn(async move {
-                            match bundle_sender::send_bundle(
-                                &optimal_sandwich,
-                                block_oracle.next_block,
-                                sandwich_maker,
-                                sandwich_state.clone(),
-                            )
-                            .await
-                            {
-                                Ok(_) => { /* all reporting already done inside of send_bundle */ }
-                                Err(e) => {
-                                    log::info!(
-                                        "{}",
-                                        format!(
-                                            "{:?} failed to send bundle, due to {:?}",
-                                            optimal_sandwich.print_meats(),
-                                            e
-                                        )
-                                        .bright_magenta()
-                                    );
-                                }
-                            };
-                        });
-                    }
-
-                    // spawn thread to add tx for mega sandwich calculation
-                    let bundle_sender = bundle_sender.clone();
-                    tokio::spawn(async move {
-                        bundle_sender
-                            .write()
-                            .await
-                            .add_recipe(optimal_sandwich_two)
-                            .await;
-                    });
+                        victim_hash,
+                        bundle_sender,
+                        sandwich_state,
+                    ).await.unwrap();
                 });
             }
         }
