@@ -26,7 +26,7 @@ library V3SandoUtility {
 
         string memory functionSignature = weth < outputToken ? "v3_frontrun0" : "v3_frontrun1";
         uint8 jumpDest = SandoCommon.getJumpDestFromSig(functionSignature);
-        payload = abi.encodePacked(jumpDest, address(pool), poolKeyHash);
+        payload = abi.encodePacked(jumpDest, address(pool), poolKeyHash,uint32(block.number));
 
         encodedValue = WethEncodingUtils.encode(uint256(amountIn));
     }

@@ -217,6 +217,12 @@ isZeroForOne:
     stop
 
 v3_frontrun1:
+    // valiblocknumer
+    0x35 calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
+
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -251,6 +257,12 @@ v3_frontrun1:
 
 // (UniswapV3) Weth is token0 && input && has an offset of 0
 v3_frontrun0:
+    // valiblocknumer
+    0x35 calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
+
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -463,6 +475,12 @@ v2_backrun1:
 
 // Make swap when Weth is token0 && input
 v2_frontrun0:
+    // valiblocknumer
+    0x1a calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
+
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -502,7 +520,7 @@ v2_frontrun0:
     0x00 0x24 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(36, 0) **Clear Memory**
 
     // get amountOut and store at memOffset (5 byte encoding)
-    0x15 calldataload dup1
+    0x15 calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
 
@@ -516,6 +534,12 @@ v2_frontrun0:
 
 // Make swap when Weth is token1 && input
 v2_frontrun1:
+    // valiblocknumer
+    0x1a calldataload 0xe0 shr number eq
+    iszero
+    gtfo
+    jumpi
+
     // validate msg.sender
     [SEARCHER] caller eq                        // [is_caller_searcher]
     iszero                                      // [!is_caller_searcher]
@@ -553,7 +577,7 @@ v2_frontrun1:
     0x00 0x04 mstore                            // [pair_address, value, argoffset, argsize, retoffset, retsize] - mstore(4, 0) **Clear Memory**
 
     // get amountOut and store at memOffset (5 byte encoding)
-    0x15 calldataload dup1
+    0x15 calldataload 0xd8 shr 0xd8 shl dup1
     0x08 shl swap1                              // extract encodedValue by removing memOffset
     0x00 byte mstore                            // extract memOffset and perform mstore
 

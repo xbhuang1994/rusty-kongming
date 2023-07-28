@@ -94,7 +94,8 @@ library V2SandoUtility {
         payload = abi.encodePacked(
             jumpDest, // type of swap to make
             address(pair), // univ2 pair
-            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParams, weth < outputToken ? 1 : 0)
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParams, weth < outputToken ? 1 : 0),
+            uint32(block.number)
         );
 
         encodedValue = WethEncodingUtils.encode(amountIn);
