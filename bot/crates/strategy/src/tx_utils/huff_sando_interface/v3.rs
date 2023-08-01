@@ -2,7 +2,7 @@ use cfmms::pool::UniswapV3Pool;
 use eth_encode_packed::{SolidityDataType, TakeLastXBytes};
 use ethers::{
     abi::{encode, Token},
-    types::{Address, U256},
+    types::{Address, U256,U64},
 };
 
 use crate::constants::WETH_ADDRESS;
@@ -15,6 +15,7 @@ pub fn v3_create_frontrun_payload(
     pool: UniswapV3Pool,
     output_token: Address,
     amount_in: U256,
+    target_block_number:U64
 ) -> (Vec<u8>, U256) {
     let (payload, _) = eth_encode_packed::abi::encode_packed(&[
         SolidityDataType::NumberWithShift(
@@ -28,6 +29,7 @@ pub fn v3_create_frontrun_payload(
         ),
         SolidityDataType::Address(pool.address().0.into()),
         SolidityDataType::Bytes(&get_pool_key_hash(pool).to_vec()),
+        SolidityDataType::NumberWithShift(target_block_number.as_u64().into(), TakeLastXBytes(32)),
     ]);
 
     let encoded_value = WethEncoder::encode(amount_in);

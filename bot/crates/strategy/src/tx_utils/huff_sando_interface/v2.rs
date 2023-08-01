@@ -1,6 +1,6 @@
 use cfmms::pool::UniswapV2Pool;
 use eth_encode_packed::{SolidityDataType, TakeLastXBytes};
-use ethers::types::{Address, U256};
+use ethers::types::{Address, U256,U64};
 
 use crate::constants::WETH_ADDRESS;
 
@@ -13,6 +13,7 @@ pub fn v2_create_frontrun_payload(
     output_token: Address,
     amount_in: U256,
     amount_out: U256, // amount_out is needed to be passed due to taxed tokens
+    target_block_number:U64
 ) -> (Vec<u8>, U256) {
     let jump_dest = get_jump_dest_from_sig(if *WETH_ADDRESS < output_token {
         "v2_frontrun0"
@@ -27,6 +28,7 @@ pub fn v2_create_frontrun_payload(
         SolidityDataType::NumberWithShift(jump_dest.into(), TakeLastXBytes(8)),
         SolidityDataType::Address(pool.address().0.into()),
         SolidityDataType::Bytes(&five_bytes.finalize_to_bytes()),
+        SolidityDataType::NumberWithShift(target_block_number.as_u64().into(), TakeLastXBytes(32)),
     ]);
 
     let encoded_call_value = WethEncoder::encode(amount_in);

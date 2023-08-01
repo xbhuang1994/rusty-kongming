@@ -78,11 +78,13 @@ pub fn create_recipe(
             ingredients.get_intermediary_token(),
             frontrun_in,
             frontrun_out,
+            next_block.number
         ),
         UniswapV3(p) => v3_create_frontrun_payload(
             p,
             ingredients.get_intermediary_token(),
             frontrun_in.as_u128().into(),
+            next_block.number
         ),
     };
 
