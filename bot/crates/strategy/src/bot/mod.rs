@@ -28,6 +28,7 @@ pub struct SandoBot<M> {
     block_manager: BlockManager,
     /// Keeps track of weth inventory & token dust
     sando_state_manager: SandoStateManager,
+    
 }
 
 impl<M: Middleware + 'static> SandoBot<M> {
@@ -133,7 +134,17 @@ impl<M: Middleware + 'static> SandoBot<M> {
     /// Process new blocks as they come in
     async fn process_new_block(&mut self, event: NewBlock) -> Result<()> {
         log_new_block_info!(event);
+        let new_block_number = event.number;
         self.block_manager.update_block_info(event);
+        match self.provider.get_block_with_txs(new_block_number).await? {
+            Some(block) =>{
+                self.pool_manager.update_block_info(block);
+            },
+            None =>{
+                log_error!("Block not found");
+            }
+        }
+        
         Ok(())
     }
 
@@ -151,7 +162,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         // check if tx is a swap
-        let touched_pools = self
+        let (touched_pools, touched_pools_reverse) = self
             .pool_manager
             .get_touched_sandwichable_pools(
                 &victim_tx,
@@ -164,72 +175,78 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 e
             })
             .ok()?;
-
+        
         // no touched pools = no sandwich opps
-        if touched_pools.is_empty() {
-            info!("{:?}", victim_tx.hash);
+        if !touched_pools.is_empty() {
+            let mut sando_bundles = vec![];
+
+            for pool in touched_pools {
+                let (token_a, token_b) = match pool {
+                    UniswapV2(p) => (p.token_a, p.token_b),
+                    UniswapV3(p) => (p.token_a, p.token_b),
+                };
+
+                if token_a != *WETH_ADDRESS && token_b != *WETH_ADDRESS {
+                    // contract can only sandwich weth pools
+                    continue;
+                }
+
+                // token that we use as frontrun input and backrun output
+                let start_end_token = *WETH_ADDRESS;
+
+                // token that we use as frontrun output and backrun input
+                let intermediary_token = if token_a == start_end_token {
+                    token_b
+                } else {
+                    token_a
+                };
+
+                let ingredients = RawIngredients::new(
+                    vec![victim_tx.clone()],
+                    start_end_token,
+                    intermediary_token,
+                    pool,
+                );
+
+                match self.is_sandwichable(ingredients, next_block.clone()).await {
+                    Ok(s) => {
+                        let _bundle = match s
+                            .to_fb_bundle(
+                                self.sando_state_manager.get_sando_address(),
+                                self.sando_state_manager.get_searcher_signer(),
+                                false,
+                                self.provider.clone(),
+                            )
+                            .await
+                        {
+                            Ok(b) => b,
+                            Err(e) => {
+                                log_not_sandwichable!("{:?}", e);
+                                continue;
+                            }
+                        };
+
+                        #[cfg(not(feature = "debug"))]
+                        {
+                            sando_bundles.push(_bundle);
+                        }
+                    }
+                    Err(e) => {
+                        log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
+                    }
+                };
+            }
+
+            return Some(Action::SubmitToFlashbots(sando_bundles));
+        }
+
+        if !touched_pools_reverse.is_empty() {
+            //TODO sandwichable reverse pools
+            info!("TODO sandwichable reverse pools {:?}", victim_tx.hash);
             return None;
         }
 
-        let mut sando_bundles = vec![];
-
-        for pool in touched_pools {
-            let (token_a, token_b) = match pool {
-                UniswapV2(p) => (p.token_a, p.token_b),
-                UniswapV3(p) => (p.token_a, p.token_b),
-            };
-
-            if token_a != *WETH_ADDRESS && token_b != *WETH_ADDRESS {
-                // contract can only sandwich weth pools
-                continue;
-            }
-
-            // token that we use as frontrun input and backrun output
-            let start_end_token = *WETH_ADDRESS;
-
-            // token that we use as frontrun output and backrun input
-            let intermediary_token = if token_a == start_end_token {
-                token_b
-            } else {
-                token_a
-            };
-
-            let ingredients = RawIngredients::new(
-                vec![victim_tx.clone()],
-                start_end_token,
-                intermediary_token,
-                pool,
-            );
-
-            match self.is_sandwichable(ingredients, next_block.clone()).await {
-                Ok(s) => {
-                    let _bundle = match s
-                        .to_fb_bundle(
-                            self.sando_state_manager.get_sando_address(),
-                            self.sando_state_manager.get_searcher_signer(),
-                            false,
-                            self.provider.clone(),
-                        )
-                        .await
-                    {
-                        Ok(b) => b,
-                        Err(e) => {
-                            log_not_sandwichable!("{:?}", e);
-                            continue;
-                        }
-                    };
-
-                    #[cfg(not(feature = "debug"))]
-                    {
-                        sando_bundles.push(_bundle);
-                    }
-                }
-                Err(e) => {
-                    log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
-                }
-            };
-        }
-
-        Some(Action::SubmitToFlashbots(sando_bundles))
+        info!("{:?}", victim_tx.hash);
+        return None;
     }
 }

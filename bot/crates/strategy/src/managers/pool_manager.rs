@@ -10,12 +10,37 @@ use dashmap::DashMap;
 use ethers::{
     abi,
     providers::Middleware,
-    types::{Address, BlockNumber, Diff, TraceType, Transaction, H160, H256, U256},
+    types::{Address, Block, BlockNumber, Diff, TraceType, Transaction, H160, H256, U256},
 };
 use log::info;
 use std::{path::Path, str::FromStr, sync::Arc};
 
 use crate::{constants::WETH_ADDRESS, startup_info_log};
+
+pub struct TouchedTxs {
+    from_weth: Vec<Transaction>,
+    to_weth: Vec<Transaction>,
+}
+impl TouchedTxs {
+    pub fn new() -> Self {
+        Self {
+            from_weth: vec![],
+            to_weth: vec![],
+        }
+    }
+
+    pub fn remove_transaction(&mut self, tx: Transaction) {
+        self.from_weth.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce));
+        self.to_weth.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce));
+    }
+    pub fn append_transaction(&mut self, tx: Transaction, from_weth: bool) {
+        if from_weth {
+            self.from_weth.push(tx);
+        } else {
+            self.to_weth.push(tx);
+        }
+    }
+}
 
 pub(crate) struct PoolManager<M> {
     /// Provider
@@ -24,6 +49,7 @@ pub(crate) struct PoolManager<M> {
     pools: DashMap<Address, Pool>,
     /// Which dexes to monitor
     dexes: Vec<Dex>,
+    touched_txs: DashMap<Address, TouchedTxs>,
 }
 
 impl<M: Middleware + 'static> PoolManager<M> {
@@ -62,7 +88,7 @@ impl<M: Middleware + 'static> PoolManager<M> {
         victim_tx: &Transaction,
         latest_block: BlockNumber,
         provider: Arc<M>,
-    ) -> Result<Vec<Pool>> {
+    ) -> Result<(Vec<Pool>, Vec<Pool>)> {
         // get victim tx state diffs
         let state_diffs = provider
             .trace_call(victim_tx, vec![TraceType::StateDiff], Some(latest_block))
@@ -83,7 +109,7 @@ impl<M: Middleware + 'static> PoolManager<M> {
 
         // nothing to sandwich
         if touched_pools.is_empty() {
-            return Ok(vec![]);
+            return Ok((vec![], vec![]));
         }
 
         // find trade direction
@@ -93,6 +119,7 @@ impl<M: Middleware + 'static> PoolManager<M> {
             .storage;
 
         let mut sandwichable_pools = vec![];
+        let mut sandwichable_pools_reverse = vec![];
 
         for pool in touched_pools {
             // find pool mapping location on WETH contract
@@ -106,15 +133,29 @@ impl<M: Middleware + 'static> PoolManager<M> {
                 let from = U256::from(c.from.to_fixed_bytes());
                 let to = U256::from(c.to.to_fixed_bytes());
 
+                if !self.touched_txs.contains_key(&pool.address()) {
+                    self.touched_txs.insert(pool.address().clone(), TouchedTxs::new());
+                }
+                match self.touched_txs.get_mut(&pool.address()){
+                    Some(mut touched_tx) => {
+                        touched_tx.append_transaction(victim_tx.clone(), to > from);
+                    },
+                    None => {
+                        return Err(anyhow!("Pool {} not found", pool.address()))
+                    }
+                }
+                
                 // right now bot can only sandwich `weth->token` trades
                 // enhancement: add support for `token->weth` trades (using longtail or flashswaps sandos)
                 if to > from {
                     sandwichable_pools.push(pool);
+                } else {
+                    sandwichable_pools_reverse.push(pool);
                 }
             }
         }
 
-        Ok(sandwichable_pools)
+        Ok((sandwichable_pools, sandwichable_pools_reverse))
     }
 
     pub fn new(provider: Arc<M>) -> Self {
@@ -180,6 +221,15 @@ impl<M: Middleware + 'static> PoolManager<M> {
             pools: DashMap::new(),
             provider,
             dexes,
+            touched_txs: DashMap::new(),
+        }
+    }
+
+    pub fn update_block_info(&self, block: Block<Transaction>) {
+        for tx in &block.transactions {
+            self.touched_txs
+                .iter_mut()
+                .for_each(|mut r| r.remove_transaction(tx.clone()));
         }
     }
 }
