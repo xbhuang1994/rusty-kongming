@@ -49,7 +49,8 @@ pub(crate) struct PoolManager<M> {
     pools: DashMap<Address, Pool>,
     /// Which dexes to monitor
     dexes: Vec<Dex>,
-    touched_txs: DashMap<Address, TouchedTxs>,
+    /// Cache for touched pools
+    mem_touched_pools: DashMap<Address, TouchedTxs>,
 }
 
 impl<M: Middleware + 'static> PoolManager<M> {
@@ -132,16 +133,25 @@ impl<M: Middleware + 'static> PoolManager<M> {
             if let Some(Diff::Changed(c)) = weth_state_diff.get(&storage_key) {
                 let from = U256::from(c.from.to_fixed_bytes());
                 let to = U256::from(c.to.to_fixed_bytes());
-
-                if !self.touched_txs.contains_key(&pool.address()) {
-                    self.touched_txs.insert(pool.address().clone(), TouchedTxs::new());
+                let pool_address = pool.address().clone();
+                if !self.mem_touched_pools.contains_key(&pool_address) {
+                    self.mem_touched_pools.insert(pool_address, TouchedTxs::new());
                 }
-                match self.touched_txs.get_mut(&pool.address()){
-                    Some(mut touched_tx) => {
-                        touched_tx.append_transaction(victim_tx.clone(), to > from);
+                match self.mem_touched_pools.get_mut(&pool_address){
+                    Some(mut mem_touched_pool) => {
+                        match victim_tx.recover_from(){
+                            Ok(tx_from) => {
+                                let mut touched_tx = victim_tx.clone(); 
+                                touched_tx.from = tx_from;
+                                mem_touched_pool.append_transaction(touched_tx, to > from);
+                            },
+                            Err(_) => {
+                                return Err(anyhow!("failed to recover from victim tx"));
+                            }
+                        }
                     },
                     None => {
-                        return Err(anyhow!("Pool {} not found", pool.address()))
+                        return Err(anyhow!("Pool {} not found", pool_address))
                     }
                 }
                 
@@ -221,13 +231,14 @@ impl<M: Middleware + 'static> PoolManager<M> {
             pools: DashMap::new(),
             provider,
             dexes,
-            touched_txs: DashMap::new(),
+            mem_touched_pools: DashMap::new(),
         }
     }
 
     pub fn update_block_info(&self, block: Block<Transaction>) {
+        println!("updating block info...");
         for tx in &block.transactions {
-            self.touched_txs
+            self.mem_touched_pools
                 .iter_mut()
                 .for_each(|mut r| r.remove_transaction(tx.clone()));
         }
