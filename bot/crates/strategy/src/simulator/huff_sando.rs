@@ -54,6 +54,38 @@ pub fn create_recipe(
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
 
+
+    /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
+    /*                     HEAD TRANSACTION/s                     */
+    /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
+    for head_tx in ingredients.get_head_txs_ref().iter() {
+        evm.env.tx.caller = rAddress::from_slice(&head_tx.from.0);
+        evm.env.tx.transact_to =
+            TransactTo::Call(rAddress::from_slice(&head_tx.to.unwrap_or_default().0));
+        evm.env.tx.data = head_tx.input.0.clone();
+        evm.env.tx.value = head_tx.value.into();
+        evm.env.tx.chain_id = head_tx.chain_id.map(|id| id.as_u64());
+        // evm.env.tx.nonce = Some(meat.nonce.as_u64()); /** ignore nonce check for now **/
+        evm.env.tx.gas_limit = head_tx.gas.as_u64();
+        match head_tx.transaction_type {
+            Some(ethers::types::U64([0])) => {
+                // legacy tx
+                evm.env.tx.gas_price = head_tx.gas_price.unwrap_or_default().into();
+            }
+            Some(_) => {
+                // type 2 tx
+                evm.env.tx.gas_priority_fee = head_tx.max_priority_fee_per_gas.map(|mpf| mpf.into());
+                evm.env.tx.gas_price = head_tx.max_fee_per_gas.unwrap_or_default().into();
+            }
+            None => {
+                // legacy tx
+                evm.env.tx.gas_price = head_tx.gas_price.unwrap_or_default().into();
+            }
+        }
+
+        let _res = evm.transact_commit();
+    }
+
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    FRONTRUN TRANSACTION                    */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -302,6 +334,7 @@ pub fn create_recipe(
         .collect();
 
     Ok(SandoRecipe::new(
+        ingredients.get_head_txs_ref().clone(),
         frontrun_tx_env,
         frontrun_gas_used,
         good_meats_only,

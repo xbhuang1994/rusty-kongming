@@ -43,6 +43,7 @@ pub struct StratConfig {
 /// Information on potential sandwichable opportunity
 #[derive(Clone)]
 pub struct RawIngredients {
+    head_txs:Vec<Transaction>,
     /// Victim tx/s to be used in sandwich
     meats: Vec<Transaction>,
     /// Which token do start and end sandwich with
@@ -55,12 +56,14 @@ pub struct RawIngredients {
 
 impl RawIngredients {
     pub fn new(
+        front_txs:Vec<Transaction>,
         meats: Vec<Transaction>,
         start_end_token: Address,
         intermediary_token: Address,
         target_pool: Pool,
     ) -> Self {
         Self {
+            head_txs: front_txs,
             meats,
             start_end_token,
             intermediary_token,
@@ -78,6 +81,9 @@ impl RawIngredients {
 
     pub fn get_meats_ref(&self) -> &Vec<Transaction> {
         &self.meats
+    }
+    pub fn get_head_txs_ref(&self) -> &Vec<Transaction> {
+        &self.head_txs
     }
 
     pub fn get_target_pool(&self) -> Pool {
@@ -186,6 +192,7 @@ fn calculate_next_block_base_fee(block: &BlockInfo) -> U256 {
 
 /// All details for capturing a sando opp
 pub struct SandoRecipe {
+    head_txs: Vec<Transaction>,
     frontrun: TxEnv,
     frontrun_gas_used: u64,
     meats: Vec<Transaction>,
@@ -197,6 +204,7 @@ pub struct SandoRecipe {
 
 impl SandoRecipe {
     pub fn new(
+        head_txs: Vec<Transaction>,
         frontrun: TxEnv,
         frontrun_gas_used: u64,
         meats: Vec<Transaction>,
@@ -206,6 +214,7 @@ impl SandoRecipe {
         target_block: BlockInfo,
     ) -> Self {
         Self {
+            head_txs,
             frontrun,
             frontrun_gas_used,
             meats,

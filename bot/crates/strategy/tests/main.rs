@@ -82,6 +82,7 @@ async fn can_sandwich_uni_v2() {
     let bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
+        vec![],
         vec![
             victim_tx_hash(
                 "0xfecf2c78d1418e6905c18a6a6301c9d39b14e5320e345adce52baaecf805580d",
@@ -110,6 +111,7 @@ async fn can_sandwich_sushi_swap() {
     let bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
+        vec![],
         vec![
             victim_tx_hash(
                 "0xb344fdc6a3b7c65c5dd971cb113567e2ee6d0636f261c3b8d624627b90694cdb",
@@ -138,6 +140,7 @@ async fn can_sandwich_multi_v2_swaps() {
     let bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
+        vec![],
         vec![
             victim_tx_hash(
                 "0x4791d05bdd6765f036ff4ae44fc27099997417e3bdb053ecb52182bbfc7767c5",
@@ -171,6 +174,7 @@ async fn can_sandwich_uni_v3() {
     let bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
+        vec![],
         vec![
             victim_tx_hash(
                 "0x90dfe56814821e7f76f2e4970a7b35948670a968abffebb7be69fe528283e6d8",

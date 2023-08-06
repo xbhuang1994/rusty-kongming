@@ -200,8 +200,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 } else {
                     token_a
                 };
-
+                
                 let ingredients = RawIngredients::new(
+                    vec![],
                     vec![victim_tx.clone()],
                     start_end_token,
                     intermediary_token,

@@ -29,15 +29,16 @@ impl TouchedTxs {
         }
     }
 
-    pub fn remove_transaction(&mut self, tx: Transaction) {
+    pub fn remove_transaction(&mut self, tx: &Transaction) {
         self.from_weth.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce));
         self.to_weth.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce));
     }
-    pub fn append_transaction(&mut self, tx: Transaction, from_weth: bool) {
+    pub fn append_transaction(&mut self, tx: &Transaction, from_weth: bool) {
+        self.remove_transaction(&tx);
         if from_weth {
-            self.from_weth.push(tx);
+            self.from_weth.push(tx.clone());
         } else {
-            self.to_weth.push(tx);
+            self.to_weth.push(tx.clone());
         }
     }
 }
@@ -143,7 +144,7 @@ impl<M: Middleware + 'static> PoolManager<M> {
                             Ok(tx_from) => {
                                 let mut touched_tx = victim_tx.clone(); 
                                 touched_tx.from = tx_from;
-                                mem_touched_pool.append_transaction(touched_tx, to > from);
+                                mem_touched_pool.append_transaction(&touched_tx, to > from);
                             },
                             Err(_) => {
                                 return Err(anyhow!("failed to recover from victim tx"));
@@ -240,7 +241,7 @@ impl<M: Middleware + 'static> PoolManager<M> {
         for tx in &block.transactions {
             self.mem_touched_pools
                 .iter_mut()
-                .for_each(|mut r| r.remove_transaction(tx.clone()));
+                .for_each(|mut r| r.remove_transaction(&tx));
         }
     }
 }
