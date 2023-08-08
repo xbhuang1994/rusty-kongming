@@ -1,3 +1,4 @@
+pub mod credit;
 pub mod huff_sando;
 pub(crate) mod lil_router;
 pub(crate) mod salmonella_inspector;

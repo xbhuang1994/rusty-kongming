@@ -18,6 +18,7 @@ use foundry_evm::executor::TxEnv;
 use crate::constants::DUST_OVERPAY;
 use crate::helpers::access_list_to_ethers;
 use crate::helpers::sign_eip1559;
+use crate::simulator::credit::CreditHelper;
 
 /// Core Event enum for current strategy
 #[derive(Debug, Clone)]
@@ -43,7 +44,7 @@ pub struct StratConfig {
 /// Information on potential sandwichable opportunity
 #[derive(Clone)]
 pub struct RawIngredients {
-    head_txs:Vec<Transaction>,
+    head_txs: Vec<Transaction>,
     /// Victim tx/s to be used in sandwich
     meats: Vec<Transaction>,
     /// Which token do start and end sandwich with
@@ -52,11 +53,12 @@ pub struct RawIngredients {
     intermediary_token: Address,
     /// Which pool are we targetting
     target_pool: Pool,
+    credit_helper: CreditHelper,
 }
 
 impl RawIngredients {
     pub fn new(
-        front_txs:Vec<Transaction>,
+        front_txs: Vec<Transaction>,
         meats: Vec<Transaction>,
         start_end_token: Address,
         intermediary_token: Address,
@@ -68,6 +70,7 @@ impl RawIngredients {
             start_end_token,
             intermediary_token,
             target_pool,
+            credit_helper: CreditHelper::new(),
         }
     }
 
@@ -88,6 +91,10 @@ impl RawIngredients {
 
     pub fn get_target_pool(&self) -> Pool {
         self.target_pool
+    }
+
+    pub fn get_credit_helper_ref(&self) -> &CreditHelper {
+        &self.credit_helper
     }
 
     // Used for logging

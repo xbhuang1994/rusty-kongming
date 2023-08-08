@@ -173,11 +173,22 @@ async fn evaluate_sandwich_revenue(
     let mut fork_db = CacheDB::new(shared_backend);
     inject_lil_router_code(&mut fork_db);
 
+    let start_end_token = ingredients.get_start_end_token();
+    if start_end_token != (*WETH_ADDRESS).into() {
+        // if start_end token is not WETH, credit 1000 tokens for use
+        let credit_helper_ref = ingredients.get_credit_helper_ref();
+
+        credit_helper_ref.credit_token(
+            start_end_token.clone(),
+            &mut fork_db,
+            (*LIL_ROUTER_ADDRESS).into(),
+            "3000",
+        );
+    }
+
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
-
-
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     HEAD TRANSACTION/s                     */
@@ -198,7 +209,8 @@ async fn evaluate_sandwich_revenue(
             }
             Some(_) => {
                 // type 2 tx
-                evm.env.tx.gas_priority_fee = head_tx.max_priority_fee_per_gas.map(|mpf| mpf.into());
+                evm.env.tx.gas_priority_fee =
+                    head_tx.max_priority_fee_per_gas.map(|mpf| mpf.into());
                 evm.env.tx.gas_price = head_tx.max_fee_per_gas.unwrap_or_default().into();
             }
             None => {
@@ -208,7 +220,6 @@ async fn evaluate_sandwich_revenue(
         }
 
         let _res = evm.transact_commit();
-        
     }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
