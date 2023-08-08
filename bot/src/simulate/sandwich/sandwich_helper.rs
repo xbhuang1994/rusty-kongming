@@ -3,7 +3,7 @@ use revm::primitives::{ExecutionResult, Output, TransactTo, B160 as rAddress, U2
 
 use crate::simulate::{
     attach_braindance_module, braindance_address, braindance_controller_address,
-    braindance_starting_balance, setup_block_state,
+    braindance_starting_balance, setup_block_state
 };
 
 use crate::prelude::PoolVariant;
@@ -33,6 +33,7 @@ pub async fn juiced_quadratic_search(
     mut upper_bound: U256,
     next_block: &BlockInfo,
     mut fork_factory: &mut ForkFactory,
+    is_forward: bool,
 ) -> Result<U256, SimulationError> {
     //
     //            [EXAMPLE WITH 10 BOUND INTERVALS]
@@ -51,13 +52,17 @@ pub async fn juiced_quadratic_search(
     //  * Search again with bounds set to adjacent index of highest
     //
 
-    attach_braindance_module(&mut fork_factory);
+    attach_braindance_module(&mut fork_factory, ingredients.clone(), is_forward);
 
     #[cfg(test)]
     {
         // if running test, setup contract sandwich to allow for backtest
         // can also inject new sandwich code for testing
-        crate::prelude::inject_sando(&mut fork_factory, upper_bound);
+        crate::prelude::inject_sando(
+            &mut fork_factory,
+            upper_bound,
+            is_forward,
+            ingredients.clone());
     }
 
     // setup values for search termination
@@ -109,6 +114,7 @@ pub async fn juiced_quadratic_search(
                 ingredients.clone(),
                 next_block.clone(),
                 fork_factory.new_sandbox_fork(),
+                is_forward.clone(),
             ));
             revenues.push(sim);
         }
@@ -172,12 +178,24 @@ pub async fn evaluate_sandwich_revenue(
     ingredients: RawIngredients,
     next_block: BlockInfo,
     fork_db: ForkDB,
+    is_forward: bool,
 ) -> Result<U256, SimulationError> {
     let mut evm = revm::EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
 
     let pool_variant = ingredients.target_pool.pool_variant;
+
+    let (mut startend_token, mut intermediary_token) = (ingredients.startend_token, ingredients.intermediary_token);
+
+    if !is_forward {
+        (startend_token, intermediary_token) = (intermediary_token, startend_token);
+    }
+    #[cfg(test)]
+    {
+        // println!("started_token:{:?}, intermediary_token:{:?}, frontrun_in:{:?}",
+        // startend_token, intermediary_token, frontrun_in);
+    }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                    FRONTRUN TRANSACTION                    */
@@ -186,14 +204,14 @@ pub async fn evaluate_sandwich_revenue(
         PoolVariant::UniswapV2 => braindance::build_swap_v2_data(
             frontrun_in,
             ingredients.target_pool.address,
-            ingredients.startend_token,
-            ingredients.intermediary_token,
+            startend_token,
+            intermediary_token,
         ),
         PoolVariant::UniswapV3 => braindance::build_swap_v3_data(
             frontrun_in.as_u128().into(),
             ingredients.target_pool.address,
-            ingredients.startend_token,
-            ingredients.intermediary_token,
+            startend_token,
+            intermediary_token,
         ),
     };
 
@@ -214,9 +232,17 @@ pub async fn evaluate_sandwich_revenue(
             Output::Create(o, _) => o,
         },
         ExecutionResult::Revert { output, .. } => {
+            #[cfg(test)]
+            {
+                println!("ErrorRevert:{:?}", output);
+            }
             return Err(SimulationError::FrontrunReverted(output))
         }
         ExecutionResult::Halt { reason, .. } => {
+            #[cfg(test)]
+            {
+                println!("ErrorHalt:{:?}", reason);
+            }
             return Err(SimulationError::FrontrunHalted(reason))
         }
     };
@@ -234,6 +260,10 @@ pub async fn evaluate_sandwich_revenue(
             }
         }
     };
+    #[cfg(test)]
+    {
+        println!("1004: _frontrun_out:{:?}, backrun_in:{:?}", _frontrun_out, backrun_in);
+    }
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     MEAT TRANSACTION/s                     */
@@ -273,14 +303,14 @@ pub async fn evaluate_sandwich_revenue(
         PoolVariant::UniswapV2 => braindance::build_swap_v2_data(
             backrun_in,
             ingredients.target_pool.address,
-            ingredients.intermediary_token,
-            ingredients.startend_token,
+            intermediary_token,
+            startend_token,
         ),
         PoolVariant::UniswapV3 => braindance::build_swap_v3_data(
             backrun_in.as_u128().into(),
             ingredients.target_pool.address,
-            ingredients.intermediary_token,
-            ingredients.startend_token,
+            intermediary_token,
+            startend_token,
         ),
     };
 

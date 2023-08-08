@@ -8,7 +8,7 @@ use crate::prelude::is_sando_safu::{IsSandoSafu, SalmonellaInspectoooor};
 use crate::prelude::sandwich_types::RawIngredients;
 use crate::prelude::{
     convert_access_list, get_amount_out_evm, get_balance_of_evm,
-    setup_block_state, PoolVariant,
+    setup_block_state, PoolVariant
 };
 use crate::types::sandwich_types::OptimalRecipe;
 use crate::types::{BlockInfo, SimulationError};
@@ -37,12 +37,22 @@ pub async fn create_optimal_sandwich(
     fork_factory: &mut ForkFactory,
     sandwich_maker: &SandwichMaker,
 ) -> Result<OptimalRecipe, SimulationError> {
+
+    // find_token_slot_value(
+    //     ingredients,
+    //     next_block,
+    //     fork_factory,
+    //     sandwich_maker,
+    //     false,
+    // ).unwrap();
+
     let optimal = juiced_quadratic_search(
         ingredients,
         U256::zero(),
         sandwich_balance,
         next_block,
         fork_factory,
+        false,
     )
     .await?;
 
@@ -53,6 +63,7 @@ pub async fn create_optimal_sandwich(
     if optimal.is_zero() {
         return Err(SimulationError::ZeroOptimal());
     }
+
     sanity_check(
         sandwich_balance,
         optimal,
@@ -86,15 +97,22 @@ fn sanity_check(
 ) -> Result<OptimalRecipe, SimulationError> {
     // setup evm simulation
     let mut evm = revm::EVM::new();
-    evm.database(fork_db);
+    evm.database(fork_db.clone());
     setup_block_state(&mut evm, &next_block);
 
     let searcher = dotenv::get_searcher_wallet().address();
     let sandwich_contract = dotenv::get_sandwich_contract_address();
     let pool_variant = ingredients.target_pool.pool_variant;
 
-    let sandwich_start_balance = get_balance_of_evm(
-        ingredients.startend_token,
+    let (startend_token, intermediary_token) = (ingredients.intermediary_token, ingredients.startend_token);
+
+    #[cfg(test)]
+    {
+        println!("001:startend_token={:?},intermediary_token={:?},frontrun_in={:?}", startend_token, intermediary_token, frontrun_in);
+    }
+
+    let sandwich_start_weth_balance = get_balance_of_evm(
+        intermediary_token,
         sandwich_contract,
         next_block,
         &mut evm,
@@ -106,41 +124,62 @@ fn sanity_check(
     //
     // encode frontrun_in before passing to sandwich contract
     let frontrun_in = match pool_variant {
-        PoolVariant::UniswapV2 => tx_builder::v2::encode_weth(frontrun_in),
-        PoolVariant::UniswapV3 => tx_builder::v3::encode_weth(frontrun_in),
+        PoolVariant::UniswapV2 => {
+            tx_builder::v2::encode_intermediary_with_dust(frontrun_in, false, startend_token)
+        }
+        PoolVariant::UniswapV3 => tx_builder::v3::encode_intermediary_token(frontrun_in),
     };
 
     // caluclate frontrun_out using encoded frontrun_in
     let frontrun_out = match pool_variant {
         PoolVariant::UniswapV2 => {
             let target_pool = ingredients.target_pool.address;
-            let token_in = ingredients.startend_token;
-            let token_out = ingredients.intermediary_token;
             evm.env.tx.gas_price = next_block.base_fee.into();
             evm.env.tx.gas_limit = 700000;
             evm.env.tx.value = rU256::ZERO;
             let amount_out =
-                get_amount_out_evm(frontrun_in, target_pool, token_in, token_out, &mut evm)?;
-            tx_builder::v2::decode_intermediary(amount_out, true, token_out)
+                get_amount_out_evm(
+                    frontrun_in,
+                    target_pool,
+                    startend_token, 
+                    intermediary_token,
+                    &mut evm
+                )?;
+            tx_builder::v2::encode_weth(amount_out)
         }
         PoolVariant::UniswapV3 => U256::zero(),
     };
 
-    // create tx.data and tx.value for frontrun_in
+    /* add by wang start */
+    let sandwich_start_other_balance = get_balance_of_evm(
+        startend_token, 
+        sandwich_contract, 
+        next_block, 
+        &mut evm)?;
+
+    #[cfg(test)]
+    {
+        println!("002:sandwich_start_weth_balance={:?}, sandwich_start_other_balance={:?}, frontrun_in={:?}, frontrun_out={:?}",
+            sandwich_start_weth_balance, sandwich_start_other_balance, frontrun_in, frontrun_out);
+    }
+    /* add by wang end*/
+
+    // create tx.data and tx.value for backrun_in
     let (frontrun_data, frontrun_value) = match pool_variant {
-        PoolVariant::UniswapV2 => sandwich_maker.v2.create_payload_weth_is_input(
+        PoolVariant::UniswapV2 => sandwich_maker.v2.create_payload_weth_is_output(
             frontrun_in,
             frontrun_out,
-            ingredients.intermediary_token,
+            startend_token,
             ingredients.target_pool,
-            next_block.number,
         ),
-        PoolVariant::UniswapV3 => sandwich_maker.v3.create_payload_weth_is_input(
-            frontrun_in.as_u128().into(),
-            ingredients.startend_token,
-            ingredients.intermediary_token,
-            ingredients.target_pool,
-            next_block.number,
+        PoolVariant::UniswapV3 => (
+            sandwich_maker.v3.create_payload_weth_is_output(
+                frontrun_in.as_u128().into(),
+                startend_token,
+                intermediary_token,
+                ingredients.target_pool,
+            ),
+            U256::zero(),
         ),
     };
 
@@ -151,7 +190,6 @@ fn sanity_check(
     evm.env.tx.value = frontrun_value.into();
     evm.env.tx.gas_limit = 700000;
     evm.env.tx.gas_price = next_block.base_fee.into();
-    evm.env.tx.access_list = Vec::default();
 
     // get access list
     let mut access_list_inspector = AccessListInspector::new(searcher, sandwich_contract);
@@ -168,6 +206,7 @@ fn sanity_check(
         Ok(result) => result,
         Err(e) => return Err(SimulationError::FrontrunEvmError(e)),
     };
+
     match frontrun_result {
         ExecutionResult::Success { .. } => { /* continue operation */ }
         ExecutionResult::Revert { output, .. } => {
@@ -185,6 +224,12 @@ fn sanity_check(
     }
 
     let frontrun_gas_used = frontrun_result.gas_used();
+
+    #[cfg(test)]
+    {
+        println!("003:gas={:?}", frontrun_gas_used);
+    }
+
 
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                     MEAT TRANSACTION/s                     */
@@ -233,53 +278,79 @@ fn sanity_check(
     // *                    BACKRUN TRANSACTION                     */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     //
+
     // encode backrun_in before passing to sandwich contract
-    let token_in = ingredients.intermediary_token;
-    let token_out = ingredients.startend_token;
-    let balance = get_balance_of_evm(token_in, sandwich_contract, next_block, &mut evm)?;
-    let backrun_in = match pool_variant {
-        PoolVariant::UniswapV2 => {
-            tx_builder::v2::encode_intermediary_with_dust(balance, false, token_in)
-        }
-        PoolVariant::UniswapV3 => tx_builder::v3::encode_intermediary_token(balance),
-    };
+    // let backrun_in = match pool_variant {
+    //     PoolVariant::UniswapV2 => {
+    //         tx_builder::v2::encode_intermediary_with_dust(frontrun_in, true, startend_token)
+    //     }
+    //     PoolVariant::UniswapV3 => tx_builder::v3::encode_intermediary_token(frontrun_in),
+    // };
+    let backrun_in = frontrun_in;
 
     // caluclate backrun_out using encoded backrun_in
     let backrun_out = match pool_variant {
         PoolVariant::UniswapV2 => {
             let target_pool = ingredients.target_pool.address;
-            let out = get_amount_out_evm(backrun_in, target_pool, token_in, token_out, &mut evm)?;
-            tx_builder::v2::encode_weth(out)
+            let amount_out = get_amount_out_evm(
+                backrun_in,
+                target_pool,
+                startend_token,
+                intermediary_token,
+                &mut evm
+            )?;
+            tx_builder::v2::encode_weth(amount_out)
+            // tx_builder::v2::decode_intermediary(amount_out, true, startend_token)
         }
         PoolVariant::UniswapV3 => U256::zero(),
     };
 
-    // create tx.data and tx.value for backrun_in
+    #[cfg(test)]
+    {
+        let sandwich_backrun_weth_balance = get_balance_of_evm(
+            intermediary_token,
+            sandwich_contract,
+            next_block,
+            &mut evm,
+        )?;
+        let sandwich_backrun_other_balance = get_balance_of_evm(
+            startend_token,
+            sandwich_contract,
+            next_block,
+            &mut evm,
+        )?;
+        println!("004:sandwich_backrun_weth_balance={:?}, sandwich_backrun_other_balance={:?}, backrun_in={:?}, backrun_out={:?}",
+            sandwich_backrun_weth_balance, sandwich_backrun_other_balance, backrun_in, backrun_out);
+    }
+
+    // create tx.data and tx.value for frontrun_in
     let (backrun_data, backrun_value) = match pool_variant {
-        PoolVariant::UniswapV2 => sandwich_maker.v2.create_payload_weth_is_output(
-            backrun_in,
-            backrun_out,
-            ingredients.intermediary_token,
-            ingredients.target_pool,
-        ),
-        PoolVariant::UniswapV3 => (
-            sandwich_maker.v3.create_payload_weth_is_output(
-                backrun_in.as_u128().into(),
-                ingredients.intermediary_token,
-                ingredients.startend_token,
-                ingredients.target_pool,
-            ),
+        PoolVariant::UniswapV2 => sandwich_maker.v2.create_payload_weth_is_input_multi(
             U256::zero(),
+            U256::zero(),
+            startend_token,
+            ingredients.target_pool,
+            // next_block.number,
+        ),
+        PoolVariant::UniswapV3 => sandwich_maker.v3.create_payload_weth_is_input(
+            backrun_out.as_u128().into(),
+            intermediary_token,
+            startend_token,
+            ingredients.target_pool,
+            next_block.number,
         ),
     };
+
+    // println!("backrun_data={:?}", ethers::utils::format_bytes32_string(backrun_data.into()));
 
     // setup evm for backrun transaction
     evm.env.tx.caller = searcher.0.into();
     evm.env.tx.transact_to = TransactTo::Call(sandwich_contract.0.into());
     evm.env.tx.data = backrun_data.clone().into();
+    evm.env.tx.value = U256::zero().into();
     evm.env.tx.gas_limit = 700000;
     evm.env.tx.gas_price = next_block.base_fee.into();
-    evm.env.tx.value = backrun_value.into();
+    evm.env.tx.access_list = Vec::default();
 
     // create access list
     let mut access_list_inspector = AccessListInspector::new(searcher, sandwich_contract);
@@ -294,38 +365,74 @@ fn sanity_check(
     let mut salmonella_inspector = SalmonellaInspectoooor::new();
     let backrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
         Ok(result) => result,
-        Err(e) => return Err(SimulationError::BackrunEvmError(e)),
+        Err(e) => {
+            #[cfg(test)]
+            {
+                println!("EVMError:error={:?}", e);
+            }
+            return Err(SimulationError::BackrunEvmError(e))
+        }
     };
     match backrun_result {
         ExecutionResult::Success { .. } => { /* continue */ }
         ExecutionResult::Revert { output, .. } => {
+            #[cfg(test)]
+            {
+                println!("ExecutionResult::Revert:output={:?}", output);
+            }
             return Err(SimulationError::BackrunReverted(output))
         }
-        ExecutionResult::Halt { reason, .. } => return Err(SimulationError::BackrunHalted(reason)),
+        ExecutionResult::Halt { reason, .. } => {
+            #[cfg(test)]
+            {
+                println!("ExecutionResult::Halt:output={:?}", reason);
+            }
+            return Err(SimulationError::BackrunHalted(reason))
+        }
     };
     match salmonella_inspector.is_sando_safu() {
         IsSandoSafu::Safu => { /* continue operation */ }
         IsSandoSafu::NotSafu(not_safu_opcodes) => {
+            #[cfg(test)]
+            {
+                println!("IsSandoSafu::NotSafu:not_safu_opcodes={:?}", not_safu_opcodes);
+            }
             return Err(SimulationError::BackrunNotSafu(not_safu_opcodes))
         }
     }
 
     let backrun_gas_used = backrun_result.gas_used();
+    #[cfg(test)]
+    {
+        println!("005:backrun_gas_used={:?}", backrun_gas_used);
+    }
 
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                      GENERATE REPORTS                      */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     //
     // caluclate revenue from balance change
-    let post_sandwich_balance = get_balance_of_evm(
-        ingredients.startend_token,
+    let post_sandwich_weth_balance = get_balance_of_evm(
+        intermediary_token,
         sandwich_contract,
         next_block,
         &mut evm,
     )?;
-    let revenue = post_sandwich_balance
-        .checked_sub(sandwich_start_balance)
+    let revenue = post_sandwich_weth_balance
+        .checked_sub(sandwich_start_weth_balance)
         .unwrap_or_default();
+
+    #[cfg(test)]
+    {
+        let post_sandwich_other_balance = get_balance_of_evm(
+            startend_token,
+            sandwich_contract,
+            next_block,
+            &mut evm,
+        )?;
+        println!("final: post_sandwich_weth_balance={:?}, post_sandwich_other_balance={:?}, sandwich_start_weth_balance={:?}, revenue={:?}",
+            post_sandwich_weth_balance, post_sandwich_other_balance, sandwich_start_weth_balance, revenue);
+    }
 
     // filter only passing meat txs
     let good_meats_only = ingredients

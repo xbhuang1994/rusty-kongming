@@ -1,6 +1,6 @@
 #[cfg(test)]
 mod test {
-    use std::str::FromStr;
+    use std::{str::FromStr, vec};
 
     use crate::{
         prelude::{fork_factory::ForkFactory, sandwich_types::RawIngredients},
@@ -17,6 +17,7 @@ mod test {
         pool_addr: &str,
         meats: Vec<&str>,
         is_v2: bool,
+        test_flag: &str,
     ) {
         dotenv().ok();
         // let ws_provider = testhelper::create_ws().await;
@@ -77,10 +78,10 @@ mod test {
         )
         .await
         {
-            Ok(sandwich) => println!("revenue: {:?}", sandwich.revenue),
-            Err(_) => println!("not sandwichable"),
+            Ok(sandwich) => println!("{} revenue: {:?}", test_flag, sandwich.revenue),
+            Err(_) => println!("{} not sandwichable", test_flag),
         };
-        println!("total_duration took: {:?}", start.elapsed());
+        println!("{} total_duration took: {:?}", test_flag, start.elapsed());
     }
     async fn create_test(fork_block_num: u64, pool_addr: &str, meats: Vec<&str>, is_v2: bool) {
         dotenv().ok();
@@ -147,27 +148,56 @@ mod test {
         };
         println!("total_duration took: {:?}", start.elapsed());
     }
+
     #[test]
-    fn sandv2_uniswap_router_reverse() {
+    fn sandv2_uniswap_router_reverse_dydx() {
         let rt = Runtime::new().unwrap();
+
+        // dydx
         rt.block_on(async {
             create_test_reverse(
-                17760866,
-                "0x33af110e648c5b8acb21e93ed2fab7d361309014",
-                vec!["0x4e4309001648bc1660bdb86218af4c1428662ed7fd27d1fc8ec6732afb40c6bb"],
+                17805264,
+                "0xf660809b6d2d34cc43f620a9b22a40895365a5f8",
+                vec!["0x586b48227b5a6cd553b11c0446441121d4667b9c57fee6baf752893c3b2242c6"],
                 true,
-            )
-            .await;
-
-            create_test_reverse(
-                17773300,
-                "0x60e5d1afef2d253366e87d8298090b7d0ea5d827",
-                vec!["0xfa792db28c3c56842155a188a69717f79cdad828ab1d0d8b1adea53e6e5ab84a"],
-                true,
+                "sandv2_uniswap_router_reverse_dydx",
             )
             .await;
         });
     }
+
+    #[test]
+    fn sandv2_uniswap_router_reverse_x() {
+        let rt = Runtime::new().unwrap();
+        // x
+        rt.block_on(async {
+            create_test_reverse(
+                17816697,
+                "0x2515c6b737151bbd5c7826c04717b342ac44c1da",
+                vec!["0xa71fd7e3ab7b3a78cbde767451271e5c2eebfc75d928d25f9d8f19f78c054acd"],
+                true,
+                "sandv2_uniswap_router_reverse_x",
+            )
+            .await;
+        });
+    }
+
+    #[test]
+    fn sandv2_uniswap_router_reverse_edge() {
+        let rt = Runtime::new().unwrap();
+        // edge
+        rt.block_on(async {
+            create_test_reverse(
+                17706152,
+                "0xa4c13470da60e81f15d304d071a9e1168605a6e0",
+                vec!["0x51518a6cbdc86b85468e405cef66a451377d04dee4a04eddfa1c9463569eea8b"],
+                true,
+                "sandv2_uniswap_router_reverse_edge",
+            )
+            .await;
+        });
+    }
+
     #[test]
     fn sandv2_sushi_router() {
         // Can't use [tokio::test] attr with `global_backed` for some reason

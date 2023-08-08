@@ -15,6 +15,11 @@ contract BrainDance {
         //            NO STRINGS            //
         //////////////////////////////////////
 
+        // for debug start
+        // amountOut = IERC20(inputToken).balanceOf(address(this));
+        // realAfterBalance = IERC20(outputToken).balanceOf(address(this));
+        // for debug end
+        
         // Optimistically send amountIn of inputToken to targetPair
         IERC20(inputToken).transfer(targetPair, amountIn);
 

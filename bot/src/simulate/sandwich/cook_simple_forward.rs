@@ -8,7 +8,7 @@ use crate::prelude::is_sando_safu::{IsSandoSafu, SalmonellaInspectoooor};
 use crate::prelude::sandwich_types::RawIngredients;
 use crate::prelude::{
     convert_access_list, get_amount_out_evm, get_balance_of_evm,
-    setup_block_state, PoolVariant,
+    setup_block_state, PoolVariant
 };
 use crate::types::sandwich_types::OptimalRecipe;
 use crate::types::{BlockInfo, SimulationError};
@@ -36,12 +36,22 @@ pub async fn create_optimal_sandwich(
     fork_factory: &mut ForkFactory,
     sandwich_maker: &SandwichMaker,
 ) -> Result<OptimalRecipe, SimulationError> {
+
+    // find_token_slot_value(
+    //     ingredients,
+    //     next_block,
+    //     fork_factory,
+    //     sandwich_maker,
+    //     true,
+    // ).unwrap();
+
     let optimal = juiced_quadratic_search(
         ingredients,
         U256::zero(),
         sandwich_balance,
         next_block,
         fork_factory,
+        true,
     )
     .await?;
 
@@ -49,9 +59,11 @@ pub async fn create_optimal_sandwich(
     {
         println!("Optimal amount in: {}", optimal);
     }
+
     if optimal.is_zero() {
         return Err(SimulationError::ZeroOptimal());
     }
+
     sanity_check(
         sandwich_balance,
         optimal,

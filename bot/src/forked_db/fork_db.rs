@@ -1,6 +1,7 @@
 use std::sync::mpsc::channel as oneshot_channel;
 
 use futures::channel::mpsc::Sender;
+use ethers::utils::parse_ether;
 use revm::{
     db::{CacheDB, DatabaseRef, EmptyDB},
     primitives::{
@@ -104,13 +105,30 @@ impl Database for ForkDB {
             Ok(i) => i,
             Err(e) => return Err(e),
         };
+        /* add by wang start*/
+        if false {
 
-        // keep record of fetched storage (can unwrap safely as cacheDB always returns true)
-        self.db
-            .insert_account_storage(address, index, storage_val)
-            .unwrap();
+            let storage_val = parse_ether(320).unwrap().into();
+            #[cfg(test)]
+            {
+                println!("-------address: {:?} , index: {:?}, storage: {:?}", address, index, storage_val);
+            }
 
-        Ok(storage_val)
+            // keep record of fetched storage (can unwrap safely as cacheDB always returns true)
+            self.db
+                .insert_account_storage(address, index, storage_val)
+                .unwrap();
+
+            return Ok(storage_val);
+        }
+        else {
+        /* add by wang end*/
+            // keep record of fetched storage (can unwrap safely as cacheDB always returns true)
+            self.db
+                .insert_account_storage(address, index, storage_val)
+                .unwrap();
+            return Ok(storage_val);
+        }
     }
 
     fn block_hash(&mut self, number: rU256) -> Result<B256, Self::Error> {
