@@ -245,8 +245,6 @@ pub fn create_recipe(
         }
         UniswapV3(_p) => U256::zero(), // we don't need to know backrun out for v3
     };
-    log::info!("backrun_in: {:?}", ethers::utils::format_units(backrun_in, "ether"));
-    log::info!("backrun_out: {:?}", ethers::utils::format_units(backrun_out, "ether"));
     
     // create tx.data and tx.value for backrun_in
     let (backrun_data, backrun_value) = match ingredients.get_target_pool() {
@@ -319,8 +317,6 @@ pub fn create_recipe(
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     // caluclate revenue from balance change
     let post_sando_bal = get_erc20_balance(backrun_token_out, sando_address, next_block, &mut evm)?;
-    println!("sando_start_bal: {:?}", ethers::utils::format_units(sando_start_bal,"ether"));
-    println!("post_sando_bal: {:?}", ethers::utils::format_units(post_sando_bal,"ether"));
     
     let revenue = post_sando_bal
         .checked_sub(sando_start_bal)
