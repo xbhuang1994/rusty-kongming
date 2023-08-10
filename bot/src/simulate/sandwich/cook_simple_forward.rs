@@ -51,7 +51,6 @@ pub async fn create_optimal_sandwich(
         sandwich_balance,
         next_block,
         fork_factory,
-        true,
     )
     .await?;
 

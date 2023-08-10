@@ -17,13 +17,40 @@ pub fn get_x_address() -> Address {
     Address::from_str("0x5f5166c4fdb9055efb24a7e75cc1a21ca8ca61a3").unwrap()
 }
 
+pub fn get_pepe_address() -> Address {
+    Address::from_str("0x8d5b6a0b8379c660043d841e274d7fe07786a6bc").unwrap()
+}
+
+pub fn get_ydf_address() -> Address {
+    Address::from_str("0x30dcba0405004cf124045793e1933c798af9e66a").unwrap()
+}
+
+pub fn get_futu_address() -> Address {
+    Address::from_str("0x86746590604b6b3387905bfc218d4229ec8d7fde").unwrap()
+}
+
+pub fn get_datboi_address() -> Address {
+    Address::from_str("0x57914df4324a7f9e17062728ca44e566c485af97").unwrap()
+}
+
+pub fn get_bad_address() -> Address {
+    Address::from_str("0x32b86b99441480a7e5bd3a26c124ec2373e3f015").unwrap()
+}
+
 pub fn get_slot_by_address(addr: Address) -> rU256 {
-    if addr == get_edge_address() || addr == get_dydx_address() {
-        return rU256::from_str("0xedceff30864d0c59113a29113472807abd04c523799e1d9f56afb2bb1e3410d1").unwrap();
+    if addr == get_edge_address() || addr == get_dydx_address()
+        || addr == get_ydf_address() || addr == get_bad_address(){
+        return rU256::from_str("0xedceff30864d0c59113a29113472807abd04c523799e1d9f56afb2bb1e3410d1").unwrap()
+    } else if addr == get_pepe_address() {
+        return rU256::from_str("0x2a14a55e6f4c0d1688108845f66780c416401b5154eb4a4f241ea83b3e5e1bda").unwrap()
     } else if addr == get_x_address() {
         return rU256::from_str("0x232deb70cfb822531166001be71bfd7d5255cbbed99199639d5a89e167ffe1ad").unwrap()
-    }else {
-        return rU256::from_str("").unwrap();
+    } else if addr == get_futu_address() {
+        return rU256::from_str("0x4e02ceddb6d3084053f93bfb0b52f2289e83c4633cfa2e7bfe61df1e52b2ed92").unwrap()
+    } else if addr == get_datboi_address() {
+        return rU256::from_str("0xa7b01fdf0b7c35d2b6724bac387fdfcee55f2f126845c5c71cd59a2e76ef1fc9").unwrap()
+    } else {
+        return rU256::from_str("").unwrap()
     }
 }
 

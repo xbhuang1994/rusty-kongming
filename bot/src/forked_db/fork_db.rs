@@ -1,4 +1,4 @@
-use std::sync::mpsc::channel as oneshot_channel;
+use std::{sync::mpsc::channel as oneshot_channel, str::FromStr};
 
 use futures::channel::mpsc::Sender;
 use ethers::utils::parse_ether;
@@ -106,7 +106,7 @@ impl Database for ForkDB {
             Err(e) => return Err(e),
         };
         /* add by wang start*/
-        if false {
+        if false && address == B160::from_str("0x32b86b99441480a7e5bd3a26c124ec2373e3f015").unwrap() {
 
             let storage_val = parse_ether(320).unwrap().into();
             #[cfg(test)]

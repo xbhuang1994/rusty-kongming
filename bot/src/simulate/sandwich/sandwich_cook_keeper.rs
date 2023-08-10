@@ -116,14 +116,16 @@ async fn make_simple_reverse(
             sandwich_maker
         ).await;
     
-    do_send_bundle(
-        optimal_sandwich,
-        victim_hash,
-        sandwich_state,
-        sandwich_maker,
-        bundle_sender,
-        next_block,
-    ).await;
+    if optimal_sandwich.is_ok() {
+        do_send_bundle(
+            optimal_sandwich,
+            victim_hash,
+            sandwich_state,
+            sandwich_maker,
+            bundle_sender,
+            next_block,
+        ).await;
+    }
 }
 
 async fn do_send_bundle(

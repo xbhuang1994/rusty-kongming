@@ -144,7 +144,8 @@ pub fn attach_braindance_module(
     /* add by wang start*/
     if !is_forward {
         let slot = get_slot_by_address(ingredients.intermediary_token);
-        let value = parse_ether(320).unwrap();
+        println!("slot={:?}", slot);
+        let value = braindance_starting_balance_other();
         fork_factory.insert_account_storage(
             ingredients.intermediary_token.0.into(),
             slot.into(),
@@ -409,4 +410,8 @@ pub fn braindance_controller_address() -> rAddress {
 // Holds constant value representing braindance weth starting balance
 pub fn braindance_starting_balance() -> U256 {
     parse_ether(420).unwrap()
+}
+
+pub fn braindance_starting_balance_other() -> U256 {
+    parse_ether(100).unwrap()
 }

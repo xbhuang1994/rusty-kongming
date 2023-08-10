@@ -33,7 +33,6 @@ pub async fn create_optimal_sandwich_multi(
         sandwich_balance,
         next_block,
         fork_factory,
-        true,
     )
     .await?;
 

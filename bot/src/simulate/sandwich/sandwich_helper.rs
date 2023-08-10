@@ -33,7 +33,6 @@ pub async fn juiced_quadratic_search(
     mut upper_bound: U256,
     next_block: &BlockInfo,
     mut fork_factory: &mut ForkFactory,
-    is_forward: bool,
 ) -> Result<U256, SimulationError> {
     //
     //            [EXAMPLE WITH 10 BOUND INTERVALS]
@@ -52,7 +51,7 @@ pub async fn juiced_quadratic_search(
     //  * Search again with bounds set to adjacent index of highest
     //
 
-    attach_braindance_module(&mut fork_factory, ingredients.clone(), is_forward);
+    attach_braindance_module(&mut fork_factory, ingredients.clone(), true);
 
     #[cfg(test)]
     {
@@ -61,7 +60,7 @@ pub async fn juiced_quadratic_search(
         crate::prelude::inject_sando(
             &mut fork_factory,
             upper_bound,
-            is_forward,
+            true,
             ingredients.clone());
     }
 
@@ -114,7 +113,6 @@ pub async fn juiced_quadratic_search(
                 ingredients.clone(),
                 next_block.clone(),
                 fork_factory.new_sandbox_fork(),
-                is_forward.clone(),
             ));
             revenues.push(sim);
         }
@@ -178,7 +176,6 @@ pub async fn evaluate_sandwich_revenue(
     ingredients: RawIngredients,
     next_block: BlockInfo,
     fork_db: ForkDB,
-    is_forward: bool,
 ) -> Result<U256, SimulationError> {
     let mut evm = revm::EVM::new();
     evm.database(fork_db);
@@ -188,9 +185,6 @@ pub async fn evaluate_sandwich_revenue(
 
     let (mut startend_token, mut intermediary_token) = (ingredients.startend_token, ingredients.intermediary_token);
 
-    if !is_forward {
-        (startend_token, intermediary_token) = (intermediary_token, startend_token);
-    }
     #[cfg(test)]
     {
         // println!("started_token:{:?}, intermediary_token:{:?}, frontrun_in:{:?}",
@@ -351,6 +345,7 @@ pub async fn evaluate_sandwich_revenue(
         }
     };
 
+    println!("final:post_sandwich_balance={:?}", post_sandwich_balance);
     let revenue = post_sandwich_balance
         .checked_sub(braindance_starting_balance())
         .unwrap_or_default();

@@ -150,6 +150,22 @@ mod test {
     }
 
     #[test]
+    fn sandv2_uniswap_router_reverse_pepe() {
+        let rt = Runtime::new().unwrap();
+        // pepe
+        rt.block_on(async {
+            create_test_reverse(
+                17878004,
+                "0xdbe94db12fc555e891717eb0fd2e34cf72a49644",
+                vec!["0x12ae088914416bca1f8189369e60d77561c917c10549e0188eb6ff379f53ef57"],
+                true,
+                "sandv2_uniswap_router_reverse_pepe",
+            )
+            .await;
+        });
+    }
+
+    #[test]
     fn sandv2_uniswap_router_reverse_dydx() {
         let rt = Runtime::new().unwrap();
 
@@ -172,9 +188,9 @@ mod test {
         // x
         rt.block_on(async {
             create_test_reverse(
-                17816697,
+                17882689,
                 "0x2515c6b737151bbd5c7826c04717b342ac44c1da",
-                vec!["0xa71fd7e3ab7b3a78cbde767451271e5c2eebfc75d928d25f9d8f19f78c054acd"],
+                vec!["0x913ccc34fbe5480736368f2972b1738d0be527d9237698deea2c14e999207d08"],
                 true,
                 "sandv2_uniswap_router_reverse_x",
             )
@@ -197,6 +213,71 @@ mod test {
             .await;
         });
     }
+
+    #[test]
+    fn sandv2_uniswap_router_reverse_ydf() {
+        let rt = Runtime::new().unwrap();
+        // ydf
+        rt.block_on(async {
+            create_test_reverse(
+                17882685,
+                "0x153f2044feace1eb377c6e1cf644d12677bd86fd",
+                vec!["0x32fb942763fc378512a0ab648ecc70e1de1acf8aaf12a47a25018677420adeba"],
+                true,
+                "sandv2_uniswap_router_reverse_ydf",
+            )
+            .await;
+        });
+    }
+
+    #[test]
+    fn sandv2_uniswap_router_reverse_futu() {
+        let rt = Runtime::new().unwrap();
+        // futu
+        rt.block_on(async {
+            create_test_reverse(
+                17882365,
+                "0x56e73243101bc0bdbf3bae0bd5db0bea94c5251d",
+                vec!["0xcaabd7dc3454a3cfd5a06e768cc6409aeefac17b03e4fc97648679627ef80a74"],
+                true,
+                "sandv2_uniswap_router_reverse_futu",
+            )
+            .await;
+        });
+    }
+
+    #[test]
+    fn sandv2_uniswap_router_reverse_datboi() {
+        let rt = Runtime::new().unwrap();
+        // datboi
+        rt.block_on(async {
+            create_test_reverse(
+                17882365,
+                "0x076d3f4cdb47dc8bb223e7ad656c9c4c041b7353",
+                vec!["0xcaabd7dc3454a3cfd5a06e768cc6409aeefac17b03e4fc97648679627ef80a74"],
+                true,
+                "sandv2_uniswap_router_reverse_datboi",
+            )
+            .await;
+        });
+    }
+    
+    #[test]
+    fn sandv2_uniswap_router_reverse_bad() {
+        let rt = Runtime::new().unwrap();
+        // bad(available)
+        rt.block_on(async {
+            create_test_reverse(
+                17864648,
+                "0x29c830864930c897efa2b9e9851342187b82010e",
+                vec!["0x472b923421a68f9fdeeceb0c57c35b3908ec3f5bc8ebabe8193057f6dd2a6a9a"],
+                true,
+                "sandv2_uniswap_router_reverse_bad",
+            )
+            .await;
+        });
+    }
+
 
     #[test]
     fn sandv2_sushi_router() {
