@@ -26,7 +26,7 @@ impl CreditHelper {
     // not so elegeant but create sim env from state diffs
     pub fn new() -> Self {
         // load slot index map
-        let toml_str = std::fs::read_to_string("./slot.toml").expect("Unable to read config file");
+        let toml_str = std::fs::read_to_string("Slot.toml").expect("Unable to read config file");
         let parsed: Value = toml::from_str(&toml_str).expect("Failed to parse TOML");
         let mut slot_index_map: HashMap<Address, SlotIndex> = HashMap::new();
         for (key, value) in parsed.as_table().unwrap() {
