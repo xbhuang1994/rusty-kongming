@@ -20,8 +20,7 @@ use crate::helpers::access_list_to_revm;
 use crate::simulator::setup_block_state;
 use crate::tx_utils::huff_sando_interface::common::five_byte_encoder::FiveByteMetaData;
 use crate::tx_utils::huff_sando_interface::{
-    common::weth_encoder::WethEncoder,
-    v2::{v2_create_backrun_payload, v2_create_frontrun_payload},
+    v2::{v2_create_frontrun_payload_multi,v2_create_backrun_payload_multi},
     v3::{v3_create_backrun_payload, v3_create_frontrun_payload},
 };
 use crate::types::{BlockInfo, RawIngredients, SandoRecipe};
@@ -85,13 +84,12 @@ pub fn create_recipe(
 
         let _res = evm.transact_commit();
     }
-
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    FRONTRUN TRANSACTION                    */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     // encode frontrun_in before passing to sandwich contract
-    let frontrun_in = WethEncoder::decode(WethEncoder::encode(optimal_in));
-
+    // let frontrun_in = WethEncoder::decode(WethEncoder::encode(optimal_in));
+    let frontrun_in = FiveByteMetaData::encode(optimal_in, 0).decode();
     // caluclate frontrun_out using encoded frontrun_in
     let frontrun_out = match ingredients.get_target_pool() {
         UniswapV2(p) => {
@@ -105,12 +103,11 @@ pub fn create_recipe(
 
     // create tx.data and tx.value for frontrun_in
     let (frontrun_data, frontrun_value) = match ingredients.get_target_pool() {
-        UniswapV2(p) => v2_create_frontrun_payload(
+        UniswapV2(p) => v2_create_frontrun_payload_multi(
             p,
             ingredients.get_intermediary_token(),
             frontrun_in,
-            frontrun_out,
-            next_block.number
+            frontrun_out
         ),
         UniswapV3(p) => v3_create_frontrun_payload(
             p,
@@ -176,6 +173,7 @@ pub fn create_recipe(
     }
 
     let frontrun_gas_used = frontrun_result.gas_used();
+
 
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                     MEAT TRANSACTION/s                     */
@@ -247,10 +245,12 @@ pub fn create_recipe(
         }
         UniswapV3(_p) => U256::zero(), // we don't need to know backrun out for v3
     };
-
+    log::info!("backrun_in: {:?}", ethers::utils::format_units(backrun_in, "ether"));
+    log::info!("backrun_out: {:?}", ethers::utils::format_units(backrun_out, "ether"));
+    
     // create tx.data and tx.value for backrun_in
     let (backrun_data, backrun_value) = match ingredients.get_target_pool() {
-        UniswapV2(p) => v2_create_backrun_payload(p, backrun_token_in, backrun_in, backrun_out),
+        UniswapV2(p) => v2_create_backrun_payload_multi(p, backrun_token_in, backrun_in, backrun_out),
         UniswapV3(p) => (
             v3_create_backrun_payload(p, backrun_token_in, backrun_in),
             U256::zero(),
@@ -319,7 +319,9 @@ pub fn create_recipe(
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     // caluclate revenue from balance change
     let post_sando_bal = get_erc20_balance(backrun_token_out, sando_address, next_block, &mut evm)?;
-
+    println!("sando_start_bal: {:?}", ethers::utils::format_units(sando_start_bal,"ether"));
+    println!("post_sando_bal: {:?}", ethers::utils::format_units(post_sando_bal,"ether"));
+    
     let revenue = post_sando_bal
         .checked_sub(sando_start_bal)
         .unwrap_or_default();
