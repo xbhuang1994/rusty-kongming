@@ -1,3 +1,6 @@
+use eth_encode_packed::{SolidityDataType, TakeLastXBytes};
+use ethers::types::U64;
+
 /// This Module file holds common methods used for both v2 and v3 methods
 
 /// Utils to encode (and decode) 32 bytes to 5 bytes of calldata
@@ -40,4 +43,13 @@ pub fn get_jump_dest_from_sig(function_name: &str) -> u8 {
 
     // not found (force jump to invalid JUMPDEST)
     0x00
+}
+//limit block height to next block height
+pub fn limit_block_height(call_data:Vec<u8> ,next_block_number: U64) -> Vec<u8> {
+    let (payload,_) = eth_encode_packed::abi::encode_packed(&[
+        SolidityDataType::NumberWithShift(get_jump_dest_from_sig("check_block_number").into(), TakeLastXBytes(8)),
+        SolidityDataType::NumberWithShift(next_block_number.as_u64().into(), TakeLastXBytes(32)),
+        SolidityDataType::Bytes(call_data.as_slice()),
+    ]);
+    payload
 }

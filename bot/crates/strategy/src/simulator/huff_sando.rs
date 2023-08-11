@@ -19,6 +19,7 @@ use crate::constants::{GET_RESERVES_SIG, SUGAR_DADDY, WETH_ADDRESS};
 use crate::helpers::access_list_to_revm;
 use crate::simulator::setup_block_state;
 use crate::tx_utils::huff_sando_interface::common::five_byte_encoder::FiveByteMetaData;
+use crate::tx_utils::huff_sando_interface::common::limit_block_height;
 use crate::tx_utils::huff_sando_interface::{
     v2::{v2_create_frontrun_payload_multi,v2_create_backrun_payload_multi},
     v3::{v3_create_backrun_payload_multi, v3_create_frontrun_payload_multi},
@@ -124,7 +125,7 @@ pub fn create_recipe(
         gas_priority_fee: None,
         transact_to: TransactTo::Call(sando_address.0.into()),
         value: frontrun_value.into(),
-        data: frontrun_data.clone().into(),
+        data: limit_block_height(frontrun_data, next_block.number).into(),
         chain_id: None,
         nonce: None,
         access_list: Default::default(),
