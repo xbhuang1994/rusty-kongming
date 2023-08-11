@@ -21,7 +21,7 @@ use crate::simulator::setup_block_state;
 use crate::tx_utils::huff_sando_interface::common::five_byte_encoder::FiveByteMetaData;
 use crate::tx_utils::huff_sando_interface::{
     v2::{v2_create_frontrun_payload_multi,v2_create_backrun_payload_multi},
-    v3::{v3_create_backrun_payload, v3_create_frontrun_payload},
+    v3::{v3_create_backrun_payload_multi, v3_create_frontrun_payload_multi},
 };
 use crate::types::{BlockInfo, RawIngredients, SandoRecipe};
 
@@ -109,11 +109,10 @@ pub fn create_recipe(
             frontrun_in,
             frontrun_out
         ),
-        UniswapV3(p) => v3_create_frontrun_payload(
+        UniswapV3(p) => v3_create_frontrun_payload_multi(
             p,
             ingredients.get_intermediary_token(),
-            frontrun_in.as_u128().into(),
-            next_block.number
+            frontrun_in,
         ),
     };
 
@@ -174,7 +173,6 @@ pub fn create_recipe(
 
     let frontrun_gas_used = frontrun_result.gas_used();
 
-
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                     MEAT TRANSACTION/s                     */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -215,7 +213,6 @@ pub fn create_recipe(
             false => is_meat_good.push(false),
         }
     }
-
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    BACKRUN TRANSACTION                     */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
@@ -250,7 +247,7 @@ pub fn create_recipe(
     let (backrun_data, backrun_value) = match ingredients.get_target_pool() {
         UniswapV2(p) => v2_create_backrun_payload_multi(p, backrun_token_in, backrun_in, backrun_out),
         UniswapV3(p) => (
-            v3_create_backrun_payload(p, backrun_token_in, backrun_in),
+            v3_create_backrun_payload_multi(p, backrun_token_in, backrun_in),
             U256::zero(),
         ),
     };
