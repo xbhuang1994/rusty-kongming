@@ -243,11 +243,13 @@ fn sanity_check(
     let mut current_round = 1;
     let mut low_amount_in = min_backrun_in.clone();
     // let mut high_amount_in = max_backrun_in.clone().mul(U256::from(101)).div(U256::from(100))
-    let mut high_amount_in = max_backrun_in.clone();
+    let mut high_amount_in = max_backrun_in.clone() * 2;  // modify by wang
 
     let mut min_amount_in = U256::zero();
     let mut low_high_range = U256::zero();
     // let mut max_other_balance = U256::zero();
+    let mut max_backrun_out = U256::zero();
+    let mut backrun_in_at_max = U256::zero();
 
     let (startend_token, intermediary_token) = (ingredients.intermediary_token, ingredients.startend_token);
  
@@ -258,7 +260,8 @@ fn sanity_check(
             high_amount_in,
             last_amount_in,
             is_last_too_many,
-            current_round);
+            current_round,
+        );
         
         if min_amount_in == U256::zero() || (can_continue && current_amount_in < min_amount_in) {
             min_amount_in = current_amount_in;
@@ -448,11 +451,18 @@ fn sanity_check(
         // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
         
         let backrun_in = current_amount_in;
+        let backrun_in = match pool_variant {
+            PoolVariant::UniswapV2 => tx_builder::v2::encode_weth(backrun_in),
+            PoolVariant::UniswapV3 => tx_builder::v3::encode_weth(backrun_in),
+        };
 
         // caluclate backrun_out using encoded backrun_in
         let backrun_out = match pool_variant {
             PoolVariant::UniswapV2 => {
                 let target_pool = ingredients.target_pool.address;
+                evm.env.tx.gas_price = next_block.base_fee.into();
+                evm.env.tx.gas_limit = 700000;
+                evm.env.tx.value = rU256::ZERO;
                 let amount_out = get_amount_out_evm(
                     backrun_in,
                     target_pool,
@@ -460,11 +470,16 @@ fn sanity_check(
                     startend_token,
                     &mut evm,
                 )?;
-                tx_builder::v2::encode_weth(amount_out)
-                // tx_builder::v2::decode_intermediary(amount_out, true, startend_token)
+                // tx_builder::v2::encode_weth(amount_out)
+                tx_builder::v2::decode_intermediary(amount_out, true, startend_token)
             }
             PoolVariant::UniswapV3 => U256::zero(),
         };
+
+        if backrun_out > max_backrun_out {
+            max_backrun_out = backrun_out;
+            backrun_in_at_max = backrun_in;
+        }
 
         #[cfg(test)]
         {
@@ -480,17 +495,19 @@ fn sanity_check(
                 next_block,
                 &mut evm,
             )?;
-            println!("004:sandwich_backrun_weth_balance={:?}, sandwich_backrun_other_balance={:?}, backrun_in={:?}, backrun_out={:?}",
-                sandwich_backrun_weth_balance, sandwich_backrun_other_balance, backrun_in, backrun_out);
+            println!("004:backrun_weth_balance={:?},backrun_other_balance={:?},max_backrun_out={:?},
+                backrun_in_at_max={:?}, max_backrun_in={:?},round={:?},backrun_in={:?},backrun_out={:?}",
+                sandwich_backrun_weth_balance, sandwich_backrun_other_balance, max_backrun_out,
+                backrun_in_at_max, max_backrun_in, current_round, backrun_in, backrun_out);
         }
 
         // create tx.data and tx.value for frontrun_in
         let (backrun_data, backrun_value) = match pool_variant {
             PoolVariant::UniswapV2 => sandwich_maker.v2.create_payload_weth_is_input(
-                // backrun_in.into(),
-                // backrun_out.into(),
-                U256::zero(),
-                U256::zero(),
+                backrun_in.into(),
+                backrun_out.into(),
+                // U256::zero(),
+                // U256::zero(),
                 startend_token,
                 ingredients.target_pool,
                 next_block.number,
@@ -537,6 +554,7 @@ fn sanity_check(
                 return Err(SimulationError::BackrunEvmError(e))
             }
         };
+        let mut has_error = false;
         match backrun_result {
             ExecutionResult::Success { .. } => { /* continue */ }
             ExecutionResult::Revert { output, .. } => {
@@ -544,14 +562,16 @@ fn sanity_check(
                 {
                     println!("ExecutionResult::Revert:output={:?}", output);
                 }
-                return Err(SimulationError::BackrunReverted(output))
+                has_error = true;
+                // return Err(SimulationError::BackrunReverted(output))
             }
             ExecutionResult::Halt { reason, .. } => {
                 #[cfg(test)]
                 {
                     println!("ExecutionResult::Halt:output={:?}", reason);
                 }
-                return Err(SimulationError::BackrunHalted(reason))
+                has_error = true;
+                // return Err(SimulationError::BackrunHalted(reason))
             }
         };
         match salmonella_inspector.is_sando_safu() {
@@ -561,11 +581,13 @@ fn sanity_check(
                 {
                     println!("IsSandoSafu::NotSafu:not_safu_opcodes={:?}", not_safu_opcodes);
                 }
-                return Err(SimulationError::BackrunNotSafu(not_safu_opcodes))
+                has_error = true;
+                // return Err(SimulationError::BackrunNotSafu(not_safu_opcodes))
             }
         }
 
-        let backrun_gas_used = backrun_result.gas_used();
+        // let backrun_gas_used = backrun_result.gas_used();
+        let backrun_gas_used = 10000;
         #[cfg(test)]
         {
             println!("005:backrun_gas_used={:?}", backrun_gas_used);
@@ -584,15 +606,17 @@ fn sanity_check(
             &mut evm,
         )?;
 
-        last_amount_in = current_amount_in.clone();
-        current_round = current_round + 1;
         low_high_range = high_amount_in - low_amount_in;
         revenue = sandwich_final_weth_balance.checked_sub(sandwich_start_weth_balance).unwrap_or_default();
+
+        last_amount_in = current_amount_in.clone();
+        current_round = current_round + 1;
+
         let mut should_report = false;
         if sandwich_final_other_balance == sandwich_start_other_balance
             || low_high_range <= U256::from(100000) {
             should_report = true;
-        } else if sandwich_final_other_balance > sandwich_start_other_balance {
+        } else if has_error || sandwich_final_other_balance > sandwich_start_other_balance {
             // buy more, reduce weth input and retry
             is_last_too_many = true;
             high_amount_in = last_amount_in;
@@ -604,12 +628,13 @@ fn sanity_check(
             continue;
         }
 
-        if should_report {
+        should_report = true;
+        if should_report && !has_error{
 
             #[cfg(test)]
             {
-                println!("final: sandwich_final_weth_balance={:?}, sandwich_final_other_balance={:?},
-                    sandwich_start_weth_balance={:?}, revenue={:?}, round={:?}, low={:?}, high={:?}, range={:?}",
+                println!("final: final_weth_balance={:?}, final_other_balance={:?}, start_weth_balance={:?}, 
+                    revenue={:?}, round={:?}, low={:?}, high={:?}, range={:?}",
                     sandwich_final_weth_balance, sandwich_final_other_balance, sandwich_start_weth_balance, revenue,
                     current_round, low_amount_in, high_amount_in, low_high_range);
             }
@@ -652,7 +677,7 @@ fn sanity_check(
 fn calculate_weth_input_amount(low_amount_in: U256, high_amount_in: U256, last_amount_in: U256, is_last_too_many: bool, current_round: i32)
     -> (bool, U256) {
     if current_round == 1 {
-        return (true, high_amount_in - 5000000)
+        return (true, high_amount_in - 50000)
     } else if current_round > 10 {
         return (false, U256::zero())
     }
@@ -666,7 +691,13 @@ fn calculate_weth_input_amount(low_amount_in: U256, high_amount_in: U256, last_a
         if high_amount_in - low_amount_in == U256::from(1) {
             return (true, last_amount_in - 1)
         } else {
-            return (true, last_amount_in - (high_amount_in - low_amount_in) / 2)
+            println!("last_amount_in={:?},low={:?},high={:?}", last_amount_in, low_amount_in, high_amount_in);
+            let half_range = (high_amount_in - low_amount_in) / 2;
+            if last_amount_in > half_range {
+                return (true, last_amount_in - half_range)
+            } else {
+                return (false, U256::zero())
+            }
         }
     } else {
         if current_round == 2 {
@@ -676,7 +707,7 @@ fn calculate_weth_input_amount(low_amount_in: U256, high_amount_in: U256, last_a
             if high_amount_in - low_amount_in == U256::from(1) {
                 return (true, last_amount_in + 1)
             } else {
-                return (true, last_amount_in + (high_amount_in - low_amount_in) / 2)
+                return (true, last_amount_in - (high_amount_in - low_amount_in) / 2)
             }
         }
     }

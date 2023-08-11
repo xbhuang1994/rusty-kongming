@@ -183,7 +183,7 @@ pub async fn evaluate_sandwich_revenue(
 
     let pool_variant = ingredients.target_pool.pool_variant;
 
-    let (mut startend_token, mut intermediary_token) = (ingredients.startend_token, ingredients.intermediary_token);
+    let (startend_token, intermediary_token) = (ingredients.startend_token, ingredients.intermediary_token);
 
     #[cfg(test)]
     {
