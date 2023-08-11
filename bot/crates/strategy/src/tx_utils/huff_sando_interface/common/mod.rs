@@ -7,7 +7,7 @@ use ethers::types::U64;
 pub mod five_byte_encoder;
 
 /// Utils to encode (and decode) weth to `tx.value`
-pub mod weth_encoder;
+// pub mod weth_encoder;
 
 // Declare the array as static
 static FUNCTION_NAMES: [&str; 18] = [
