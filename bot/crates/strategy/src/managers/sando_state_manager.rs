@@ -134,6 +134,13 @@ impl SandoStateManager {
         //get low txs by max_fee_per_gas > base_fee_per_gas
         self.low_txs.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect()
     }
+    /// get approve txs by tx.from
+    /// input Address
+    /// return Vec<Transaction>
+    pub fn get_approve_txs(&self,from: &Address) -> Vec<Transaction> {
+        self.approve_txs.iter().filter(|tx| tx.from == *from).cloned().collect()
+    }
+    
     fn remove_approve_tx(&mut self, tx: &Transaction) {
         self.approve_txs.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce))
     }
