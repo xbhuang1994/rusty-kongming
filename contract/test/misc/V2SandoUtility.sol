@@ -56,13 +56,13 @@ library V2SandoUtility {
         uint256 amountOut = GeneralHelper.getAmountOut(otherToken, weth, amountInActual);
         FiveBytesEncodingUtils.EncodingMetaData memory fiveByteParamsOutput = FiveBytesEncodingUtils.encode(amountOut);
         uint8 jumpDest = SandoCommon.getJumpDestFromSig("v2_backrun_multi");
-        bool weth_is_zero = weth > otherToken;
+        bool weth_is_zero = weth < otherToken;
         payload = abi.encodePacked(
             jumpDest,
             address(pair), // univ2 pair
             address(otherToken), // inputToken
             FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParams, 1),
-            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParamsOutput, weth_is_zero ? 1 : 0)
+            FiveBytesEncodingUtils.finalzeForParamIndex(fiveByteParamsOutput, weth_is_zero ? 0 : 1)
         );
     }
 
