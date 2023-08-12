@@ -3,7 +3,7 @@ use colored::Colorize;
 use ethers::{
     providers::Middleware,
     signers::{LocalWallet, Signer},
-    types::{Address, BlockNumber, Filter, U256, U64},
+    types::{Address, BlockNumber, Filter, U256, U64, Transaction, Block},
 };
 use log::info;
 use std::sync::Arc;
@@ -13,13 +13,16 @@ use crate::{
     constants::{ERC20_TRANSFER_EVENT_SIG, WETH_ADDRESS},
     startup_info_log,
 };
-
+// max transaction count
+const MAX_TRANSACTION_COUNT: usize = 10000;
 pub struct SandoStateManager {
     sando_contract: Address,
     sando_inception_block: U64,
     searcher_signer: LocalWallet,
     weth_inventory: U256,
     token_dust: Vec<Address>,
+    approve_txs: Vec<Transaction>,
+    low_txs: Vec<Transaction>,
 }
 
 impl SandoStateManager {
@@ -34,6 +37,8 @@ impl SandoStateManager {
             searcher_signer,
             weth_inventory: Default::default(),
             token_dust: Default::default(),
+            approve_txs : Default::default(),
+            low_txs: Default::default(),
         }
     }
 
@@ -101,4 +106,36 @@ impl SandoStateManager {
     pub fn get_weth_inventory(&self) -> U256 {
         self.weth_inventory
     }
+
+    pub fn check_sig_id(&mut self, tx: &Transaction) -> bool{
+        let mut has_sig_funcation = false;
+        
+        let sig_approve = ethers::utils::id("approve(address,uint256)");
+        if tx.input.0.starts_with(&sig_approve) {
+            has_sig_funcation = true;
+            self.approve_txs.push(tx.clone());
+        }
+        has_sig_funcation
+    }
+    pub fn update_block_info(&mut self, block: &Block<Transaction>) {
+        for tx in &block.transactions {
+            self.remove_approve_tx(tx);
+        }
+    }
+    pub fn append_low_tx(&mut self, tx: &Transaction) {
+        //if low txs count is more than 10000, remove the oldest one
+        if self.low_txs.len() > MAX_TRANSACTION_COUNT {
+            self.low_txs.remove(0);
+        }
+        self.low_txs.push(tx.clone());
+    }
+    
+    pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
+        //get low txs by max_fee_per_gas > base_fee_per_gas
+        self.low_txs.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect()
+    }
+    fn remove_approve_tx(&mut self, tx: &Transaction) {
+        self.approve_txs.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce))
+    }
+
 }

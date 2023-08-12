@@ -80,7 +80,7 @@ macro_rules! log_not_sandwichable {
 
 #[macro_export]
 macro_rules! log_opportunity {
-    ($meats:expr, $optimal_input:expr, $revenue:expr) => {{
+    ($meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
         info!("\n{}", "[OPPORTUNITY DETECTED]".green().on_black().bold());
         info!(
             "{}",
@@ -99,6 +99,22 @@ macro_rules! log_opportunity {
             format!(
                 "revenue      : {} wETH",
                 $revenue.to_string().green().on_black()
+            )
+            .bold()
+        );
+        info!(
+            "{}",
+            format!(
+                "frontrun_gas_used: {} ",
+                $frontrun_gas_used.to_string().green().on_black()
+            )
+            .bold()
+        );
+        info!(
+            "{}",
+            format!(
+                "backrun_gas_used: {} ",
+                $backrun_gas_used.to_string().green().on_black()
             )
             .bold()
         );

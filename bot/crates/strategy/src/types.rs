@@ -235,6 +235,12 @@ impl SandoRecipe {
     pub fn get_revenue(&self) -> U256 {
         self.revenue
     }
+    pub fn get_frontrun_gas_used(&self) -> u64 {
+        self.frontrun_gas_used
+    }
+    pub fn get_backrun_gas_used(&self) -> u64 {
+        self.backrun_gas_used
+    }
 
     /// turn recipe into a signed bundle that can be sumbitted to flashbots
     pub async fn to_fb_bundle<M: Middleware>(

@@ -91,11 +91,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
             self.sando_state_manager.get_sando_address(),
             shared_backend,
         )?;
-
+        
         log_opportunity!(
             ingredients.print_meats(),
             optimal_input.as_u128() as f64 / 1e18,
-            recipe.get_revenue().as_u128() as f64 / 1e18
+            recipe.get_revenue().as_u128() as f64 / 1e18,
+            recipe.get_frontrun_gas_used(),
+            recipe.get_backrun_gas_used()    
+            
         );
 
         Ok(recipe)
@@ -136,7 +139,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
         self.block_manager.update_block_info(event);
         match self.provider.get_block_with_txs(new_block_number).await? {
             Some(block) =>{
-                self.pool_manager.update_block_info(block);
+                self.pool_manager.update_block_info(&block);
+                self.sando_state_manager.update_block_info(&block);
             },
             None =>{
                 log_error!("Block not found");
@@ -157,9 +161,16 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // enhancement: simulate all txs regardless, store result, and use result when tx can included
         if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas {
             log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
+            self.sando_state_manager.append_low_tx(&victim_tx);
             return None;
         }
 
+        if self.sando_state_manager.check_sig_id(&victim_tx) {
+            log_info_cyan!("{:?} approve", victim_tx.hash);
+            return None;
+        }
+        
+        
         // check if tx is a swap
         let (touched_pools, touched_pools_reverse) = self
             .pool_manager

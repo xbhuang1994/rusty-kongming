@@ -236,12 +236,15 @@ impl<M: Middleware + 'static> PoolManager<M> {
         }
     }
 
-    pub fn update_block_info(&self, block: Block<Transaction>) {
-        println!("updating block info...");
+    pub fn update_block_info(&self, block: &Block<Transaction>) {
         for tx in &block.transactions {
-            self.mem_touched_pools
-                .iter_mut()
-                .for_each(|mut r| r.remove_transaction(&tx));
+            self.remove_mem_touched_pool_tx(tx);
         }
+    }
+
+    fn remove_mem_touched_pool_tx(&self, tx: &Transaction) {
+        self.mem_touched_pools
+            .iter_mut()
+            .for_each(|mut r| r.remove_transaction(&tx));
     }
 }
