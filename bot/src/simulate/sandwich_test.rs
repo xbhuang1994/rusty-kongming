@@ -71,7 +71,7 @@ mod test {
 
         match cook_simple_reverse::create_optimal_sandwich(
             &ingredients,
-            ethers::utils::parse_ether("50").unwrap(),
+            ethers::utils::parse_ether("6000").unwrap(),
             &testhelper::get_next_block_info(fork_block_num, &ws_provider).await,
             &mut db,
             &SandwichMaker::new().await,
@@ -268,9 +268,8 @@ mod test {
         // bad(available)
         rt.block_on(async {
             create_test_reverse(
-                17864648,
+                17864649,
                 "0x29c830864930c897efa2b9e9851342187b82010e",
-                // vec!["0x472b923421a68f9fdeeceb0c57c35b3908ec3f5bc8ebabe8193057f6dd2a6a9a"],
                 vec!["0xf9944763d2c639e98c9df584c1e76e1ed10f912a28c8f062654bb096370e4dd0",
                             "0x7e6745dcf989730e2230ed80973cbabdb253f7d2cde0fd4fc49a233e3dfa8940"],
                 true,
@@ -312,6 +311,38 @@ mod test {
         });
     }
 
+    #[test]
+    fn sandv2_uniswap_router_reverse_rlb() {
+        let rt = Runtime::new().unwrap();
+        // mog
+        rt.block_on(async {
+            create_test_reverse(
+                17888391,
+                "0x3157e15e15fd41d6a9c5df255c71506f160db67c",
+                vec!["0x95c67328111ff5afbf47fd8350bf01101c33a1ea9726233c44eb46792c318c07"],
+                false,
+                "sandv2_uniswap_router_reverse_rlb",
+            )
+            .await;
+        });
+    }
+
+
+    #[test]
+    fn sandv2_uniswap_router() {
+        // Can't use [tokio::test] attr with `global_backed` for some reason
+        // so manually create a runtime
+        let rt = Runtime::new().unwrap();
+        rt.block_on(async {
+            create_test(
+                17888025,
+                "0x6cea05f7cb348d48a0bdf86889040f6a5bae98dd",
+                vec!["0xd5be61e200b6feabe37085bedf37bf8ee8f6a85f4f6c5d31d670adf841ef34b1"],
+                true,
+            )
+            .await;
+        });
+    }
 
     #[test]
     fn sandv2_sushi_router() {

@@ -1,6 +1,5 @@
 use crate::prelude::fork_db::ForkDB;
 use crate::prelude::fork_factory::ForkFactory;
-use crate::prelude::PoolVariant;
 use crate::prelude::sandwich_types::RawIngredients;
 use crate::types::{BlockInfo, SimulationError};
 use crate::utils::constants::get_slot_by_address;
@@ -18,100 +17,6 @@ use revm::{
     EVM,
 };
 use std::str::FromStr;
-use crate::prelude::access_list::AccessListInspector;
-use crate::utils::tx_builder::{self, SandwichMaker};
-
-pub fn find_token_slot_value(
-    ingredients: &RawIngredients,
-    next_block: &BlockInfo,
-    fork_factory: &mut ForkFactory,
-    sandwich_maker: &SandwichMaker,
-    is_forward: bool,) -> Result<rU256, SimulationError> {
-
-    let searcher = get_searcher_wallet().address();
-    let sandwich_contract = get_sandwich_contract_address();
-
-    let (mut startend_token, mut intermediary_token) = (ingredients.startend_token, ingredients.intermediary_token);
-
-    if !is_forward {
-        (startend_token, intermediary_token) = (intermediary_token, startend_token);
-    }
-    println!("startend:{:?}, end:{:?>}", startend_token, intermediary_token);
-
-
-    let mut evm = revm::EVM::new();
-    evm.database(fork_factory.new_sandbox_fork());
-    setup_block_state(&mut evm, &next_block);
-
-    let sandwich_start_balance = get_balance_of_evm(
-        startend_token,
-        sandwich_contract,
-        next_block,
-        &mut evm,
-    )?;
-
-    let pool_variant = ingredients.target_pool.pool_variant;
-    let frontrun_in = ethers::utils::parse_ether("50").unwrap();
-    let frontrun_in = match pool_variant {
-        PoolVariant::UniswapV2 => tx_builder::v2::encode_weth(frontrun_in),
-        PoolVariant::UniswapV3 => tx_builder::v3::encode_weth(frontrun_in),
-    };
-
-    // caluclate frontrun_out using encoded frontrun_in
-    let frontrun_out = match pool_variant {
-        PoolVariant::UniswapV2 => {
-            let target_pool = ingredients.target_pool.address;
-            let token_in = startend_token;
-            let token_out = intermediary_token;
-            evm.env.tx.gas_price = next_block.base_fee.into();
-            evm.env.tx.gas_limit = 700000;
-            evm.env.tx.value = rU256::ZERO;
-            let amount_out =
-                get_amount_out_evm(frontrun_in, target_pool, token_in, token_out, &mut evm)?;
-            tx_builder::v2::decode_intermediary(amount_out, true, token_out)
-        }
-        PoolVariant::UniswapV3 => U256::zero(),
-    };
-
-    // create tx.data and tx.value for frontrun_in
-    let (frontrun_data, frontrun_value) = match pool_variant {
-        PoolVariant::UniswapV2 => sandwich_maker.v2.create_payload_weth_is_input(
-            frontrun_in,
-            frontrun_out,
-            intermediary_token,
-            ingredients.target_pool,
-            next_block.number,
-        ),
-        PoolVariant::UniswapV3 => sandwich_maker.v3.create_payload_weth_is_input(
-            frontrun_in.as_u128().into(),
-            startend_token,
-            intermediary_token,
-            ingredients.target_pool,
-            next_block.number,
-        ),
-    };
-
-    evm.env.tx.caller = searcher.0.into();
-    evm.env.tx.transact_to = TransactTo::Call(sandwich_contract.0.into());
-    evm.env.tx.data = frontrun_data.clone().into();
-    evm.env.tx.value = frontrun_value.into();
-    evm.env.tx.gas_limit = 700000;
-    evm.env.tx.gas_price = next_block.base_fee.into();
-    evm.env.tx.access_list = Vec::default();
-
-    let mut access_list_inspector = AccessListInspector::new(searcher, sandwich_contract);
-    evm.inspect_ref(&mut access_list_inspector)
-        .map_err(|e| SimulationError::FrontrunEvmError(e))
-        .unwrap();
-    let frontrun_access_list = access_list_inspector.into_access_list();
-    for (address, slots) in frontrun_access_list.iter() {
-        for slot in slots.iter() {
-            println!("============address:{:?}, slot:{:?}", address, slot);
-        }
-    }
-
-    Ok(rU256::from(0))
-}
 
 // Setup braindance for current fork factory by injecting braindance
 // contract code and setting up balances

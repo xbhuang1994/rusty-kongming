@@ -45,6 +45,10 @@ pub fn get_mog_address() -> Address {
     Address::from_str("0xaaee1a9723aadb7afa2810263653a34ba2c21c7a").unwrap()
 }
 
+pub fn get_rlb_address() -> Address {
+    Address::from_str("0x046eee2cc3188071c02bfc1745a6b17c656e3f3d").unwrap()
+}
+
 pub fn get_slot_by_address(addr: Address) -> rU256 {
     if addr == get_edge_address() || addr == get_dydx_address()
         || addr == get_ydf_address() || addr == get_bad_address()
@@ -60,6 +64,8 @@ pub fn get_slot_by_address(addr: Address) -> rU256 {
         return rU256::from_str("0xa7b01fdf0b7c35d2b6724bac387fdfcee55f2f126845c5c71cd59a2e76ef1fc9").unwrap()
     } else if addr == get_mog_address() {
         return rU256::from_str("0x3eda6cc33a4f384c95b93751d68c3b0e7a97af67e8490ffb0fc26ec84f175998").unwrap()
+    } else if addr == get_rlb_address() {
+        return rU256::from_str("0xb53127684a568b3173ae13b9f8a6016e243e63b6e8ee1178d6a717850b5d6103").unwrap()
     } else {
         return rU256::from_str("").unwrap()
     }

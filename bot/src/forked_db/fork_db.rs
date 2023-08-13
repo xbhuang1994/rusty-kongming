@@ -106,7 +106,7 @@ impl Database for ForkDB {
             Err(e) => return Err(e),
         };
         /* add by wang start*/
-        if false && address == B160::from_str("0xaaee1a9723aadb7afa2810263653a34ba2c21c7a").unwrap() {
+        if false && address == B160::from_str("0x046eee2cc3188071c02bfc1745a6b17c656e3f3d").unwrap() {
 
             let storage_val = parse_ether(320).unwrap().into();
             #[cfg(test)]
