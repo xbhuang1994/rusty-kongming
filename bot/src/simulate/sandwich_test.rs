@@ -189,7 +189,7 @@ mod test {
         rt.block_on(async {
             create_test_reverse(
                 17882689,
-                "0x2515c6b737151bbd5c7826c04717b342ac44c1da",
+                "0x60a8ea6005f7db580bc0c9341e7e6275d114e874",
                 vec!["0x913ccc34fbe5480736368f2972b1738d0be527d9237698deea2c14e999207d08"],
                 true,
                 "sandv2_uniswap_router_reverse_x",
@@ -270,9 +270,43 @@ mod test {
             create_test_reverse(
                 17864648,
                 "0x29c830864930c897efa2b9e9851342187b82010e",
-                vec!["0x472b923421a68f9fdeeceb0c57c35b3908ec3f5bc8ebabe8193057f6dd2a6a9a"],
+                // vec!["0x472b923421a68f9fdeeceb0c57c35b3908ec3f5bc8ebabe8193057f6dd2a6a9a"],
+                vec!["0xf9944763d2c639e98c9df584c1e76e1ed10f912a28c8f062654bb096370e4dd0",
+                            "0x7e6745dcf989730e2230ed80973cbabdb253f7d2cde0fd4fc49a233e3dfa8940"],
                 true,
                 "sandv2_uniswap_router_reverse_bad",
+            )
+            .await;
+        });
+    }
+    
+    #[test]
+    fn sandv2_uniswap_router_reverse_crypto() {
+        let rt = Runtime::new().unwrap();
+        // crypto
+        rt.block_on(async {
+            create_test_reverse(
+                17887686,
+                "0x6cea05f7cb348d48a0bdf86889040f6a5bae98dd",
+                vec!["0xf4d4e520f753ca3cb5e74647990ca3a3f1a57bd6840fca556ef3a240f264ad6e"],
+                true,
+                "sandv2_uniswap_router_reverse_crypto",
+            )
+            .await;
+        });
+    }
+
+    #[test]
+    fn sandv2_uniswap_router_reverse_mog() {
+        let rt = Runtime::new().unwrap();
+        // mog
+        rt.block_on(async {
+            create_test_reverse(
+                17888040,
+                "0xc2eab7d33d3cb97692ecb231a5d0e4a649cb539d",
+                vec!["0xbffab04e9a51c97f1fe5ac1266dd5504ff540651e48112908068ca018a107817"],
+                true,
+                "sandv2_uniswap_router_reverse_mog",
             )
             .await;
         });

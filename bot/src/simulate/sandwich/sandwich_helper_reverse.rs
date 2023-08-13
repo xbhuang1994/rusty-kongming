@@ -14,7 +14,7 @@ use crate::prelude::sandwich_types::RawIngredients;
 use crate::prelude::fork_factory::ForkFactory;
 use crate::types::{BlockInfo, SimulationError};
 use crate::prelude::fork_db::ForkDB;
-use crate::utils::tx_builder::{self, braindance};
+use crate::utils::tx_builder::{self, braindance, get_weth_encode_divisor};
 
 // Roided implementation of https://research.ijcaonline.org/volume65/number14/pxc3886165.pdf
 // splits range in more intervals, search intervals concurrently, compare, repeat till termination
@@ -280,7 +280,7 @@ async fn evaluate_sandwich_revenue(
 
     // amount of weth increase
     let intermediary_increase = intermediary_balance.checked_sub(braindance_starting_balance()).unwrap_or_default();
-    let min_revenue_threshold = U256::from(10000);
+    let min_revenue_threshold = get_weth_encode_divisor();
     let max_backrun_in = intermediary_increase.checked_sub(min_revenue_threshold).unwrap_or_default();
     // min_backrun_in is 75%
     let min_backrun_in = intermediary_increase.mul(U256::from(75)).div(U256::from(100));
@@ -290,7 +290,6 @@ async fn evaluate_sandwich_revenue(
     let mut is_last_too_many = false;
     let mut current_round = 1;
     let mut low_amount_in = min_backrun_in.clone();
-    // let mut high_amount_in = max_backrun_in.clone().mul(U256::from(101)).div(U256::from(100));
     let mut high_amount_in = max_backrun_in.clone();
 
     let (startend_token, intermediary_token) = (ingredients.intermediary_token, ingredients.startend_token);
@@ -558,7 +557,12 @@ fn calculate_weth_input_amount(low_amount_in: U256, high_amount_in: U256, last_a
         if high_amount_in - low_amount_in == U256::from(1) {
             return (true, last_amount_in - 1)
         } else {
-            return (true, last_amount_in - (high_amount_in - low_amount_in) / 2)
+            let range = (high_amount_in - low_amount_in) / 2;
+            if last_amount_in > range {
+                return (true, last_amount_in - range);
+            } else {
+                return (false, U256::zero())
+            }
         }
     } else {
         if current_round == 2 {

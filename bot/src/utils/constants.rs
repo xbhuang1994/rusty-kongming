@@ -37,9 +37,18 @@ pub fn get_bad_address() -> Address {
     Address::from_str("0x32b86b99441480a7e5bd3a26c124ec2373e3f015").unwrap()
 }
 
+pub fn get_crypto_address() -> Address {
+    Address::from_str("0x586a7cfe21e55ec0e24f0bfb118f77fe4ca87bab").unwrap()
+}
+
+pub fn get_mog_address() -> Address {
+    Address::from_str("0xaaee1a9723aadb7afa2810263653a34ba2c21c7a").unwrap()
+}
+
 pub fn get_slot_by_address(addr: Address) -> rU256 {
     if addr == get_edge_address() || addr == get_dydx_address()
-        || addr == get_ydf_address() || addr == get_bad_address(){
+        || addr == get_ydf_address() || addr == get_bad_address()
+        || addr == get_crypto_address() {
         return rU256::from_str("0xedceff30864d0c59113a29113472807abd04c523799e1d9f56afb2bb1e3410d1").unwrap()
     } else if addr == get_pepe_address() {
         return rU256::from_str("0x2a14a55e6f4c0d1688108845f66780c416401b5154eb4a4f241ea83b3e5e1bda").unwrap()
@@ -49,6 +58,8 @@ pub fn get_slot_by_address(addr: Address) -> rU256 {
         return rU256::from_str("0x4e02ceddb6d3084053f93bfb0b52f2289e83c4633cfa2e7bfe61df1e52b2ed92").unwrap()
     } else if addr == get_datboi_address() {
         return rU256::from_str("0xa7b01fdf0b7c35d2b6724bac387fdfcee55f2f126845c5c71cd59a2e76ef1fc9").unwrap()
+    } else if addr == get_mog_address() {
+        return rU256::from_str("0x3eda6cc33a4f384c95b93751d68c3b0e7a97af67e8490ffb0fc26ec84f175998").unwrap()
     } else {
         return rU256::from_str("").unwrap()
     }
