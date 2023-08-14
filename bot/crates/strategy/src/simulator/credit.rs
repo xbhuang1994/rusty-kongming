@@ -4,9 +4,9 @@ use ethers::{
     utils::parse_units,
 };
 use foundry_evm::{executor::fork::SharedBackend, revm::db::CacheDB};
-use std::{collections::HashMap, str::FromStr};
+use lazy_static::lazy_static;
+use std::{collections::HashMap, env, str::FromStr};
 use toml::Value;
-
 #[derive(Debug, Clone, Default)]
 struct SlotIndex {
     decimals: u32,
@@ -25,20 +25,28 @@ pub struct CreditHelper {
 impl CreditHelper {
     // not so elegeant but create sim env from state diffs
     pub fn new() -> Self {
-        // load slot index map
-        let toml_str = std::fs::read_to_string("Slot.toml").expect("Unable to read config file");
-        let parsed: Value = toml::from_str(&toml_str).expect("Failed to parse TOML");
-        let mut slot_index_map: HashMap<Address, SlotIndex> = HashMap::new();
-        for (key, value) in parsed.as_table().unwrap() {
-            let index = value["index"].as_integer().unwrap();
-            let decimals = value["decimals"].as_integer().unwrap() as u32;
+        lazy_static! {
+            static ref SLOT_INDEX_MAP: HashMap<Address, SlotIndex> = {
+                log::info!("current dir {:?}", env::current_dir().unwrap());
+                let toml_str =
+                    std::fs::read_to_string("Slot.toml").expect("Unable to read config file");
+                let parsed: Value = toml::from_str(&toml_str).expect("Failed to parse TOML");
+                let mut slot_index_map: HashMap<Address, SlotIndex> = HashMap::new();
+                for (key, value) in parsed.as_table().unwrap() {
+                    let index = value["index"].as_integer().unwrap();
+                    let decimals = value["decimals"].as_integer().unwrap() as u32;
 
-            let slot_index = SlotIndex::new(decimals, index);
-            let address = H160::from_str(key).expect("Invalid input token address");
-            slot_index_map.insert(address, slot_index);
+                    let slot_index = SlotIndex::new(decimals, index);
+                    let address = H160::from_str(key).expect("Invalid input token address");
+                    slot_index_map.insert(address, slot_index);
+                }
+                slot_index_map
+            };
         }
 
-        Self { slot_index_map }
+        Self {
+            slot_index_map: SLOT_INDEX_MAP.clone(),
+        }
     }
 
     pub fn credit_token_from_base(
@@ -48,6 +56,7 @@ impl CreditHelper {
         credit_addr: Address,
         base_amount: &str,
     ) {
+        //log::info!("current dir {:?}", &self.slot_index_map);
         let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
         // give sandwich contract some weth for swap
         let slot: U256 = ethers::utils::keccak256(abi::encode(&[
