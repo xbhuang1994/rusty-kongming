@@ -31,7 +31,7 @@ use super::huff_helper::{get_erc20_balance, v2_get_amount_out};
 use crate::constants::{WETH_ADDRESS, LIL_ROUTER_WETH_AMT_BASE};
 
 /// finds if sandwich is profitable + salmonella free
-pub fn create_recipe(
+pub fn create_recipe_reverse(
     ingredients: &RawIngredients,
     next_block: &BlockInfo,
     optimal_in: U256,
@@ -43,12 +43,21 @@ pub fn create_recipe(
     #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    #[cfg(feature = "debug")]
+    // #[cfg(feature = "debug")]
     {
         inject_huff_sando(
             &mut fork_db,
             sando_address.0.into(),
             searcher.0.into(),
+            sando_start_bal,
+        );
+
+        // as start_end token is not WETH, credit xxxx tokens for use
+        let credit_helper_ref = ingredients.get_credit_helper_ref();
+        credit_helper_ref.credit_token_amount(
+            ingredients.get_start_end_token().clone(),
+            &mut fork_db,
+            sando_address.0.into(),
             sando_start_bal,
         );
     }
@@ -343,7 +352,7 @@ pub fn create_recipe(
     ))
 }
 
-#[cfg(feature = "debug")]
+// #[cfg(feature = "debug")]
 fn inject_huff_sando(
     db: &mut CacheDB<SharedBackend>,
     huff_sando_addy: foundry_evm::executor::B160,

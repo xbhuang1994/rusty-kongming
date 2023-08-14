@@ -1,6 +1,9 @@
 pub mod credit;
+pub mod huff_helper;
 pub mod huff_sando;
+pub mod huff_sando_reverse;
 pub(crate) mod lil_router;
+pub(crate) mod lil_router_reverse;
 pub(crate) mod salmonella_inspector;
 
 use foundry_evm::{

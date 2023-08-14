@@ -41,12 +41,12 @@ impl CreditHelper {
         Self { slot_index_map }
     }
 
-    pub fn credit_token(
+    pub fn credit_token_from_base(
         &self,
         input_token: Address,
         fork_db: &mut CacheDB<SharedBackend>,
         credit_addr: Address,
-        amount: &str,
+        base_amount: &str,
     ) {
         let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
         // give sandwich contract some weth for swap
@@ -56,9 +56,38 @@ impl CreditHelper {
         ]))
         .into();
         // update changes
-        let credit_balance: U256 = parse_units(amount, slot_item.decimals).unwrap().into();
+        let credit_balance: U256 = parse_units(base_amount, slot_item.decimals).unwrap().into();
         fork_db
             .insert_account_storage(input_token.0.into(), slot.into(), credit_balance.into())
             .unwrap();
+    }
+
+    pub fn credit_token_amount(
+        &self,
+        input_token: Address,
+        fork_db: &mut CacheDB<SharedBackend>,
+        credit_addr: Address,
+        amount: U256,
+    ) {
+        let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
+        // give sandwich contract some weth for swap
+        let slot: U256 = ethers::utils::keccak256(abi::encode(&[
+            abi::Token::Address(credit_addr.0.into()),
+            abi::Token::Uint(U256::from(slot_item.index)),
+        ]))
+        .into();
+        // update changes
+        let credit_balance = amount;
+        fork_db
+            .insert_account_storage(input_token.0.into(), slot.into(), credit_balance.into())
+            .unwrap();
+    }
+
+    pub fn base_to_amount(&self,
+        input_token: Address,
+        amount: &str,) -> U256 {
+        
+        let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
+        parse_units(amount, slot_item.decimals).unwrap().into() 
     }
 }

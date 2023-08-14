@@ -80,8 +80,12 @@ macro_rules! log_not_sandwichable {
 
 #[macro_export]
 macro_rules! log_opportunity {
-    ($meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
-        info!("\n{}", "[OPPORTUNITY DETECTED]".green().on_black().bold());
+    ($is_reverse:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
+        if !$is_reverse {
+            info!("\n{}", "[OPPORTUNITY DETECTED]".green().on_black().bold());
+        } else {
+            info!("\n{}", "[OPPORTUNITY REVERSE DETECTED]".green().on_black().bold());
+        }
         info!(
             "{}",
             format!("meats: {}", $meats.to_string().green().on_black()).bold()

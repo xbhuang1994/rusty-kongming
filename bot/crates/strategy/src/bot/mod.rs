@@ -16,6 +16,7 @@ use crate::{
         sando_state_manager::SandoStateManager,
     },
     simulator::{huff_sando::create_recipe, lil_router::find_optimal_input},
+    simulator::{huff_sando_reverse::create_recipe_reverse, lil_router_reverse::find_optimal_input_reverse},
     types::{Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig},
 };
 
@@ -52,6 +53,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         &self,
         ingredients: RawIngredients,
         target_block: BlockInfo,
+        is_reverse: bool,
     ) -> Result<SandoRecipe> {
         // setup shared backend
         let shared_backend = SharedBackend::spawn_backend_thread(
@@ -74,25 +76,51 @@ impl<M: Middleware + 'static> SandoBot<M> {
             self.sando_state_manager.get_weth_inventory()
         };
 
-        let optimal_input = find_optimal_input(
-            &ingredients,
-            &target_block,
-            weth_inventory,
-            shared_backend.clone(),
-        )
-        .await?;
+        let optimal_input;
+        let recipe;
 
-        let recipe = create_recipe(
-            &ingredients,
-            &target_block,
-            optimal_input,
-            weth_inventory,
-            self.sando_state_manager.get_searcher_address(),
-            self.sando_state_manager.get_sando_address(),
-            shared_backend,
-        )?;
+        if !is_reverse {
+
+            optimal_input = find_optimal_input(
+                &ingredients,
+                &target_block,
+                weth_inventory,
+                shared_backend.clone(),
+            )
+            .await?;
+
+            recipe = create_recipe(
+                &ingredients,
+                &target_block,
+                optimal_input,
+                weth_inventory,
+                self.sando_state_manager.get_searcher_address(),
+                self.sando_state_manager.get_sando_address(),
+                shared_backend,
+            )?;
+        } else {
+
+            optimal_input = find_optimal_input_reverse(
+                &ingredients,
+                &target_block,
+                weth_inventory,
+                shared_backend.clone(),
+            )
+            .await?;
+
+            recipe = create_recipe_reverse(
+                &ingredients,
+                &target_block,
+                optimal_input,
+                weth_inventory,
+                self.sando_state_manager.get_searcher_address(),
+                self.sando_state_manager.get_sando_address(),
+                shared_backend,
+            )?;
+        }
         
         log_opportunity!(
+            is_reverse,
             ingredients.print_meats(),
             optimal_input.as_u128() as f64 / 1e18,
             recipe.get_revenue().as_u128() as f64 / 1e18,
@@ -103,6 +131,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         Ok(recipe)
     }
+
+    
 }
 
 #[async_trait]
@@ -187,8 +217,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
             .ok()?;
         
         // no touched pools = no sandwich opps
+        let mut sando_bundles = vec![];
         if !touched_pools.is_empty() {
-            let mut sando_bundles = vec![];
 
             for pool in touched_pools {
                 let (token_a, token_b) = match pool {
@@ -219,7 +249,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     pool,
                 );
 
-                match self.is_sandwichable(ingredients, next_block.clone()).await {
+                match self.is_sandwichable(ingredients, next_block.clone(), false).await {
                     Ok(s) => {
                         let _bundle = match s
                             .to_fb_bundle(
@@ -247,17 +277,74 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     }
                 };
             }
-
-            return Some(Action::SubmitToFlashbots(sando_bundles));
         }
 
         if !touched_pools_reverse.is_empty() {
-            //TODO sandwichable reverse pools
-            info!("TODO sandwichable reverse pools {:?}", victim_tx.hash);
+
+            for pool in touched_pools_reverse {
+                let (token_a, token_b) = match pool {
+                    UniswapV2(p) => (p.token_a, p.token_b),
+                    UniswapV3(p) => (p.token_a, p.token_b),
+                };
+
+                if token_a != *WETH_ADDRESS && token_b != *WETH_ADDRESS {
+                    // contract can only sandwich weth pools
+                    continue;
+                }
+
+                // token that we use as frontrun output and backrun input
+                let intermediary_token = *WETH_ADDRESS;
+
+                // token that we use as frontrun input and backrun output
+                let start_end_token = if token_a == intermediary_token {
+                    token_b
+                } else {
+                    token_a
+                };
+                
+                let ingredients = RawIngredients::new(
+                    vec![],
+                    vec![victim_tx.clone()],
+                    start_end_token,
+                    intermediary_token,
+                    pool,
+                );
+
+                match self.is_sandwichable(ingredients, next_block.clone(), true).await {
+                    Ok(s) => {
+                        let _bundle = match s
+                            .to_fb_bundle(
+                                self.sando_state_manager.get_sando_address(),
+                                self.sando_state_manager.get_searcher_signer(),
+                                false,
+                                self.provider.clone(),
+                            )
+                            .await
+                        {
+                            Ok(b) => b,
+                            Err(e) => {
+                                log_not_sandwichable!("{:?}", e);
+                                continue;
+                            }
+                        };
+
+                        #[cfg(not(feature = "debug"))]
+                        {
+                            sando_bundles.push(_bundle);
+                        }
+                    }
+                    Err(e) => {
+                        log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
+                    }
+                };
+            }
+        }
+        
+        if sando_bundles.len() > 0 {
+            return Some(Action::SubmitToFlashbots(sando_bundles));
+        } else {
+            info!("{:?}", victim_tx.hash);
             return None;
         }
-
-        info!("{:?}", victim_tx.hash);
-        return None;
     }
 }

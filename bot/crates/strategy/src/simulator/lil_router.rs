@@ -13,6 +13,7 @@ use foundry_evm::{
 use crate::{
     constants::{
         LIL_ROUTER_ADDRESS, LIL_ROUTER_CODE, LIL_ROUTER_CONTROLLER, WETH_ADDRESS, WETH_FUND_AMT,
+        LIL_ROUTER_WETH_AMT_BASE,
     },
     tx_utils::lil_router_interface::{
         build_swap_v2_data, build_swap_v3_data, decode_swap_v2_result, decode_swap_v3_result,
@@ -172,19 +173,6 @@ async fn evaluate_sandwich_revenue(
 ) -> Result<U256> {
     let mut fork_db = CacheDB::new(shared_backend);
     inject_lil_router_code(&mut fork_db);
-
-    let start_end_token = ingredients.get_start_end_token();
-    if start_end_token != (*WETH_ADDRESS).into() {
-        // if start_end token is not WETH, credit 1000 tokens for use
-        let credit_helper_ref = ingredients.get_credit_helper_ref();
-
-        credit_helper_ref.credit_token(
-            start_end_token.clone(),
-            &mut fork_db,
-            (*LIL_ROUTER_ADDRESS).into(),
-            "3000",
-        );
-    }
 
     let mut evm = EVM::new();
     evm.database(fork_db);
@@ -369,6 +357,9 @@ fn inject_lil_router_code(db: &mut CacheDB<SharedBackend>) {
         abi::Token::Uint(U256::from(3)),
     ]));
 
-    db.insert_account_storage((*WETH_ADDRESS).into(), slot.into(), eth_to_wei(200))
+    db.insert_account_storage(
+        (*WETH_ADDRESS).into(),
+        slot.into(),
+        eth_to_wei(LIL_ROUTER_WETH_AMT_BASE))
         .unwrap();
 }
