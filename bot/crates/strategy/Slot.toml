@@ -8,6 +8,11 @@ index = 3
 decimals = 18
 symbol = "WETH"
 
+[0x32b86b99441480a7e5bd3a26c124ec2373e3f015]
+index = 0
+decimals = 18
+symbol = "BAD"
+
 [0x4e15361fd6b4bb609fa63c81a2be19d873717870]
 index = 4
 decimals = 18

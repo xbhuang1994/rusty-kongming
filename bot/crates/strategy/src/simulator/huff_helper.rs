@@ -3,7 +3,7 @@ use cfmms::pool::UniswapV2Pool;
 use ethers::abi::{self, parse_abi, Address, ParamType};
 use ethers::prelude::BaseContract;
 use ethers::types::{Bytes, U256};
-use crate::constants::{GET_RESERVES_SIG, SUGAR_DADDY, WETH_ADDRESS};
+use crate::constants::{GET_RESERVES_SIG, SUGAR_DADDY, WETH_ADDRESS, LIL_ROUTER_WETH_AMT_BASE};
 use foundry_evm::executor::{
     fork::SharedBackend, ExecutionResult, Output, TransactTo,
 };
@@ -140,4 +140,66 @@ pub fn v2_get_amount_out(
     let amount_out: U256 = numerator.checked_div(denominator).unwrap_or(U256::zero());
 
     Ok(amount_out)
+}
+
+// #[cfg(feature = "debug")]
+pub fn inject_huff_sando(
+    db: &mut CacheDB<SharedBackend>,
+    huff_sando_addy: foundry_evm::executor::B160,
+    searcher: foundry_evm::executor::B160,
+    sando_start_bal: U256,
+) {
+    // compile huff contract
+    let git_root = std::str::from_utf8(
+        &std::process::Command::new("git")
+            .arg("rev-parse")
+            .arg("--show-toplevel")
+            .output()
+            .expect("Failed to execute git command")
+            .stdout,
+    )
+    .unwrap()
+    .trim()
+    .to_string();
+
+    let mut contract_dir = std::path::PathBuf::from(git_root);
+    contract_dir.push("contract/src");
+
+    let output = std::process::Command::new("huffc")
+        .arg("--bin-runtime")
+        .arg("sando.huff")
+        .current_dir(contract_dir)
+        .output()
+        .expect("Failed to compile huff sando contract");
+
+    assert!(output.status.success(), "Command execution failed");
+
+    let huff_sando_code = std::str::from_utf8(&output.stdout).unwrap();
+    let huff_sando_code = <Bytes as std::str::FromStr>::from_str(huff_sando_code).unwrap();
+
+    //// insert huff sando bytecode
+    let huff_sando_info = foundry_evm::revm::primitives::AccountInfo::new(
+        rU256::ZERO,
+        0,
+        foundry_evm::executor::Bytecode::new_raw(huff_sando_code.0),
+    );
+
+    db.insert_account_info(huff_sando_addy, huff_sando_info);
+
+    // insert and fund lilRouter controller (so we can spoof)
+    let searcher_info = foundry_evm::revm::primitives::AccountInfo::new(
+        crate::simulator::eth_to_wei(LIL_ROUTER_WETH_AMT_BASE),
+        0,
+        foundry_evm::executor::Bytecode::default(),
+    );
+    db.insert_account_info(searcher, searcher_info);
+
+    // fund huff sando with xxx weth
+    let slot = foundry_evm::revm::primitives::keccak256(&abi::encode(&[
+        abi::Token::Address(huff_sando_addy.0.into()),
+        abi::Token::Uint(U256::from(3)),
+    ]));
+
+    db.insert_account_storage((*WETH_ADDRESS).into(), slot.into(), sando_start_bal.into())
+        .unwrap();
 }

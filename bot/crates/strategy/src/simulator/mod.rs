@@ -15,6 +15,7 @@ use crate::{
     constants::{COINBASE, ONE_ETHER_IN_WEI},
     types::BlockInfo,
 };
+use ethers::types::U256;
 
 fn setup_block_state(evm: &mut EVM<CacheDB<SharedBackend>>, next_block: &BlockInfo) {
     evm.env.block.number = rU256::from(next_block.number.as_u64());
@@ -26,4 +27,42 @@ fn setup_block_state(evm: &mut EVM<CacheDB<SharedBackend>>, next_block: &BlockIn
 
 pub fn eth_to_wei(amt: u128) -> rU256 {
     rU256::from(amt).checked_mul(*ONE_ETHER_IN_WEI).unwrap()
+}
+
+fn binary_search_weth_input(low_amount_in: U256, high_amount_in: U256, last_amount_in: U256, is_last_too_many: bool, current_round: i32)
+    -> (bool, U256) {
+    if current_round == 1 {
+        return (true, high_amount_in)
+    } else if current_round > 10 {
+        return (false, U256::zero())
+    }
+
+    if low_amount_in >= high_amount_in {
+        return (false, U256::zero())
+    }
+
+    if is_last_too_many {
+        // reduce weth input amount
+        if high_amount_in - low_amount_in == U256::from(1) {
+            return (true, last_amount_in - 1)
+        } else {
+            let range = (high_amount_in - low_amount_in) / 2;
+            if last_amount_in > range {
+                return (true, last_amount_in - range);
+            } else {
+                return (false, U256::zero())
+            }
+        }
+    } else {
+        if current_round == 2 {
+            return (false, U256::zero())
+        } else {
+            // increase weth input amount
+            if high_amount_in - low_amount_in == U256::from(1) {
+                return (true, last_amount_in + 1)
+            } else {
+                return (true, last_amount_in + (high_amount_in - low_amount_in) / 2)
+            }
+        }
+    }
 }

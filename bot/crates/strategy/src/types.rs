@@ -1,4 +1,5 @@
 use std::sync::Arc;
+use std::fmt;
 
 use anyhow::ensure;
 use anyhow::{anyhow, Result};
@@ -31,6 +32,24 @@ pub enum Event {
 #[derive(Debug, Clone)]
 pub enum Action {
     SubmitToFlashbots(FlashbotsBundle),
+}
+
+/// sandwich direction type
+#[derive(Debug, Clone, PartialEq)]
+pub enum SandwichSwapType {
+    Forward,
+    Reverse,
+}
+
+impl fmt::Display for SandwichSwapType {
+
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if *self == SandwichSwapType::Forward {
+            write!(f, "Forward")
+        } else {
+            write!(f, "Reverse")
+        }
+    }
 }
 
 /// Configuration for variables needed for sandwiches

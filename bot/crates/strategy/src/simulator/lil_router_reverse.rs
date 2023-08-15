@@ -18,10 +18,10 @@ use crate::{
     tx_utils::lil_router_interface::{
         build_swap_v2_data, build_swap_v3_data, decode_swap_v2_result, decode_swap_v3_result,
     },
-    types::{BlockInfo, RawIngredients},
+    types::{BlockInfo, RawIngredients}
 };
 
-use super::{eth_to_wei, setup_block_state};
+use super::{eth_to_wei, setup_block_state, binary_search_weth_input};
 
 // Juiced implementation of https://research.ijcaonline.org/volume65/number14/pxc3886165.pdf
 // splits range in more intervals, search intervals concurrently, compare, repeat till termination
@@ -165,7 +165,7 @@ pub async fn find_optimal_input_reverse(
     Ok(highest_sando_input)
 }
 
-async fn pre_evalute_for_backrun_in(
+async fn pre_evalute_for_intermediary_balance(
     frontrun_in: U256,
     next_block: BlockInfo,
     shared_backend: SharedBackend,
@@ -236,9 +236,11 @@ async fn pre_evalute_for_backrun_in(
             Output::Create(o, _) => o,
         },
         ExecutionResult::Revert { output, .. } => {
+            println!("ErrorRevert{:?}", output);
             return Err(anyhow!("[lilRouter: REVERT] frontrun: {:?}", output))
         }
         ExecutionResult::Halt { reason, .. } => {
+            println!("ErrorHalt{:?}", reason);
             return Err(anyhow!("[lilRouter: HALT] frontrun: {:?}", reason))
         }
     };
@@ -257,7 +259,6 @@ async fn pre_evalute_for_backrun_in(
             Err(e) => return Err(anyhow!("lilRouter: FailedToDecodeOutput: {:?}", e)),
         },
     };
-
     Ok(intermediary_balance)
 }
 
@@ -268,9 +269,12 @@ async fn evaluate_sandwich_revenue(
     ingredients: RawIngredients,
 ) -> Result<U256> {
 
+    if frontrun_in.is_zero() {
+        return Err(anyhow!("[lilRouter: ZeroOptimal]"));
+    }
     // evalute to get back_in firstly
     let ingredients_result = &mut ingredients.clone();
-    let intermediary_balance = pre_evalute_for_backrun_in(
+    let intermediary_balance = pre_evalute_for_intermediary_balance(
         frontrun_in,
         next_block,
         shared_backend.clone(),
@@ -303,7 +307,7 @@ async fn evaluate_sandwich_revenue(
     let mut max_other_balance = U256::zero();
 
     loop {
-        let (can_continue, current_amount_in) = calculate_weth_input_amount(
+        let (can_continue, current_amount_in) = binary_search_weth_input(
             low_amount_in,
             high_amount_in,
             last_amount_in,
@@ -509,12 +513,12 @@ async fn evaluate_sandwich_revenue(
         }
     }
 
-    #[cfg(test)]
+    #[cfg(feature = "debug")]
     {
-        println!("started_token={:?},intermediary_token={:?},frontrun_in={:?},intermediary_balance={:?},
-            min_mount_in={:?},max_other_balance={:?},low_high_range={:?},round={:?},revenue={:?}",
-            startend_token, _intermediary_token, frontrun_in, intermediary_balance, min_amount_in,
-            max_other_balance, low_high_range, current_round, revenue);
+        // println!("started_token={:?},intermediary_token={:?},frontrun_in={:?},intermediary_balance={:?},
+        //     min_mount_in={:?},max_other_balance={:?},low_high_range={:?},round={:?},revenue={:?}",
+        //     startend_token, _intermediary_token, frontrun_in, intermediary_balance, min_amount_in,
+        //     max_other_balance, low_high_range, current_round, revenue);
     }
 
     Ok(revenue)
@@ -549,7 +553,6 @@ fn inject_lil_router_code(
         eth_to_wei(LIL_ROUTER_WETH_AMT_BASE))
         .unwrap();
 
-
     // as start_end token is not WETH, credit xxxx tokens for use
     let credit_helper_ref = ingredients.get_credit_helper_ref();
     credit_helper_ref.credit_token_from_base(
@@ -558,42 +561,4 @@ fn inject_lil_router_code(
         (*LIL_ROUTER_ADDRESS).into(),
         &(LIL_ROUTER_OTHER_AMT_BASE.to_string()),
     );
-}
-
-fn calculate_weth_input_amount(low_amount_in: U256, high_amount_in: U256, last_amount_in: U256, is_last_too_many: bool, current_round: i32)
-    -> (bool, U256) {
-    if current_round == 1 {
-        return (true, high_amount_in)
-    } else if current_round > 10 {
-        return (false, U256::zero())
-    }
-
-    if low_amount_in >= high_amount_in {
-        return (false, U256::zero())
-    }
-
-    if is_last_too_many {
-        // reduce weth input amount
-        if high_amount_in - low_amount_in == U256::from(1) {
-            return (true, last_amount_in - 1)
-        } else {
-            let range = (high_amount_in - low_amount_in) / 2;
-            if last_amount_in > range {
-                return (true, last_amount_in - range);
-            } else {
-                return (false, U256::zero())
-            }
-        }
-    } else {
-        if current_round == 2 {
-            return (false, U256::zero())
-        } else {
-            // increase weth input amount
-            if high_amount_in - low_amount_in == U256::from(1) {
-                return (true, last_amount_in + 1)
-            } else {
-                return (true, last_amount_in + (high_amount_in - low_amount_in) / 2)
-            }
-        }
-    }
 }

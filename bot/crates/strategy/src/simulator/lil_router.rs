@@ -1,6 +1,10 @@
 use anyhow::{anyhow, Result};
 use cfmms::pool::Pool::{UniswapV2, UniswapV3};
-use ethers::{abi, types::U256};
+use ethers::{
+    abi,
+    types::U256,
+};
+
 use foundry_evm::{
     executor::{fork::SharedBackend, Bytecode, ExecutionResult, Output, TransactTo},
     revm::{
@@ -139,6 +143,9 @@ pub async fn find_optimal_input(
                 return Ok(U256::zero());
             }
             // no revenue found, most likely small optimal so decrease range
+            if intervals[intervals.len() / 3] <= U256::from(1) {
+                continue;
+            }
             upper_bound = intervals[intervals.len() / 3]
                 .checked_sub(1.into())
                 .ok_or(anyhow!("intervals[intervals.len()/3] - 1 underflowed"))?;
@@ -338,7 +345,9 @@ async fn evaluate_sandwich_revenue(
 }
 
 /// Inserts custom minimal router contract into evm instance for simulations
-fn inject_lil_router_code(db: &mut CacheDB<SharedBackend>) {
+fn inject_lil_router_code(
+    db: &mut CacheDB<SharedBackend>,
+) {
     // insert lilRouter bytecode
     let lil_router_info = AccountInfo::new(
         rU256::ZERO,
@@ -362,4 +371,5 @@ fn inject_lil_router_code(db: &mut CacheDB<SharedBackend>) {
         slot.into(),
         eth_to_wei(LIL_ROUTER_WETH_AMT_BASE))
         .unwrap();
+
 }

@@ -17,7 +17,7 @@ use crate::{
     },
     simulator::{huff_sando::create_recipe, lil_router::find_optimal_input},
     simulator::{huff_sando_reverse::create_recipe_reverse, lil_router_reverse::find_optimal_input_reverse},
-    types::{Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig},
+    types::{Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType},
 };
 
 pub struct SandoBot<M> {
@@ -53,7 +53,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         &self,
         ingredients: RawIngredients,
         target_block: BlockInfo,
-        is_reverse: bool,
+        swap_type: SandwichSwapType,
     ) -> Result<SandoRecipe> {
         // setup shared backend
         let shared_backend = SharedBackend::spawn_backend_thread(
@@ -79,48 +79,49 @@ impl<M: Middleware + 'static> SandoBot<M> {
         let optimal_input;
         let recipe;
 
-        if !is_reverse {
+        match swap_type {
+            SandwichSwapType::Forward => {
+                optimal_input = find_optimal_input(
+                    &ingredients,
+                    &target_block,
+                    weth_inventory,
+                    shared_backend.clone()
+                )
+                .await?;
+    
+                recipe = create_recipe(
+                    &ingredients,
+                    &target_block,
+                    optimal_input,
+                    weth_inventory,
+                    self.sando_state_manager.get_searcher_address(),
+                    self.sando_state_manager.get_sando_address(),
+                    shared_backend,
+                )?;
+            },
+            SandwichSwapType::Reverse => {
+                optimal_input = find_optimal_input_reverse(
+                    &ingredients,
+                    &target_block,
+                    weth_inventory,
+                    shared_backend.clone(),
+                )
+                .await?;
 
-            optimal_input = find_optimal_input(
-                &ingredients,
-                &target_block,
-                weth_inventory,
-                shared_backend.clone(),
-            )
-            .await?;
-
-            recipe = create_recipe(
-                &ingredients,
-                &target_block,
-                optimal_input,
-                weth_inventory,
-                self.sando_state_manager.get_searcher_address(),
-                self.sando_state_manager.get_sando_address(),
-                shared_backend,
-            )?;
-        } else {
-
-            optimal_input = find_optimal_input_reverse(
-                &ingredients,
-                &target_block,
-                weth_inventory,
-                shared_backend.clone(),
-            )
-            .await?;
-
-            recipe = create_recipe_reverse(
-                &ingredients,
-                &target_block,
-                optimal_input,
-                weth_inventory,
-                self.sando_state_manager.get_searcher_address(),
-                self.sando_state_manager.get_sando_address(),
-                shared_backend,
-            )?;
-        }
+                recipe = create_recipe_reverse(
+                    &ingredients,
+                    &target_block,
+                    optimal_input,
+                    weth_inventory,
+                    self.sando_state_manager.get_searcher_address(),
+                    self.sando_state_manager.get_sando_address(),
+                    shared_backend,
+                )?;
+            },
+        };
         
         log_opportunity!(
-            is_reverse,
+            swap_type,
             ingredients.print_meats(),
             optimal_input.as_u128() as f64 / 1e18,
             recipe.get_revenue().as_u128() as f64 / 1e18,
@@ -249,7 +250,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     pool,
                 );
 
-                match self.is_sandwichable(ingredients, next_block.clone(), false).await {
+                match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Forward).await {
                     Ok(s) => {
                         let _bundle = match s
                             .to_fb_bundle(
@@ -301,7 +302,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 } else {
                     token_a
                 };
-                
+
                 let ingredients = RawIngredients::new(
                     vec![],
                     vec![victim_tx.clone()],
@@ -310,7 +311,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     pool,
                 );
 
-                match self.is_sandwichable(ingredients, next_block.clone(), true).await {
+                match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Reverse).await {
                     Ok(s) => {
                         let _bundle = match s
                             .to_fb_bundle(

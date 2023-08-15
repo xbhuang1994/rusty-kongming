@@ -8,11 +8,11 @@ use ethers::{
 };
 use strategy::{
     bot::SandoBot,
-    types::{BlockInfo, RawIngredients, StratConfig},
+    types::{BlockInfo, RawIngredients, StratConfig, SandwichSwapType},
 };
 
 // -- consts --
-static WSS_RPC: &str = "ws://localhost:8545";
+static WSS_RPC: &str = "ws://65.21.224.37:8545";
 pub static WETH_ADDRESS: Lazy<Address> = Lazy::new(|| {
     "0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2"
         .parse()
@@ -98,7 +98,7 @@ async fn can_sandwich_uni_v2() {
     let target_block = block_num_to_info(17754167, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, false)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
         .await
         .unwrap();
 }
@@ -127,7 +127,7 @@ async fn can_sandwich_sushi_swap() {
     let target_block = block_num_to_info(16873148, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, false)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
         .await
         .unwrap();
 }
@@ -161,7 +161,7 @@ async fn can_sandwich_multi_v2_swaps() {
     let target_block = block_num_to_info(16780625, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, false)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
         .await
         .unwrap();
 }
@@ -190,7 +190,42 @@ async fn can_sandwich_uni_v3() {
     let target_block = block_num_to_info(16863225, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, false)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
+        .await
+        .unwrap();
+}
+
+/// testing against: 
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn can_reverse_sandwich_uni_v2() {
+    let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
+
+    let bot = setup_bot(client.clone()).await;
+
+    let ingredients = RawIngredients::new(
+        vec![],
+        vec![
+            victim_tx_hash(
+                "0xf9944763d2c639e98c9df584c1e76e1ed10f912a28c8f062654bb096370e4dd0",
+                client.clone(),
+            )
+            .await,
+
+            victim_tx_hash(
+                "0x7e6745dcf989730e2230ed80973cbabdb253f7d2cde0fd4fc49a233e3dfa8940",
+                client.clone(),
+            )
+            .await,
+        ],
+        hex_to_address("0x32b86b99441480a7e5bd3a26c124ec2373e3f015"),
+        *WETH_ADDRESS,
+        hex_to_univ2_pool("0x29c830864930c897efa2b9e9851342187b82010e", client.clone()).await,
+    );
+
+    let target_block = block_num_to_info(17864649, client.clone()).await;
+
+    let _ = bot
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Reverse)
         .await
         .unwrap();
 }
