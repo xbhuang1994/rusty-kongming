@@ -8,6 +8,16 @@ index = 3
 decimals = 18
 symbol = "WETH"
 
+[0x2654e753424a9f02df31cfbc6c5af14a87b6cab5]
+index = 0
+decimals = 18
+symbol = "KEN"
+
+[0xa62894d5196bc44e4c3978400ad07e7b30352372]
+index = 2
+decimals = 18
+symbol = "X"
+
 [0x32b86b99441480a7e5bd3a26c124ec2373e3f015]
 index = 0
 decimals = 18

@@ -206,23 +206,17 @@ async fn can_reverse_sandwich_uni_v2() {
         vec![],
         vec![
             victim_tx_hash(
-                "0xf9944763d2c639e98c9df584c1e76e1ed10f912a28c8f062654bb096370e4dd0",
-                client.clone(),
-            )
-            .await,
-
-            victim_tx_hash(
-                "0x7e6745dcf989730e2230ed80973cbabdb253f7d2cde0fd4fc49a233e3dfa8940",
+                "0x84b92bc769f1292c15cbaec2773db1cee1ba983b20e52a9b0140a2fbf04117b0",
                 client.clone(),
             )
             .await,
         ],
-        hex_to_address("0x32b86b99441480a7e5bd3a26c124ec2373e3f015"),
+        hex_to_address("0x2654e753424a9f02df31cfbc6c5af14a87b6cab5"),
         *WETH_ADDRESS,
-        hex_to_univ2_pool("0x29c830864930c897efa2b9e9851342187b82010e", client.clone()).await,
+        hex_to_univ2_pool("0xe55fe78e41c01df97ae3f2a885b4e65b4f5fe027", client.clone()).await,
     );
 
-    let target_block = block_num_to_info(17864649, client.clone()).await;
+    let target_block = block_num_to_info(17926193, client.clone()).await;
 
     let _ = bot
         .is_sandwichable(ingredients, target_block, SandwichSwapType::Reverse)

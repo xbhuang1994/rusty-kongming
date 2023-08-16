@@ -69,6 +69,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             Some((target_block.number - 1).into()),
         );
 
+        // enhancement: should set another inventory when reverse
         let weth_inventory = if cfg!(feature = "debug") {
             // spoof weth balance when the debug feature is active
             (*crate::constants::WETH_FUND_AMT).into()
@@ -116,7 +117,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     self.sando_state_manager.get_searcher_address(),
                     self.sando_state_manager.get_sando_address(),
                     shared_backend,
-                )?;
+                )?
             },
         };
         

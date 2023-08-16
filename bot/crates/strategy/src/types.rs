@@ -45,9 +45,9 @@ impl fmt::Display for SandwichSwapType {
 
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         if *self == SandwichSwapType::Forward {
-            write!(f, "Forward")
+            write!(f, "FORWARD")
         } else {
-            write!(f, "Reverse")
+            write!(f, "REVERSE")
         }
     }
 }

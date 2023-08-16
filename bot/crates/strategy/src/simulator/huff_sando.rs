@@ -37,6 +37,11 @@ pub fn create_recipe(
     sando_address: Address,
     shared_backend: SharedBackend,
 ) -> Result<SandoRecipe> {
+
+    if optimal_in.is_zero() {
+        return Err(anyhow!("[huffsando: ZeroOtimal]"))
+    }
+
     #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 

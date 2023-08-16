@@ -99,4 +99,9 @@ impl CreditHelper {
         let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
         parse_units(amount, slot_item.decimals).unwrap().into() 
     }
+
+    pub fn token_can_swap(&self, input_token: Address) -> bool {
+
+        return self.slot_index_map.contains_key(&input_token.clone());
+    }
 }

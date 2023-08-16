@@ -215,6 +215,10 @@ pub fn create_recipe_reverse(
     shared_backend: SharedBackend,
 ) -> Result<SandoRecipe> {
     
+    if optimal_in.is_zero() {
+        return Err(anyhow!("[huffsando: BEGIN] ZeroOtimal"))
+    }
+
     let intermediary_balance = pre_get_intermediary_balance(
         ingredients,
         &next_block.clone(),
@@ -249,7 +253,7 @@ pub fn create_recipe_reverse(
     let mut high_amount_in = max_backrun_in.clone();
 
     let mut min_amount_in = U256::zero();
-    let mut low_high_range = U256::zero();
+    let mut low_high_range;
     let mut max_other_balance = U256::zero();
 
     loop {
@@ -469,12 +473,15 @@ pub fn create_recipe_reverse(
                 false => is_meat_good.push(false),
             }
         }
+
+        let other_mid_balance = get_erc20_balance(ingredients.get_start_end_token(), sando_address, &next_block, &mut evm)?;
+        
         // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
         // *                    BACKRUN TRANSACTION                     */
         // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
         // encode backrun_in before passing to sandwich contract
-        let _backrun_token_in = ingredients.get_intermediary_token();
-        let backrun_token_out = ingredients.get_start_end_token();
+        // let _backrun_token_in = ingredients.get_intermediary_token();
+        // let backrun_token_out = ingredients.get_start_end_token();
 
         let backrun_in = FiveByteMetaData::encode(current_amount_in, 0).decode();
         // caluclate backrun_out using encoded backrun_in
@@ -490,13 +497,13 @@ pub fn create_recipe_reverse(
         let (backrun_data, backrun_value) = match ingredients.get_target_pool() {
             UniswapV2(p) => v2_create_frontrun_payload_multi(
                 p,
-                backrun_token_out,
+                ingredients.get_start_end_token(),
                 backrun_in,
                 backrun_out
             ),
             UniswapV3(p) => v3_create_frontrun_payload_multi(
                 p,
-                backrun_token_out,
+                ingredients.get_start_end_token(),
                 backrun_in,
             ),
         };
@@ -558,25 +565,23 @@ pub fn create_recipe_reverse(
 
         let backrun_gas_used = backrun_result.gas_used();
 
-        let post_other_balance = get_erc20_balance(_backrun_token_in, sando_address, &next_block, &mut evm)?;
-        let current_post_other_balance = post_other_balance.clone();
-        if current_post_other_balance > max_other_balance {
-            max_other_balance = post_other_balance.clone();
+        let other_post_balance = get_erc20_balance(ingredients.get_start_end_token(), sando_address, &next_block, &mut evm)?;
+        if other_post_balance > max_other_balance {
+            max_other_balance = other_post_balance.clone();
         }
 
-        println!("010:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, other_frontrun_in={:?} intermediary_increase={:?},
-            current_amount_in={:?}, last_amount_in={:?}, other_start_balance={:?}, current_post_other_balance={:?}",
-            current_round, low_amount_in, high_amount_in, can_continue, frontrun_in, intermediary_increase,
-            current_amount_in, last_amount_in, other_start_balance, current_post_other_balance);
+        // println!("010:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, other_frontrun_in={:?} intermediary_increase={:?},
+        //     current_amount_in={:?}, last_amount_in={:?}, other_start_balance={:?}, other_mid_balance={:?}, other_post_balance={:?}",
+        //     current_round, low_amount_in, high_amount_in, can_continue, frontrun_in, intermediary_increase,
+        //     current_amount_in, last_amount_in, other_start_balance, other_mid_balance, other_post_balance);
 
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
         low_high_range = high_amount_in - low_amount_in;
-        if current_post_other_balance == other_start_balance
-            || low_high_range <= U256::from(100000) {
+        if other_post_balance == other_start_balance
+            || low_high_range <= U256::from(10000) {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
-            break;
-        } else if current_post_other_balance > other_start_balance {
+        } else if other_post_balance > other_start_balance {
             // buy more, reduce weth input and retry
             is_last_too_many = true;
             high_amount_in = last_amount_in

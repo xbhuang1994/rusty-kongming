@@ -31,6 +31,12 @@ pub async fn find_optimal_input_reverse(
     weth_inventory: U256,
     shared_backend: SharedBackend,
 ) -> Result<U256> {
+
+    let credit_helper_ref = ingredients.get_credit_helper_ref();
+    if !credit_helper_ref.token_can_swap(ingredients.get_start_end_token()) {
+        return Err(anyhow!("[lilRouter: TOKEN_CANNOT_SWAP] token={:?}", ingredients.get_start_end_token()));
+    }
+
     //
     //            [EXAMPLE WITH 10 BOUND INTERVALS]
     //
@@ -230,17 +236,16 @@ async fn pre_evalute_for_intermediary_balance(
         Ok(result) => result,
         Err(e) => return Err(anyhow!("[lilRouter: EVM ERROR] frontrun: {:?}", e)),
     };
+
     let output = match result {
         ExecutionResult::Success { output, .. } => match output {
             Output::Call(o) => o,
             Output::Create(o, _) => o,
         },
         ExecutionResult::Revert { output, .. } => {
-            println!("ErrorRevert{:?}", output);
             return Err(anyhow!("[lilRouter: REVERT] frontrun: {:?}", output))
         }
         ExecutionResult::Halt { reason, .. } => {
-            println!("ErrorHalt{:?}", reason);
             return Err(anyhow!("[lilRouter: HALT] frontrun: {:?}", reason))
         }
     };
@@ -259,6 +264,7 @@ async fn pre_evalute_for_intermediary_balance(
             Err(e) => return Err(anyhow!("lilRouter: FailedToDecodeOutput: {:?}", e)),
         },
     };
+    // println!("10003:frontrun_in={:?}, frontrun_out={:?}, intermediary={:?}", frontrun_in, _frontrun_out, intermediary_balance);
     Ok(intermediary_balance)
 }
 
@@ -272,6 +278,7 @@ async fn evaluate_sandwich_revenue(
     if frontrun_in.is_zero() {
         return Err(anyhow!("[lilRouter: ZeroOptimal]"));
     }
+
     // evalute to get back_in firstly
     let ingredients_result = &mut ingredients.clone();
     let intermediary_balance = pre_evalute_for_intermediary_balance(
@@ -295,7 +302,7 @@ async fn evaluate_sandwich_revenue(
     // min_backrun_in is 75%
     let min_backrun_in = intermediary_increase.checked_mul(U256::from(75)).unwrap().checked_div(U256::from(100)).unwrap();
 
-    let mut revenue = U256::zero();
+    let revenue;
     let mut last_amount_in = max_backrun_in.clone();
     let mut is_last_too_many = false;
     let mut current_round = 1;
@@ -303,7 +310,7 @@ async fn evaluate_sandwich_revenue(
     let mut high_amount_in = max_backrun_in.clone();
 
     let mut min_amount_in = U256::zero();
-    let mut low_high_range = U256::zero();
+    let mut low_high_range;
     let mut max_other_balance = U256::zero();
 
     loop {
@@ -317,7 +324,6 @@ async fn evaluate_sandwich_revenue(
         if min_amount_in == U256::zero() || (can_continue && current_amount_in < min_amount_in) {
             min_amount_in = current_amount_in;
         }
-        
         if !can_continue {
             revenue = U256::zero();
             break;
@@ -382,6 +388,7 @@ async fn evaluate_sandwich_revenue(
             Ok(result) => result,
             Err(e) => return Err(anyhow!("[lilRouter: EVM ERROR] frontrun: {:?}", e)),
         };
+
         let output = match result {
             ExecutionResult::Success { output, .. } => match output {
                 Output::Call(o) => o,
@@ -394,6 +401,7 @@ async fn evaluate_sandwich_revenue(
                 return Err(anyhow!("[lilRouter: HALT] frontrun: {:?}", reason))
             }
         };
+
         let (_frontrun_out, _intermediary_balance) = match ingredients.get_target_pool() {
             UniswapV2(_) => match decode_swap_v2_result(output.into()) {
                 Ok(output) => output,
@@ -483,7 +491,6 @@ async fn evaluate_sandwich_revenue(
             },
         };
 
-
         let current_post_other_balance = post_other_balance.clone();
         if current_post_other_balance > max_other_balance {
             max_other_balance = post_other_balance.clone();
@@ -492,13 +499,13 @@ async fn evaluate_sandwich_revenue(
         // println!("010:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, intermediary_increase={:?},
         //     current_amount_in={:?}, last_amount_in={:?}, _amount_other_out={:?}, current_post_other_balance={:?}",
         //     current_round, low_amount_in, high_amount_in, can_continue, intermediary_increase,
-        //     current_amount_in, last_amount_in, amount_other_out, current_post_other_balance);
+        //     current_amount_in, last_amount_in, _amount_other_out, current_post_other_balance);
 
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
         low_high_range = high_amount_in - low_amount_in;
         if current_post_other_balance == other_start_balance
-            || low_high_range <= U256::from(100000) {
+            || low_high_range <= U256::from(10000) {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
             break;
         } else if current_post_other_balance > other_start_balance {
