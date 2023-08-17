@@ -572,16 +572,16 @@ pub fn create_recipe_reverse(
             max_other_balance = other_post_balance.clone();
         }
 
-        // println!("010:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, other_frontrun_in={:?} intermediary_increase={:?},
-        //     current_amount_in={:?}, last_amount_in={:?}, other_start_balance={:?}, other_mid_balance={:?}, other_post_balance={:?}",
-        //     current_round, low_amount_in, high_amount_in, can_continue, frontrun_in, intermediary_increase,
-        //     current_amount_in, last_amount_in, other_start_balance, other_mid_balance, other_post_balance);
+        println!("010:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, other_frontrun_in={:?} intermediary_increase={:?},
+            current_amount_in={:?}, last_amount_in={:?}, other_start_balance={:?}, other_mid_balance={:?}, other_post_balance={:?}",
+            current_round, low_amount_in, high_amount_in, can_continue, frontrun_in, intermediary_increase,
+            current_amount_in, last_amount_in, other_start_balance, other_mid_balance, other_post_balance);
 
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
         low_high_diff = high_amount_in - low_amount_in;
         if is_balance_diff_for_revenue(other_post_balance, other_start_balance)
-            || low_high_diff <= backrun_in_diff_revenue {
+            && low_high_diff <= backrun_in_diff_revenue {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
         } else if other_post_balance > other_start_balance {
             // buy more, reduce weth input and retry
