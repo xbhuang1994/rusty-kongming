@@ -18,6 +18,7 @@ use crate::{
     simulator::{huff_sando::create_recipe, lil_router::find_optimal_input},
     simulator::{huff_sando_reverse::create_recipe_reverse, lil_router_reverse::find_optimal_input_reverse},
     types::{Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType},
+    helpers::calculate_inventory_for_debug,
 };
 
 pub struct SandoBot<M> {
@@ -72,7 +73,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // enhancement: should set another inventory when reverse
         let weth_inventory = if cfg!(feature = "debug") {
             // spoof weth balance when the debug feature is active
-            (*crate::constants::WETH_FUND_AMT).into()
+            // (*crate::constants::WETH_FUND_AMT).into()
+            calculate_inventory_for_debug(&ingredients)
         } else {
             self.sando_state_manager.get_weth_inventory()
         };

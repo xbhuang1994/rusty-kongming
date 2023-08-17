@@ -7,12 +7,15 @@ use ethers::{
             eip2930::{AccessList, AccessListItem},
         },
         BigEndianHash, Bytes, Eip1559TransactionRequest, H256,
+        U256,
     },
 };
 use foundry_evm::{
     executor::{rU256, B160},
     utils::{b160_to_h160, h160_to_b160, ru256_to_u256, u256_to_ru256},
 };
+use crate::types::RawIngredients;
+use crate::constants::{WETH_ADDRESS, FUND_AMT_BASE};
 
 /// Sign eip1559 transactions
 pub async fn sign_eip1559(
@@ -61,6 +64,27 @@ pub fn access_list_to_revm(access_list: AccessList) -> Vec<(B160, Vec<rU256>)> {
         .collect()
 }
 
+/// get inventory for token when debug
+pub fn calculate_inventory_for_debug(
+        ingredients: &RawIngredients,
+    ) -> U256 {
+    if ingredients.get_start_end_token() == *WETH_ADDRESS {
+        (*crate::constants::WETH_FUND_AMT).into()
+    } else {
+        if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
+            let decimals = ingredients.get_credit_helper_ref()
+                .get_token_decimal(
+                    ingredients.get_start_end_token()
+                );
+            if decimals > 0 {
+                let inventory = U256::pow(U256::from(10), U256::from(decimals)).checked_mul(U256::from(FUND_AMT_BASE)).unwrap_or_default();
+                return inventory;
+            }
+        }
+        U256::zero()
+    }
+}
+
 //
 // -- Logging Macros --
 //
@@ -90,7 +114,7 @@ macro_rules! log_opportunity {
         info!(
             "{}",
             format!(
-                "optimal_input: {} wETH",
+                "optimal_input: {} wETH/Other",
                 $optimal_input.to_string().green().on_black()
             )
             .bold()

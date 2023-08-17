@@ -21,7 +21,10 @@ use crate::{
     types::{BlockInfo, RawIngredients}
 };
 
-use super::{eth_to_wei, setup_block_state, binary_search_weth_input};
+use super::{eth_to_wei, setup_block_state,
+    binary_search_weth_input,
+    is_balance_diff_for_revenue,
+    backrun_in_diff_for_revenue};
 
 // Juiced implementation of https://research.ijcaonline.org/volume65/number14/pxc3886165.pdf
 // splits range in more intervals, search intervals concurrently, compare, repeat till termination
@@ -301,6 +304,7 @@ async fn evaluate_sandwich_revenue(
     let max_backrun_in = intermediary_increase.checked_sub(*MIN_REVENUE_THRESHOLD).unwrap_or_default();
     // min_backrun_in is 75%
     let min_backrun_in = intermediary_increase.checked_mul(U256::from(75)).unwrap().checked_div(U256::from(100)).unwrap();
+    let backrun_in_diff_revenue = backrun_in_diff_for_revenue(max_backrun_in);
 
     let revenue;
     let mut last_amount_in = max_backrun_in.clone();
@@ -310,7 +314,7 @@ async fn evaluate_sandwich_revenue(
     let mut high_amount_in = max_backrun_in.clone();
 
     let mut min_amount_in = U256::zero();
-    let mut low_high_range;
+    let mut low_high_diff = U256::zero();
     let mut max_other_balance = U256::zero();
 
     loop {
@@ -491,24 +495,23 @@ async fn evaluate_sandwich_revenue(
             },
         };
 
-        let current_post_other_balance = post_other_balance.clone();
-        if current_post_other_balance > max_other_balance {
+        if post_other_balance > max_other_balance {
             max_other_balance = post_other_balance.clone();
         }
 
         // println!("010:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, intermediary_increase={:?},
-        //     current_amount_in={:?}, last_amount_in={:?}, _amount_other_out={:?}, current_post_other_balance={:?}",
+        //     current_amount_in={:?}, last_amount_in={:?}, _amount_other_out={:?}, post_other_balance={:?}",
         //     current_round, low_amount_in, high_amount_in, can_continue, intermediary_increase,
-        //     current_amount_in, last_amount_in, _amount_other_out, current_post_other_balance);
+        //     current_amount_in, last_amount_in, _amount_other_out, post_other_balance);
 
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
-        low_high_range = high_amount_in - low_amount_in;
-        if current_post_other_balance == other_start_balance
-            || low_high_range <= U256::from(10000) {
+        low_high_diff = high_amount_in - low_amount_in;
+        if is_balance_diff_for_revenue(post_other_balance, other_start_balance)
+            || low_high_diff <= backrun_in_diff_revenue {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
             break;
-        } else if current_post_other_balance > other_start_balance {
+        } else if post_other_balance > other_start_balance {
             // buy more, reduce weth input and retry
             is_last_too_many = true;
             high_amount_in = last_amount_in
@@ -523,9 +526,9 @@ async fn evaluate_sandwich_revenue(
     #[cfg(feature = "debug")]
     {
         // println!("started_token={:?},intermediary_token={:?},frontrun_in={:?},intermediary_balance={:?},
-        //     min_mount_in={:?},max_other_balance={:?},low_high_range={:?},round={:?},revenue={:?}",
+        //     min_mount_in={:?},max_other_balance={:?},low_high_diff={:?},round={:?},revenue={:?}",
         //     startend_token, _intermediary_token, frontrun_in, intermediary_balance, min_amount_in,
-        //     max_other_balance, low_high_range, current_round, revenue);
+        //     max_other_balance, low_high_diff, current_round, revenue);
     }
 
     Ok(revenue)
