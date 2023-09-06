@@ -79,7 +79,7 @@ async fn victim_tx_hash(tx: &str, provider: Arc<Provider<Ws>>) -> Transaction {
 async fn can_sandwich_uni_v2() {
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
 
-    let bot = setup_bot(client.clone()).await;
+    let mut bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
         vec![],
@@ -108,7 +108,7 @@ async fn can_sandwich_uni_v2() {
 async fn can_sandwich_sushi_swap() {
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
 
-    let bot = setup_bot(client.clone()).await;
+    let mut bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
         vec![],
@@ -137,7 +137,7 @@ async fn can_sandwich_sushi_swap() {
 async fn can_sandwich_multi_v2_swaps() {
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
 
-    let bot = setup_bot(client.clone()).await;
+    let mut bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
         vec![],
@@ -171,7 +171,7 @@ async fn can_sandwich_multi_v2_swaps() {
 async fn can_sandwich_uni_v3() {
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
 
-    let bot = setup_bot(client.clone()).await;
+    let mut bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
         vec![],
@@ -200,7 +200,7 @@ async fn can_sandwich_uni_v3() {
 async fn can_reverse_sandwich_uni_v2() {
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
 
-    let bot = setup_bot(client.clone()).await;
+    let mut bot = setup_bot(client.clone()).await;
 
     let ingredients = RawIngredients::new(
         vec![],

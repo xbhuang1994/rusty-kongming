@@ -13,6 +13,10 @@ use crate::{
     constants::{ERC20_TRANSFER_EVENT_SIG, WETH_ADDRESS},
     startup_info_log,
 };
+
+
+use std::collections::HashMap;
+
 // max transaction count
 const MAX_TRANSACTION_COUNT: usize = 10000;
 pub struct SandoStateManager {
@@ -23,6 +27,7 @@ pub struct SandoStateManager {
     token_dust: Vec<Address>,
     approve_txs: Vec<Transaction>,
     low_txs: Vec<Transaction>,
+    token_inventory_map: HashMap<Address, U256>,
 }
 
 impl SandoStateManager {
@@ -39,6 +44,7 @@ impl SandoStateManager {
             token_dust: Default::default(),
             approve_txs : Default::default(),
             low_txs: Default::default(),
+            token_inventory_map: HashMap::new(),
         }
     }
 
@@ -105,6 +111,20 @@ impl SandoStateManager {
 
     pub fn get_weth_inventory(&self) -> U256 {
         self.weth_inventory
+    }
+
+    pub async fn get_token_inventory<M: Middleware + 'static>(&mut self, token: Address, provider: Arc<M>) -> U256 {
+
+        if self.token_inventory_map.contains_key(&token.clone()) {
+            return self.token_inventory_map[&token.clone()];
+        } else {
+            let other = Erc20::new(token, provider.clone());
+            let mut other_balance = U256::zero();
+            other_balance = other.balance_of(self.sando_contract).call().await.unwrap();
+            self.token_inventory_map.insert(token.clone(), other_balance.clone());
+            startup_info_log!("token{} inventory   : {}", token, other_balance.clone());
+            return other_balance;
+        }
     }
 
     pub fn check_sig_id(&mut self, tx: &Transaction) -> bool{

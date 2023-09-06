@@ -51,7 +51,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
     /// Main logic for the strategy
     /// Checks if the passed `RawIngredients` is sandwichable
     pub async fn is_sandwichable(
-        &self,
+        &mut self,
         ingredients: RawIngredients,
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
@@ -71,12 +71,19 @@ impl<M: Middleware + 'static> SandoBot<M> {
         );
 
         // enhancement: should set another inventory when reverse
-        let weth_inventory = if cfg!(feature = "debug") {
+        let token_inventory = if cfg!(feature = "debug") {
             // spoof weth balance when the debug feature is active
             // (*crate::constants::WETH_FUND_AMT).into()
             calculate_inventory_for_debug(&ingredients)
         } else {
-            self.sando_state_manager.get_weth_inventory()
+            if swap_type == SandwichSwapType::Forward {
+                self.sando_state_manager.get_weth_inventory()
+            } else {
+                self.sando_state_manager.get_token_inventory(
+                    ingredients.get_start_end_token(),
+                    self.provider.clone()
+                ).await
+            }
         };
 
         let optimal_input;
@@ -87,7 +94,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 optimal_input = find_optimal_input(
                     &ingredients,
                     &target_block,
-                    weth_inventory,
+                    token_inventory,
                     shared_backend.clone()
                 )
                 .await?;
@@ -96,7 +103,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     &ingredients,
                     &target_block,
                     optimal_input,
-                    weth_inventory,
+                    token_inventory,
                     self.sando_state_manager.get_searcher_address(),
                     self.sando_state_manager.get_sando_address(),
                     shared_backend,
@@ -106,7 +113,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 optimal_input = find_optimal_input_reverse(
                     &ingredients,
                     &target_block,
-                    weth_inventory,
+                    token_inventory,
                     shared_backend.clone(),
                 )
                 .await?;
@@ -115,7 +122,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     &ingredients,
                     &target_block,
                     optimal_input,
-                    weth_inventory,
+                    token_inventory,
                     self.sando_state_manager.get_searcher_address(),
                     self.sando_state_manager.get_sando_address(),
                     shared_backend,

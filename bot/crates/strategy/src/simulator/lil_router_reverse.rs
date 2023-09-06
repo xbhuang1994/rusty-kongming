@@ -304,7 +304,7 @@ async fn evaluate_sandwich_revenue(
     let max_backrun_in = intermediary_increase.checked_sub(*MIN_REVENUE_THRESHOLD).unwrap_or_default();
     // min_backrun_in is 75%
     let min_backrun_in = intermediary_increase.checked_mul(U256::from(75)).unwrap().checked_div(U256::from(100)).unwrap();
-    let backrun_in_diff_revenue = backrun_in_diff_for_revenue(max_backrun_in);
+    let _backrun_in_diff_revenue = backrun_in_diff_for_revenue(max_backrun_in);
 
     let revenue;
     let mut last_amount_in = max_backrun_in.clone();
@@ -314,7 +314,7 @@ async fn evaluate_sandwich_revenue(
     let mut high_amount_in = max_backrun_in.clone();
 
     let mut min_amount_in = U256::zero();
-    let mut low_high_diff = U256::zero();
+    let mut _low_high_diff = U256::zero();
     let mut max_other_balance = U256::zero();
 
     loop {
@@ -506,9 +506,9 @@ async fn evaluate_sandwich_revenue(
 
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
-        low_high_diff = high_amount_in - low_amount_in;
+        _low_high_diff = high_amount_in - low_amount_in;
         if is_balance_diff_for_revenue(other_start_balance, post_other_balance)
-            /*&& low_high_diff <= backrun_in_diff_revenue*/ {
+            /*&& _low_high_diff <= _backrun_in_diff_revenue*/ {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
             break;
         } else if post_other_balance > other_start_balance {
@@ -528,7 +528,7 @@ async fn evaluate_sandwich_revenue(
         // println!("started_token={:?},intermediary_token={:?},frontrun_in={:?},intermediary_balance={:?},
         //     min_mount_in={:?},max_other_balance={:?},low_high_diff={:?},round={:?},revenue={:?}",
         //     startend_token, _intermediary_token, frontrun_in, intermediary_balance, min_amount_in,
-        //     max_other_balance, low_high_diff, current_round, revenue);
+        //     max_other_balance, _low_high_diff, current_round, revenue);
     }
 
     Ok(revenue)
