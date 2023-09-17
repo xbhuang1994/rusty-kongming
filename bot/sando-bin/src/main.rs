@@ -8,6 +8,9 @@ use artemis_core::{
     types::{CollectorMap, ExecutorMap},
 };
 use ethers::providers::{Provider, Ws};
+
+use once_cell::sync::OnceCell;
+
 use log::info;
 use reqwest::Url;
 use rusty_sando::{
@@ -19,46 +22,75 @@ use strategy::{
     types::{Action, Event, StratConfig},
 };
 
+use artemis_core::types::Strategy;
+
 #[tokio::main]
 async fn main() -> Result<()> {
+
     // Setup
     setup_logger()?;
     print_banner();
-    let config = Config::read_from_dotenv().await?;
 
+    // Make config
+    // lazy_static! {
+    //     static ref CONFIG: AsyncOnce<Config> = AsyncOnce::new(async {
+    //         let config = Config::read_from_dotenv().await.unwrap();
+    //         config
+    //     });
+    // }
+    static CONFIG: OnceCell<Config> = OnceCell::new();
+    let config = Config::read_from_dotenv().await.unwrap();
+    let _ = CONFIG.set(config);
+    
     // Setup ethers provider
-    let ws = Ws::connect(config.wss_rpc).await?;
-    let provider = Arc::new(Provider::new(ws));
+    static WS: OnceCell<Ws> = OnceCell::new();
+    let ws = Ws::connect(CONFIG.get().unwrap().wss_rpc.clone()).await.unwrap();
+    let _ = WS.set(ws);
+    
+    static PROVIDER: OnceCell<Arc<Provider<Ws>>> = OnceCell::new();
+    let provider: Arc<Provider<Ws>> = Arc::new(Provider::new(WS.get().unwrap().clone()));
+    let _ = PROVIDER.set(provider);
 
     // Setup signers
-    let flashbots_signer = config.bundle_signer;
-    let searcher_signer = config.searcher_signer;
+    let flashbots_signer = CONFIG.get().unwrap().bundle_signer.clone();
+    // let searcher_signer = config.searcher_signer;
 
     // Create engine
     let mut engine: Engine<Event, Action> = Engine::default();
 
     // Setup block collector
-    let block_collector = Box::new(BlockCollector::new(provider.clone()));
+    let block_collector = Box::new(BlockCollector::new(PROVIDER.get().unwrap().clone()));
     let block_collector = CollectorMap::new(block_collector, Event::NewBlock);
     engine.add_collector(Box::new(block_collector));
 
     // Setup mempool collector
-    let mempool_collector = Box::new(MempoolCollector::new(provider.clone()));
+    let mempool_collector = Box::new(MempoolCollector::new(PROVIDER.get().unwrap().clone()));
     let mempool_collector = CollectorMap::new(mempool_collector, Event::NewTransaction);
     engine.add_collector(Box::new(mempool_collector));
 
     // Setup strategy
+    static CONFIGS: OnceCell<StratConfig> = OnceCell::new();
     let configs = StratConfig {
-        sando_address: config.sando_address,
-        sando_inception_block: config.sando_inception_block,
-        searcher_signer,
+        sando_address: CONFIG.get().unwrap().sando_address,
+        sando_inception_block: CONFIG.get().unwrap().sando_inception_block,
+        searcher_signer: CONFIG.get().unwrap().searcher_signer.clone(),
     };
-    let strategy = SandoBot::new(provider.clone(), configs);
-    engine.add_strategy(Box::new(strategy));
+    let _ = CONFIGS.set(configs);
+
+    // static STRATEGY: Lazy<SandoBot<Provider<Ws>>> = Lazy::new(|| SandoBot::new(provider.clone(), configs));
+    // STRATEGY.start_auto_process(8, 1);
+    static STRATEGY: OnceCell<SandoBot<Provider<Ws>>> = OnceCell::new();
+    let strategy = SandoBot::new(PROVIDER.get().unwrap().clone(), CONFIGS.get().unwrap());
+    let _ = STRATEGY.set(strategy);
+    // let tt: &dyn Strategy<Event, Action> = STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>;
+    // engine.add_strategy(Box::new((STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>)));
+    // let p = **Box::new(STRATEGY.get().unwrap());
+    engine.add_strategy(Arc::new(STRATEGY.get().unwrap()));
+    let _ = STRATEGY.get().unwrap().start_auto_process(8, 1).await?;
 
     // Setup flashbots executor
     let executor = Box::new(FlashbotsExecutor::new(
-        provider.clone(),
+        PROVIDER.get().unwrap().clone(),
         flashbots_signer,
         Url::parse("https://relay.flashbots.net")?,
     ));

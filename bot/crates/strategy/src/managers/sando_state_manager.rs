@@ -6,15 +6,13 @@ use ethers::{
     types::{Address, BlockNumber, Filter, U256, U64, Transaction, Block},
 };
 use log::info;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex, RwLock};
 
 use crate::{
     abi::Erc20,
     constants::{ERC20_TRANSFER_EVENT_SIG, WETH_ADDRESS},
     startup_info_log,
 };
-
-
 use std::collections::HashMap;
 
 // max transaction count
@@ -23,11 +21,11 @@ pub struct SandoStateManager {
     sando_contract: Address,
     sando_inception_block: U64,
     searcher_signer: LocalWallet,
-    weth_inventory: U256,
-    token_dust: Vec<Address>,
-    approve_txs: Vec<Transaction>,
-    low_txs: Vec<Transaction>,
-    token_inventory_map: HashMap<Address, U256>,
+    weth_inventory: RwLock<U256>,
+    token_dust: Mutex<Vec<Address>>,
+    approve_txs: Mutex<Vec<Transaction>>,
+    low_txs: Mutex<Vec<Transaction>>,
+    token_inventory_map: Arc<Mutex<HashMap<Address, U256>>>,
 }
 
 impl SandoStateManager {
@@ -44,16 +42,15 @@ impl SandoStateManager {
             token_dust: Default::default(),
             approve_txs : Default::default(),
             low_txs: Default::default(),
-            token_inventory_map: HashMap::new(),
+            token_inventory_map: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 
-    pub async fn setup<M: Middleware + 'static>(&mut self, provider: Arc<M>) -> Result<()> {
+    pub async fn setup<M: Middleware + 'static>(&self, provider: Arc<M>) -> Result<()> {
         // find weth inventory
         let weth = Erc20::new(*WETH_ADDRESS, provider.clone());
         let weth_balance = weth.balance_of(self.sando_contract).call().await?;
         startup_info_log!("weth inventory   : {}", weth_balance);
-        self.weth_inventory = weth_balance;
 
         // find weth dust
         let step = 10000;
@@ -92,7 +89,14 @@ impl SandoStateManager {
         }
 
         startup_info_log!("token dust found : {}", token_dust.len());
-        self.token_dust = token_dust;
+
+        let mut locked_weth_inventory = self.weth_inventory.write().unwrap();
+        *locked_weth_inventory = weth_balance;
+        
+        let mut locked_token_dust = self.token_dust.lock().unwrap();
+        for log in token_dust {
+            locked_token_dust.push(log);
+        }
 
         Ok(())
     }
@@ -110,59 +114,78 @@ impl SandoStateManager {
     }
 
     pub fn get_weth_inventory(&self) -> U256 {
-        self.weth_inventory
+        let locked_weth_inventory = self.weth_inventory.read().unwrap();
+        return *locked_weth_inventory;
     }
 
-    pub async fn get_token_inventory<M: Middleware + 'static>(&mut self, token: Address, provider: Arc<M>) -> U256 {
-
-        if self.token_inventory_map.contains_key(&token.clone()) {
-            return self.token_inventory_map[&token.clone()];
+    fn get_inventory_from_map(&self, token: Address) -> Option<U256> {
+        let locked_map = self.token_inventory_map.lock().unwrap();
+        if locked_map.contains_key(&token.clone()) {
+            Some(locked_map[&token.clone()])
         } else {
-            let other = Erc20::new(token, provider.clone());
-            let mut other_balance = U256::zero();
-            other_balance = other.balance_of(self.sando_contract).call().await.unwrap();
-            self.token_inventory_map.insert(token.clone(), other_balance.clone());
-            startup_info_log!("token{} inventory   : {}", token, other_balance.clone());
-            return other_balance;
+            None
         }
     }
 
-    pub fn check_sig_id(&mut self, tx: &Transaction) -> bool{
+    pub async fn get_token_inventory<M: Middleware + 'static>(&self, token: Address, provider: Arc<M>) -> U256 {
+
+        match self.get_inventory_from_map(token) {
+            Some(inventory) => {
+                inventory
+            },
+            None => {
+                let other = Erc20::new(token, provider.clone());
+                let mut other_balance = U256::zero();
+                other_balance = other.balance_of(self.sando_contract).call().await.unwrap();
+                // should get locker after call.await
+                let mut locked_map = self.token_inventory_map.lock().unwrap();
+                locked_map.insert(token.clone(), other_balance.clone());
+                startup_info_log!("get token{} inventory   : {}", token, other_balance.clone());
+                other_balance
+            }
+        }
+    }
+
+    pub fn check_sig_id(&self, tx: &Transaction) -> bool{
         let mut has_sig_funcation = false;
         
         let sig_approve = ethers::utils::id("approve(address,uint256)");
         if tx.input.0.starts_with(&sig_approve) {
             has_sig_funcation = true;
-            self.approve_txs.push(tx.clone());
+            self.approve_txs.lock().unwrap().push(tx.clone());
         }
         has_sig_funcation
     }
-    pub fn update_block_info(&mut self, block: &Block<Transaction>) {
+    pub fn update_block_info(&self, block: &Block<Transaction>) {
         for tx in &block.transactions {
             self.remove_approve_tx(tx);
         }
     }
-    pub fn append_low_tx(&mut self, tx: &Transaction) {
+    pub fn append_low_tx(&self, tx: &Transaction) {
         //if low txs count is more than 10000, remove the oldest one
-        if self.low_txs.len() > MAX_TRANSACTION_COUNT {
-            self.low_txs.remove(0);
+        let mut locked_vec = self.low_txs.lock().unwrap();
+        if locked_vec.len() > MAX_TRANSACTION_COUNT {
+            locked_vec.remove(0);
         }
-        self.low_txs.push(tx.clone());
+        locked_vec.push(tx.clone());
     }
     
     pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
         //get low txs by max_fee_per_gas > base_fee_per_gas
-        self.low_txs.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect()
+        let locked_vec = self.low_txs.lock().unwrap();
+        locked_vec.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect()
     }
     /// get approve txs by tx.from
     /// input Address
     /// return Vec<Transaction>
     pub fn get_approve_txs(&self,from: &Address) -> Vec<Transaction> {
-        self.approve_txs.iter().filter(|tx| tx.from == *from).cloned().collect()
+        let locked_vec = self.approve_txs.lock().unwrap();
+        locked_vec.iter().filter(|tx| tx.from == *from).cloned().collect()
     }
     
-    fn remove_approve_tx(&mut self, tx: &Transaction) {
-        self.approve_txs.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce))
+    fn remove_approve_tx(&self, tx: &Transaction) {
+        let mut locked_vec = self.approve_txs.lock().unwrap();
+        locked_vec.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce))
     }
 
 }

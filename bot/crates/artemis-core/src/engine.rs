@@ -2,23 +2,30 @@ use tokio::sync::broadcast::{self, Sender};
 use tokio::task::JoinSet;
 use tokio_stream::StreamExt;
 use tracing::{error, info};
+use std::sync::Arc;
 
 use crate::types::{Collector, Executor, Strategy};
 
 /// The main engine of Artemis. This struct is responsible for orchestrating the
 /// data flow between collectors, strategies, and executors.
-pub struct Engine<E, A> {
+pub struct Engine<E, A>
+where
+E: Send + Clone + 'static + std::fmt::Debug,
+A: Send + Clone + 'static + std::fmt::Debug, {
     /// The set of collectors that the engine will use to collect events.
     collectors: Vec<Box<dyn Collector<E>>>,
 
     /// The set of strategies that the engine will use to process events.
-    strategies: Vec<Box<dyn Strategy<E, A>>>,
+    strategies: Vec<Arc<&'static dyn Strategy<E, A>>>,
 
     /// The set of executors that the engine will use to execute actions.
     executors: Vec<Box<dyn Executor<A>>>,
 }
 
-impl<E, A> Engine<E, A> {
+impl<E, A> Engine<E, A>
+where
+E: Send + Clone + 'static + std::fmt::Debug,
+A: Send + Clone + 'static + std::fmt::Debug, {
     pub fn new() -> Self {
         Self {
             collectors: vec![],
@@ -28,7 +35,10 @@ impl<E, A> Engine<E, A> {
     }
 }
 
-impl<E, A> Default for Engine<E, A> {
+impl<E, A> Default for Engine<E, A>
+where
+E: Send + Clone + 'static + std::fmt::Debug,
+A: Send + Clone + 'static + std::fmt::Debug, {
     fn default() -> Self {
         Self::new()
     }
@@ -45,7 +55,7 @@ where
     }
 
     /// Adds a strategy to be used by the engine.
-    pub fn add_strategy(&mut self, strategy: Box<dyn Strategy<E, A>>) {
+    pub fn add_strategy(&mut self, strategy: Arc<&'static dyn Strategy<E, A>>) {
         self.strategies.push(strategy);
     }
 
@@ -81,22 +91,25 @@ where
         }
 
         // Spawn strategies in separate threads.
-        for mut strategy in self.strategies {
+        for strategy in self.strategies {
             let mut event_receiver = event_sender.subscribe();
             let action_sender = action_sender.clone();
             strategy.sync_state().await?;
+            strategy.set_action_sender(action_sender).await?;
 
             set.spawn(async move {
                 info!("starting strategy... ");
                 loop {
                     match event_receiver.recv().await {
                         Ok(event) => {
-                            if let Some(action) = strategy.process_event(event).await {
-                                match action_sender.send(action) {
-                                    Ok(_) => {}
-                                    Err(e) => error!("error sending action: {}", e),
-                                }
-                            }
+
+                            strategy.push_event(event).await.unwrap();
+                            // if let Some(action) = strategy.process_event(event).await {
+                            //     match action_sender.send(action) {
+                            //         Ok(_) => {}
+                            //         Err(e) => error!("error sending action: {}", e),
+                            //     }
+                            // }
                         }
                         Err(e) => error!("error receiving event: {}", e),
                     }

@@ -6,7 +6,8 @@ use colored::Colorize;
 use ethers::{providers::Middleware, types::Transaction};
 use foundry_evm::executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend};
 use log::{error, info};
-use std::{collections::BTreeSet, sync::Arc};
+use std::{collections::{BTreeSet, LinkedList}, sync::{Arc,Mutex}, time, thread};
+use tokio::{runtime, sync::broadcast::Sender};
 
 use crate::{
     constants::WETH_ADDRESS,
@@ -31,27 +32,38 @@ pub struct SandoBot<M> {
     /// Keeps track of weth inventory & token dust
     sando_state_manager: SandoStateManager,
     
+    event_runtime: tokio::runtime::Runtime,
+    event_list: Arc<Mutex<LinkedList<Event>>>,
+    action_sender: Arc<Mutex<Vec<Sender<Action>>>>,
+    action_list: Arc<Mutex<LinkedList<Action>>>,
+    action_runtime: tokio::runtime::Runtime,
 }
 
 impl<M: Middleware + 'static> SandoBot<M> {
     /// Create a new instance
-    pub fn new(client: Arc<M>, config: StratConfig) -> Self {
+    pub fn new(client: Arc<M>, config: &StratConfig) -> Self {
         Self {
             pool_manager: PoolManager::new(client.clone()),
             provider: client,
             block_manager: BlockManager::new(),
             sando_state_manager: SandoStateManager::new(
                 config.sando_address,
-                config.searcher_signer,
+                config.searcher_signer.clone(),
                 config.sando_inception_block,
             ),
+            event_runtime: runtime::Builder::new_multi_thread().worker_threads(8).enable_all().build().unwrap(),
+            event_list: Arc::new(Mutex::new(LinkedList::new())),
+            action_sender: Arc::new(Mutex::new(vec![])),
+            action_list: Arc::new(Mutex::new(LinkedList::new())),
+            action_runtime: runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap(),
+            
         }
     }
 
     /// Main logic for the strategy
     /// Checks if the passed `RawIngredients` is sandwichable
     pub async fn is_sandwichable(
-        &mut self,
+        &self,
         ingredients: RawIngredients,
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
@@ -143,13 +155,60 @@ impl<M: Middleware + 'static> SandoBot<M> {
         Ok(recipe)
     }
 
+
+    pub async fn start_auto_process(&'static self, event_processor_num: i32, action_process_num: i32) -> Result<()> {
+
+        for _ in 0..event_processor_num {
+            self.event_runtime.spawn(async move {
+                loop {
+                    match self.pop_event().await {
+                        Some(event) => {
+                            let _ = self.process_event(event).await;
+                        },
+                        None => {
+                            thread::sleep(time::Duration::from_millis(10));
+                        },
+                    }
+                }
+            });
+        }
+        log_info_cyan!("start {:?} event auto processors", event_processor_num);
+
+        for _ in 0..action_process_num {
+            self.action_runtime.spawn(async move {
+                loop {
+                    let action_sender = self.get_action_sender().await;
+                    match action_sender {
+                        Some(_) => {},
+                        None => {
+                            thread::sleep(time::Duration::from_millis(10));
+                            continue;
+                        }
+                    }
+                    match self.pop_action().await {
+                        Some(action) => {
+                            match action_sender.unwrap().send(action) {
+                                Ok(_) => {},
+                                Err(e) => error!("error sending action: {}", e),
+                            }
+                        },
+                        None => {
+                            thread::sleep(time::Duration::from_millis(10));
+                        }
+                    }
+                }
+            });
+        }
+        Ok(())
+    }
     
 }
 
 #[async_trait]
 impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
+// impl<M: Middleware + 'static> SandoBot<M> {
     /// Setup by getting all pools to monitor for swaps
-    async fn sync_state(&mut self) -> Result<()> {
+    async fn sync_state(&self) -> Result<()> {
         self.pool_manager.setup().await?;
         self.sando_state_manager
             .setup(self.provider.clone())
@@ -158,23 +217,75 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
         Ok(())
     }
 
-    /// Process incoming events
-    async fn process_event(&mut self, event: Event) -> Option<Action> {
-        match event {
-            Event::NewBlock(block) => match self.process_new_block(block).await {
-                Ok(_) => None,
-                Err(e) => {
-                    panic!("strategy is out of sync {}", e);
-                }
-            },
-            Event::NewTransaction(tx) => self.process_new_tx(tx).await,
+    async fn set_action_sender(&self, sender: Sender<Action>) -> Result<()> {
+
+        let mut locked_vec = self.action_sender.lock().unwrap();
+        if locked_vec.is_empty() {
+            locked_vec[0] = sender;
         }
+        Ok(())
     }
+
+    async fn push_event(&self, event: Event) -> Result<()> {
+        let mut locked_list = self.event_list.lock().unwrap();
+        locked_list.push_back(event);
+        Ok(())
+    }
+
 }
 
 impl<M: Middleware + 'static> SandoBot<M> {
+
+    async fn push_action(&self, action: Action) -> Result<()> {
+        let mut locked_list = self.action_list.lock().unwrap();
+        locked_list.push_back(action);
+        Ok(())
+    }
+
+    /// Process incoming events
+    async fn process_event(&self, event: Event) -> Result<()> {
+        match event {
+            Event::NewBlock(block) => self.process_new_block(block).await.unwrap(),
+            Event::NewTransaction(tx) => {
+                if let Some(action) = self.process_new_tx(tx).await {
+                   self.push_action(action).await?;
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    async fn get_action_sender(&self) -> Option<Sender<Action>> {
+    
+        let locked_vec = self.action_sender.lock().unwrap();
+        if !locked_vec.is_empty() {
+            Some(locked_vec[0].clone())
+        } else {
+            None
+        }
+    }
+
+    async fn pop_event(&self) -> Option<Event> {
+        let mut locked_list = self.event_list.lock().unwrap();
+        if !locked_list.is_empty() {
+            locked_list.pop_front()
+        } else {
+            None
+        }
+    }
+
+    async fn pop_action(&self) -> Option<Action> {
+        let mut locked_list = self.action_list.lock().unwrap();
+        if !locked_list.is_empty() {
+            locked_list.pop_front()
+        } else {
+            None
+        }
+    }
+
     /// Process new blocks as they come in
-    async fn process_new_block(&mut self, event: NewBlock) -> Result<()> {
+    async fn process_new_block(&self, event: NewBlock) -> Result<()> {
         log_new_block_info!(event);
         let new_block_number = event.number;
         self.block_manager.update_block_info(event);
@@ -193,7 +304,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     /// Process new txs as they come in
     #[allow(unused_mut)]
-    async fn process_new_tx(&mut self, victim_tx: Transaction) -> Option<Action> {
+    async fn process_new_tx(& self, victim_tx: Transaction) -> Option<Action> {
         // setup variables for processing tx
         let next_block = self.block_manager.get_next_block();
         let latest_block = self.block_manager.get_latest_block();

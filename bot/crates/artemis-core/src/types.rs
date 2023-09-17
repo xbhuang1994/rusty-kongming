@@ -4,6 +4,7 @@ use ethers::types::Transaction;
 use std::pin::Pin;
 use tokio_stream::Stream;
 use tokio_stream::StreamExt;
+use tokio::sync::broadcast::Sender;
 
 use crate::collectors::block_collector::NewBlock;
 use crate::executors::flashbots_executor::FlashbotsBundle;
@@ -23,10 +24,16 @@ pub trait Collector<E>: Send + Sync {
 pub trait Strategy<E, A>: Send + Sync {
     /// Sync the initial state of the strategy if needed, usually by fetching
     /// onchain data.
-    async fn sync_state(&mut self) -> Result<()>;
+    async fn sync_state(&self) -> Result<()>;
 
     /// Process an event, and return an action if needed.
-    async fn process_event(&mut self, event: E) -> Option<A>;
+    // async fn process_event(&self, event: E) -> Option<A>;
+
+    // async fn start_auto_process(&'static self, event_processor_num: i32, action_processor_num: i32) -> Result<()>;
+
+    async fn push_event(&self, event: E) -> Result<()>;
+
+    async fn set_action_sender(&self, sender: Sender<A>) -> Result<()>;
 }
 
 /// Executor trait, responsible for executing actions returned by strategies.

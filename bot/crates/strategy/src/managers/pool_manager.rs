@@ -56,7 +56,7 @@ pub(crate) struct PoolManager<M> {
 
 impl<M: Middleware + 'static> PoolManager<M> {
     /// Gets state of all pools
-    pub async fn setup(&mut self) -> Result<()> {
+    pub async fn setup(&self) -> Result<()> {
         let checkpoint_path = ".cfmms-checkpoint.json";
 
         let checkpoint_exists = Path::new(checkpoint_path).exists();
