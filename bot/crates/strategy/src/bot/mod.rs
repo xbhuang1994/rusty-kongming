@@ -206,7 +206,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
 #[async_trait]
 impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
-// impl<M: Middleware + 'static> SandoBot<M> {
     /// Setup by getting all pools to monitor for swaps
     async fn sync_state(&self) -> Result<()> {
         self.pool_manager.setup().await?;

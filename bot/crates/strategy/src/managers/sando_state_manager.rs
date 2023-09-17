@@ -135,8 +135,7 @@ impl SandoStateManager {
             },
             None => {
                 let other = Erc20::new(token, provider.clone());
-                let mut other_balance = U256::zero();
-                other_balance = other.balance_of(self.sando_contract).call().await.unwrap();
+                let other_balance = other.balance_of(self.sando_contract).call().await.unwrap();
                 // should get locker after call.await
                 let mut locked_map = self.token_inventory_map.lock().unwrap();
                 locked_map.insert(token.clone(), other_balance.clone());
