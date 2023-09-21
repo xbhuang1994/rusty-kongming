@@ -158,11 +158,19 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     pub async fn start_auto_process(&'static self, event_processor_num: i32, action_process_num: i32) -> Result<()> {
 
-        for _ in 0..event_processor_num {
+        #[cfg(feature = "debug")]
+        {
+            println!("bot start: event_processor_num={event_processor_num}, action_process_num={action_process_num}");
+        }
+        for _index in 0..event_processor_num {
             self.event_runtime.spawn(async move {
                 loop {
                     match self.pop_event().await {
                         Some(event) => {
+                            #[cfg(feature = "debug")]
+                            {
+                                println!("bot running: event processor {_index} process_event");
+                            }
                             let _ = self.process_event(event).await;
                         },
                         None => {
@@ -174,7 +182,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
         log_info_cyan!("start {:?} event auto processors", event_processor_num);
 
-        for _ in 0..action_process_num {
+        for _index in 0..action_process_num {
             self.action_runtime.spawn(async move {
                 loop {
                     let action_sender = self.get_action_sender().await;
@@ -187,6 +195,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     }
                     match self.pop_action().await {
                         Some(action) => {
+                            #[cfg(feature = "debug")]
+                            {
+                                println!("bot running: action processor {_index} process_event");
+                            }
                             match action_sender.unwrap().send(action) {
                                 Ok(_) => {},
                                 Err(e) => error!("error sending action: {}", e),

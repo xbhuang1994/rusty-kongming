@@ -21,8 +21,7 @@ use strategy::{
     bot::SandoBot,
     types::{Action, Event, StratConfig},
 };
-
-use artemis_core::types::Strategy;
+use num_cpus;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -86,7 +85,10 @@ async fn main() -> Result<()> {
     // engine.add_strategy(Box::new((STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>)));
     // let p = **Box::new(STRATEGY.get().unwrap());
     engine.add_strategy(Arc::new(STRATEGY.get().unwrap()));
-    let _ = STRATEGY.get().unwrap().start_auto_process(8, 1).await?;
+
+    // get cpu core number
+    let cpu_num = num_cpus::get() as i32;
+    let _ = STRATEGY.get().unwrap().start_auto_process(cpu_num, 4).await?;
 
     // Setup flashbots executor
     let executor = Box::new(FlashbotsExecutor::new(
