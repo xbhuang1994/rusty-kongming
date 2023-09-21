@@ -59,7 +59,18 @@ impl BlockManager {
     pub fn update_block_info<T: Into<BlockInfo>>(&self, latest_block: T) {
         let latest_block: BlockInfo = latest_block.into();
 
-        self.latest_block.lock().unwrap()[0] = latest_block;
-        self.next_block.lock().unwrap()[0] = latest_block.get_next_block();
+        let mut latest_block_locked = self.latest_block.lock().unwrap();
+        if latest_block_locked.is_empty() {
+            latest_block_locked.push(latest_block);
+        } else {
+            latest_block_locked[0] = latest_block;
+        }
+
+        let mut next_block_locked = self.next_block.lock().unwrap();
+        if next_block_locked.is_empty() {
+            next_block_locked.push(latest_block.get_next_block());
+        } else {
+            next_block_locked[0] = latest_block.get_next_block();
+        }
     }
 }

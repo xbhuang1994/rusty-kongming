@@ -220,7 +220,7 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
 
         let mut locked_vec = self.action_sender.lock().unwrap();
         if locked_vec.is_empty() {
-            locked_vec[0] = sender;
+            locked_vec.push(sender);
         }
         Ok(())
     }
