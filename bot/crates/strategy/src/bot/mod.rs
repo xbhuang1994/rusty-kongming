@@ -167,10 +167,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 loop {
                     match self.pop_event().await {
                         Some(event) => {
-                            #[cfg(feature = "debug")]
-                            {
-                                println!("bot running: event processor {_index} process_event");
-                            }
+                            // #[cfg(feature = "debug")]
+                            // {
+                            //     println!("bot running: event processor {_index} process_event");
+                            // }
                             let _ = self.process_event(event).await;
                         },
                         None => {
@@ -322,14 +322,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         // ignore txs that we can't include in next block
         // enhancement: simulate all txs regardless, store result, and use result when tx can included
-        if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas {
-            log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
-            self.sando_state_manager.append_low_tx(&victim_tx);
+        if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas || victim_tx.max_fee_per_gas.unwrap_or_default() < latest_block.base_fee_per_gas {
+            // log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
+            // self.sando_state_manager.append_low_tx(&victim_tx);
             return None;
         }
 
         if self.sando_state_manager.check_sig_id(&victim_tx) {
-            log_info_cyan!("{:?} approve", victim_tx.hash);
+            // log_info_cyan!("{:?} approve", victim_tx.hash);
             return None;
         }
         
@@ -352,7 +352,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // no touched pools = no sandwich opps
         let mut sando_bundles = vec![];
         if !touched_pools.is_empty() {
-
+            log_info_cyan!("sandwich {:?}",victim_tx.hash);
             for pool in touched_pools {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -413,7 +413,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if !touched_pools_reverse.is_empty() {
-
+            log_info_cyan!("reverse sandwich {:?}",victim_tx.hash);
             for pool in touched_pools_reverse {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -476,7 +476,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if sando_bundles.len() > 0 {
             return Some(Action::SubmitToFlashbots(sando_bundles));
         } else {
-            info!("{:?}", victim_tx.hash);
+            // info!("{:?}", victim_tx.hash);
             return None;
         }
     }
