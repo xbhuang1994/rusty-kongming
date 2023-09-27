@@ -286,6 +286,7 @@ impl SandoRecipe {
         };
         let signed_frontrun = sign_eip1559(frontrun_tx, &searcher).await?;
 
+        let _log_hash_0 = self.meats[0].hash;
         let signed_meat_txs: Vec<Bytes> = self.meats.into_iter().map(|meat| meat.rlp()).collect();
 
         // calc bribe (bribes paid in backrun)
@@ -355,9 +356,10 @@ impl SandoRecipe {
             .unwrap_or_default();
         #[cfg(feature = "debug")]
         {
+            use colored::Colorize;
             use crate::log_info_cyan;
             use log::info;
-            log_info_cyan!("find effective meet hash={:?}, profit={:?}, next_block={:?}", self.meats[0].hash, _profit, self.target_block.number);
+            log_info_cyan!("find effective meets 0_hash={:?}, profit={:?}, next_block={:?}", _log_hash_0, _profit, self.target_block.number);
         }
         Ok(bundle_request)
     }
