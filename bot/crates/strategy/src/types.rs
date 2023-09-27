@@ -293,7 +293,6 @@ impl SandoRecipe {
             .revenue
             .checked_sub(U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
             .ok_or_else(|| {
-                println!("revenue={:?}, block_no={:?}, frontrun_gas_used={:?}, base_fee_per_gas={:?}", self.revenue, self.target_block.number, self.frontrun_gas_used, self.target_block.base_fee_per_gas);
                 anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
             })?;
 
@@ -315,7 +314,7 @@ impl SandoRecipe {
         let effective_miner_tip = max_fee.checked_sub(self.target_block.base_fee_per_gas);
 
         ensure!(
-            effective_miner_tip.is_none(),
+            !effective_miner_tip.is_none(),
             "[FAILED TO CREATE BUNDLE] negative miner tip"
         );
 
@@ -347,8 +346,18 @@ impl SandoRecipe {
             .set_simulation_block(self.target_block.number - 1)
             .set_simulation_timestamp(self.target_block.timestamp.as_u64());
 
-        
-        println!("find effective meet");
+        let _profit = self
+            .revenue
+            .checked_sub(
+                (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
+                    + (U256::from(self.backrun_gas_used) * max_fee),
+            )
+            .unwrap_or_default();
+        #[cfg(feature = "debug")]
+        {
+            use crate::log_info_cyan;
+            log_info_cyan!("find effective meet hash={:?}, profit={:?}, next_block={:?}", self.meats[0].hash, _profit, self.target_block.number);
+        }
         Ok(bundle_request)
     }
 }

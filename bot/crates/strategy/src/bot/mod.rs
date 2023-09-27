@@ -352,7 +352,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // no touched pools = no sandwich opps
         let mut sando_bundles = vec![];
         if !touched_pools.is_empty() {
-            log_info_cyan!("sandwich {:?}",victim_tx.hash);
+            log_info_cyan!("process sandwich={:?}", victim_tx.hash);
             for pool in touched_pools {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -413,7 +413,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if !touched_pools_reverse.is_empty() {
-            log_info_cyan!("reverse sandwich {:?}",victim_tx.hash);
+            log_info_cyan!("process reverse_sandwich={:?}", victim_tx.hash);
             for pool in touched_pools_reverse {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
