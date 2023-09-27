@@ -293,7 +293,7 @@ impl SandoRecipe {
             .revenue
             .checked_sub(U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
             .ok_or_else(|| {
-                println!("revenue={:?}, frontrun_gas_used={:?}, base_fee_per_gas={:?}", self.revenue, self.frontrun_gas_used, self.target_block.base_fee_per_gas);
+                println!("revenue={:?}, block_no={:?}, frontrun_gas_used={:?}, base_fee_per_gas={:?}", self.revenue, self.target_block.get_block_number(), self.frontrun_gas_used, self.target_block.base_fee_per_gas);
                 anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
             })?;
 
