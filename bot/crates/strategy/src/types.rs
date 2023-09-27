@@ -356,6 +356,7 @@ impl SandoRecipe {
         #[cfg(feature = "debug")]
         {
             use crate::log_info_cyan;
+            use log::info;
             log_info_cyan!("find effective meet hash={:?}, profit={:?}, next_block={:?}", self.meats[0].hash, _profit, self.target_block.number);
         }
         Ok(bundle_request)
