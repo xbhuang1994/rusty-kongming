@@ -94,8 +94,10 @@ where
         for strategy in self.strategies {
             let mut event_receiver = event_sender.subscribe();
             let action_sender = action_sender.clone();
+            let event_sender = event_sender.clone();
             strategy.sync_state().await?;
             strategy.set_action_sender(action_sender).await?;
+            strategy.set_event_sender(event_sender).await?;
 
             set.spawn(async move {
                 info!("starting strategy... ");

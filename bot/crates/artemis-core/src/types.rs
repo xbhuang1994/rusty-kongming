@@ -34,6 +34,8 @@ pub trait Strategy<E, A>: Send + Sync {
     async fn push_event(&self, event: E) -> Result<()>;
 
     async fn set_action_sender(&self, sender: Sender<A>) -> Result<()>;
+
+    async fn set_event_sender(&self, sender: Sender<E>) -> Result<()>;
 }
 
 /// Executor trait, responsible for executing actions returned by strategies.

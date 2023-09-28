@@ -146,15 +146,15 @@ impl SandoStateManager {
     }
 
     pub fn check_sig_id(&self, tx: &Transaction) -> bool{
-        let mut has_sig_funcation = false;
-        
         let sig_approve = ethers::utils::id("approve(address,uint256)");
         if tx.input.0.starts_with(&sig_approve) {
-            has_sig_funcation = true;
-            self.approve_txs.lock().unwrap().push(tx.clone());
+            self.append_approve_tx(&tx.clone());
+            true
+        } else {
+            false
         }
-        has_sig_funcation
     }
+
     pub fn update_block_info(&self, block: &Block<Transaction>) {
         for tx in &block.transactions {
             self.remove_approve_tx(tx);
@@ -168,11 +168,23 @@ impl SandoStateManager {
         }
         locked_vec.push(tx.clone());
     }
+
+    fn append_approve_tx(&self, tx: &Transaction) {
+        //if low txs count is more than 10000, remove the oldest one
+        let mut locked_vec = self.approve_txs.lock().unwrap();
+        if locked_vec.len() > MAX_TRANSACTION_COUNT {
+            locked_vec.remove(0);
+        }
+        locked_vec.push(tx.clone());
+    }
     
     pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
         //get low txs by max_fee_per_gas > base_fee_per_gas
-        let locked_vec = self.low_txs.lock().unwrap();
-        locked_vec.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect()
+        let mut locked_vec = self.low_txs.lock().unwrap();
+        let result = locked_vec.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect();
+        // remove the txs in result;
+        locked_vec.retain(|tx| tx.max_fee_per_gas.unwrap_or_default() <= base_fee_per_gas);
+        return result;
     }
     /// get approve txs by tx.from
     /// input Address

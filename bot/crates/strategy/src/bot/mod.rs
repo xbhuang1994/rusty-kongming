@@ -3,7 +3,10 @@ use artemis_core::{collectors::block_collector::NewBlock, types::Strategy};
 use async_trait::async_trait;
 use cfmms::pool::Pool::{UniswapV2, UniswapV3};
 use colored::Colorize;
-use ethers::{providers::Middleware, types::Transaction};
+use ethers::{
+    providers::Middleware,
+    types::{Transaction, U256}
+};
 use foundry_evm::executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend};
 use log::{error, info};
 use std::{collections::{BTreeSet, LinkedList}, sync::{Arc,Mutex}, time, thread};
@@ -34,9 +37,10 @@ pub struct SandoBot<M> {
     
     event_runtime: tokio::runtime::Runtime,
     event_list: Arc<Mutex<LinkedList<Event>>>,
-    action_sender: Arc<Mutex<Vec<Sender<Action>>>>,
+    event_sender: Arc<Mutex<Option<Sender<Event>>>>,
     action_list: Arc<Mutex<LinkedList<Action>>>,
     action_runtime: tokio::runtime::Runtime,
+    action_sender: Arc<Mutex<Option<Sender<Action>>>>,
 }
 
 impl<M: Middleware + 'static> SandoBot<M> {
@@ -53,10 +57,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
             ),
             event_runtime: runtime::Builder::new_multi_thread().worker_threads(8).enable_all().build().unwrap(),
             event_list: Arc::new(Mutex::new(LinkedList::new())),
-            action_sender: Arc::new(Mutex::new(vec![])),
+            event_sender: Arc::new(Mutex::new(None)),
             action_list: Arc::new(Mutex::new(LinkedList::new())),
             action_runtime: runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap(),
-            
+            action_sender: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -230,9 +234,18 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
 
     async fn set_action_sender(&self, sender: Sender<Action>) -> Result<()> {
 
-        let mut locked_vec = self.action_sender.lock().unwrap();
-        if locked_vec.is_empty() {
-            locked_vec.push(sender);
+        let mut locker = self.action_sender.lock().unwrap();
+        if locker.is_none() {
+            *locker = Some(sender);
+        }
+        Ok(())
+    }
+
+    async fn set_event_sender(&self, sender: Sender<Event>) -> Result<()> {
+
+        let mut locker = self.event_sender.lock().unwrap();
+        if locker.is_none() {
+            *locker = Some(sender);
         }
         Ok(())
     }
@@ -269,12 +282,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     async fn get_action_sender(&self) -> Option<Sender<Action>> {
     
-        let locked_vec = self.action_sender.lock().unwrap();
-        if !locked_vec.is_empty() {
-            Some(locked_vec[0].clone())
-        } else {
-            None
-        }
+        let locker = self.action_sender.lock().unwrap();
+        return locker.clone();
+    }
+
+    async fn get_event_sender(&self) -> Option<Sender<Event>> {
+    
+        let locker = self.event_sender.lock().unwrap();
+        return locker.clone();
     }
 
     async fn pop_event(&self) -> Option<Event> {
@@ -298,8 +313,17 @@ impl<M: Middleware + 'static> SandoBot<M> {
     /// Process new blocks as they come in
     async fn process_new_block(&self, event: NewBlock) -> Result<()> {
         log_new_block_info!(event);
-        let new_block_number = event.number;
-        self.block_manager.update_block_info(event);
+        let base_fee_per_gas = event.base_fee_per_gas;
+        self.update_block_info(event).await.unwrap();
+        self.resend_low_txs(base_fee_per_gas).await.unwrap();
+        
+        Ok(())
+    }
+
+    async fn update_block_info(&self, new_block: NewBlock) -> Result<()> {
+
+        let new_block_number = new_block.number;
+        self.block_manager.update_block_info(new_block);
         match self.provider.get_block_with_txs(new_block_number).await? {
             Some(block) =>{
                 self.pool_manager.update_block_info(&block);
@@ -308,6 +332,26 @@ impl<M: Middleware + 'static> SandoBot<M> {
             None =>{
                 log_error!("Block not found");
             }
+        }
+        Ok(())
+    }
+
+    async fn resend_low_txs(&self, base_fee_per_gas: U256) -> Result<()> {
+
+        match self.get_event_sender().await {
+            Some(sender) => {
+                let low_txs = self.sando_state_manager.get_low_txs(base_fee_per_gas);
+                if !low_txs.is_empty() {
+                    for tx in low_txs {
+                        let hash = tx.hash;
+                        match sender.send(Event::NewTransaction(tx)) {
+                            Ok(_) => info!("resend low tx {}", hash),
+                            Err(e) => error!("error resending low tx {}: {}", hash, e),
+                        }
+                    }
+                }
+            },
+            None => {}
         }
         
         Ok(())
@@ -323,8 +367,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // ignore txs that we can't include in next block
         // enhancement: simulate all txs regardless, store result, and use result when tx can included
         if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas || victim_tx.max_fee_per_gas.unwrap_or_default() < latest_block.base_fee_per_gas {
-            // log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
-            // self.sando_state_manager.append_low_tx(&victim_tx);
+            log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
+            self.sando_state_manager.append_low_tx(&victim_tx);
             return None;
         }
 
