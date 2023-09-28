@@ -366,7 +366,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         // ignore txs that we can't include in next block
         // enhancement: simulate all txs regardless, store result, and use result when tx can included
-        if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas || victim_tx.max_fee_per_gas.unwrap_or_default() < latest_block.base_fee_per_gas {
+        if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas {
             log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
             self.sando_state_manager.append_low_tx(&victim_tx);
             return None;
