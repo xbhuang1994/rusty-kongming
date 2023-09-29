@@ -165,19 +165,20 @@ impl SandoStateManager {
     pub fn append_low_tx(&self, tx: &Transaction) {
         //if low txs count is more than 10000, remove the oldest one
         let mut map_low_txs = self.low_txs.lock().unwrap();
+        let mut list_low_txs = self.low_txs_vec.lock().unwrap();
         
         if !map_low_txs.contains_key(&tx.hash) {
-            let mut list_low_txs = self.low_txs_vec.lock().unwrap();
             if list_low_txs.len() > MAX_TRANSACTION_COUNT {
-                let oldest = list_low_txs.get(0).unwrap();
+                let oldest = list_low_txs.remove(0);
+                map_low_txs.remove(&oldest).unwrap();
                 info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
-                map_low_txs.remove(oldest);
+                info!("after remove map size {:?} vec size {:?}", map_low_txs.len(), list_low_txs.len());
             }
             
             map_low_txs.insert(tx.hash.clone(), tx.clone());
             list_low_txs.push(tx.hash.clone());
         } else {
-            info!("low_tx has {:?}", tx.hash);
+            info!("exists {:?} map size {:?} vec size {:?}", tx.hash, map_low_txs.len(), list_low_txs.len());
         }
     }
 
