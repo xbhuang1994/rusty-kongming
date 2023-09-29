@@ -170,7 +170,7 @@ impl SandoStateManager {
 
     pub fn update_block_info(&self, block_txs: &Vec<Transaction>) {
         for tx in block_txs {
-            info!("remove_approve_tx by from {:?}", tx.from);
+            // info!("remove_approve_tx by from {:?}", tx.from);
             self.remove_approve_tx(tx);
         }
     }

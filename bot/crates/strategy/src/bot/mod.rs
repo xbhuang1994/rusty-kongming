@@ -294,8 +294,12 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
                 let mut list_tx = self.event_tx_list.lock().unwrap();
                 let mut tx = tx.clone();
                 // tx.from is 'zero' receive from WS, so reset it
-                let _ = tx.recover_from_mut().unwrap_or_default();
-                list_tx.push_back(tx);
+                match tx.recover_from_mut(){
+                    Ok(_) => {
+                        list_tx.push_back(tx);
+                    },
+                    Err(e) => error!("failed to recover from victim tx: {}", e),
+                }
             },
         }
 
@@ -387,8 +391,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
             Some(block) =>{
                 let mut block_txs: Vec<Transaction> = Vec::new();
                 for mut tx in block.transactions {
-                    let _ = tx.recover_from_mut().unwrap_or(Address::zero());
-                    block_txs.push(tx.clone());
+                    match tx.recover_from_mut(){
+                        Ok(_) => {
+                            block_txs.push(tx.clone());
+                        },
+                        Err(e) => error!("failed to recover from block tx: {}", e),
+                    }
                 }
                 self.pool_manager.update_block_info(&block_txs);
                 self.sando_state_manager.update_block_info(&block_txs);
@@ -462,7 +470,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if self.sando_state_manager.check_liquidity_by_signature(&victim_tx) {
-            log_info_cyan!("{:?} is liquidity tx", victim_tx.hash);
+            // todo! 
+            // log_info_cyan!("{:?} is liquidity tx", victim_tx.hash);
             return None;
         }
 
@@ -550,8 +559,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools_reverse.is_empty() {
             log_info_cyan!("process reverse sandwich={:?},from={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, victim_tx.transaction_type);
             let approve_txs = self.sando_state_manager.get_approve_txs(&victim_tx.from);
-            info!("process reverse sandwich get approve {:?} txs by from {:?}", approve_txs.len(), victim_tx.from);
             if approve_txs.len() > 0 {
+                info!("process reverse sandwich get approve {:?} txs by from {:?}", approve_txs.len(), victim_tx.from);
                 for tx in approve_txs {
                     info!("process reverse sandwich approve tx {:?} for {:?} from {:?}", tx.hash, victim_tx.hash, tx.from);
                 }
