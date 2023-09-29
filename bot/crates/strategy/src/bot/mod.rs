@@ -5,7 +5,7 @@ use cfmms::pool::Pool::{UniswapV2, UniswapV3};
 use colored::Colorize;
 use ethers::{
     providers::Middleware,
-    types::{Transaction, U256, H256}
+    types::{Address, Transaction, U256, H256}
 };
 use foundry_evm::{executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend}, HashMap};
 use log::{error, info};
@@ -292,6 +292,9 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
             },
             Event::NewTransaction(tx) => {
                 let mut list_tx = self.event_tx_list.lock().unwrap();
+                let mut tx = tx.clone();
+                // tx.from is 'zero' receive from WS, so reset it
+                let _ = tx.recover_from_mut().unwrap_or_default();
                 list_tx.push_back(tx);
             },
         }
@@ -382,8 +385,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
         self.block_manager.update_block_info(new_block);
         match self.provider.get_block_with_txs(new_block_number).await? {
             Some(block) =>{
-                self.pool_manager.update_block_info(&block);
-                self.sando_state_manager.update_block_info(&block);
+                let mut block_txs: Vec<Transaction> = Vec::new();
+                for mut tx in block.transactions {
+                    let _ = tx.recover_from_mut().unwrap_or(Address::zero());
+                    block_txs.push(tx.clone());
+                }
+                self.pool_manager.update_block_info(&block_txs);
+                self.sando_state_manager.update_block_info(&block_txs);
             },
             None =>{
                 log_error!("Block not found");
@@ -482,7 +490,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // no touched pools = no sandwich opps
         let mut sando_bundles = vec![];
         if !touched_pools.is_empty() {
-            log_info_cyan!("process sandwich={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.nonce, victim_tx.transaction_type);
+            log_info_cyan!("process sandwich={:?},from={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, victim_tx.transaction_type);
             for pool in touched_pools {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -540,9 +548,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if !touched_pools_reverse.is_empty() {
-            log_info_cyan!("process reverse sandwich={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.nonce, victim_tx.transaction_type);
+            log_info_cyan!("process reverse sandwich={:?},from={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, victim_tx.transaction_type);
             let approve_txs = self.sando_state_manager.get_approve_txs(&victim_tx.from);
-            info!("process reverse sandwich get approve {:?} txs", approve_txs.len());
+            info!("process reverse sandwich get approve {:?} txs by from {:?}", approve_txs.len(), victim_tx.from);
+            if approve_txs.len() > 0 {
+                for tx in approve_txs {
+                    info!("process reverse sandwich approve tx {:?} for {:?} from {:?}", tx.hash, victim_tx.hash, tx.from);
+                }
+            }
             for pool in touched_pools_reverse {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),

@@ -236,8 +236,9 @@ impl<M: Middleware + 'static> PoolManager<M> {
         }
     }
 
-    pub fn update_block_info(&self, block: &Block<Transaction>) {
-        for tx in &block.transactions {
+    pub fn update_block_info(&self, block_txs: &Vec<Transaction>) {
+        for tx in block_txs {
+            info!("remove_mem_tounced_pool_tx by from {:?}", tx.from);
             self.remove_mem_touched_pool_tx(tx);
         }
     }
