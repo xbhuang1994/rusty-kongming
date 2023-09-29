@@ -171,14 +171,14 @@ impl SandoStateManager {
             if list_low_txs.len() > MAX_TRANSACTION_COUNT {
                 let oldest = list_low_txs.remove(0);
                 map_low_txs.remove(&oldest).unwrap();
-                info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
-                info!("after remove map size {:?} vec size {:?}", map_low_txs.len(), list_low_txs.len());
+                // info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                // info!("after remove map size {:?} vec size {:?}", map_low_txs.len(), list_low_txs.len());
             }
             
             map_low_txs.insert(tx.hash.clone(), tx.clone());
             list_low_txs.push(tx.hash.clone());
         } else {
-            info!("exists {:?} map size {:?} vec size {:?}", tx.hash, map_low_txs.len(), list_low_txs.len());
+            // info!("exists {:?} map size {:?} vec size {:?}", tx.hash, map_low_txs.len(), list_low_txs.len());
         }
     }
 
@@ -190,6 +190,7 @@ impl SandoStateManager {
             list_approve_txs.remove(0);
         }
         list_approve_txs.push(tx.clone());
+        info!("approve_tx size {:?}", list_approve_txs.len());
     }
     
     pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
@@ -198,13 +199,13 @@ impl SandoStateManager {
         let mut list_low_txs = self.low_txs_vec.lock().unwrap();
         let result: Vec<Transaction> = map_low_txs.iter().filter(|(_, tx)| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).map(|(_, tx)| tx).cloned().collect();
         
-        info!("before low map size={:?}, low vec size={:?}, result size={:?}", map_low_txs.len(), list_low_txs.len(), result.len());
+        // info!("before low map size={:?}, low vec size={:?}, result size={:?}", map_low_txs.len(), list_low_txs.len(), result.len());
         if result.len() > 0 {
             let result_hash: Vec<H256> = result.iter().map(|tx|{tx.hash}).collect();
             map_low_txs.retain(|hash, _| !result_hash.contains(hash));
             list_low_txs.retain(|hash| !result_hash.contains(hash));
 
-            info!("after low map size={:?}, low vec size={:?}", map_low_txs.len(), list_low_txs.len());
+            // info!("after low map size={:?}, low vec size={:?}", map_low_txs.len(), list_low_txs.len());
         }
         return result;
     }
