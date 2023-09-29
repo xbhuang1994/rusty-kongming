@@ -449,12 +449,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if self.sando_state_manager.check_approve_by_signature(&victim_tx) {
-            // log_info_cyan!("{:?} approve", victim_tx.hash);
+            // log_info_cyan!("{:?} is approve tx", victim_tx.hash);
             return None;
         }
 
         if self.sando_state_manager.check_liquidity_by_signature(&victim_tx) {
-            // log_info_cyan!("{:?} liquidity", victim_tx.hash);
+            log_info_cyan!("{:?} is liquidity tx", victim_tx.hash);
             return None;
         }
 
@@ -530,10 +530,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             }
                         };
 
-                        #[cfg(not(feature = "debug"))]
-                        {
-                            sando_bundles.push(_bundle);
-                        }
+                        sando_bundles.push(_bundle);
                     }
                     Err(e) => {
                         log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
@@ -544,6 +541,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         if !touched_pools_reverse.is_empty() {
             log_info_cyan!("process reverse sandwich={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.nonce, victim_tx.transaction_type);
+            let approve_txs = self.sando_state_manager.get_approve_txs(&victim_tx.from);
+            info!("process reverse sandwich get approve {:?} txs", approve_txs.len());
             for pool in touched_pools_reverse {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -591,10 +590,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             }
                         };
 
-                        #[cfg(not(feature = "debug"))]
-                        {
-                            sando_bundles.push(_bundle);
-                        }
+                        sando_bundles.push(_bundle);
                     }
                     Err(e) => {
                         log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
