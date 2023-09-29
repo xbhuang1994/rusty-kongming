@@ -3,7 +3,7 @@ use colored::Colorize;
 use ethers::{
     providers::Middleware,
     signers::{LocalWallet, Signer},
-    types::{Address, BlockNumber, Filter, U256, U64, Transaction, Block},
+    types::{Address, BlockNumber, Filter, U256, U64, H256, Transaction, Block},
 };
 use log::info;
 use std::sync::{Arc, Mutex, RwLock};
@@ -24,7 +24,8 @@ pub struct SandoStateManager {
     weth_inventory: RwLock<U256>,
     token_dust: Mutex<Vec<Address>>,
     approve_txs: Mutex<Vec<Transaction>>,
-    low_txs: Mutex<Vec<Transaction>>,
+    low_txs: Mutex<HashMap<H256, Transaction>>,
+    low_txs_vec: Mutex<Vec<H256>>,
     token_inventory_map: Arc<Mutex<HashMap<Address, U256>>>,
 }
 
@@ -42,6 +43,7 @@ impl SandoStateManager {
             token_dust: Default::default(),
             approve_txs : Default::default(),
             low_txs: Default::default(),
+            low_txs_vec: Default::default(),
             token_inventory_map: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -162,31 +164,50 @@ impl SandoStateManager {
     }
     pub fn append_low_tx(&self, tx: &Transaction) {
         //if low txs count is more than 10000, remove the oldest one
-        let mut locked_vec = self.low_txs.lock().unwrap();
-        if locked_vec.len() > MAX_TRANSACTION_COUNT {
-            info!("low_tx vec overflow");
-            locked_vec.remove(0);
+        let mut map_low_txs = self.low_txs.lock().unwrap();
+        
+        if !map_low_txs.contains_key(&tx.hash) {
+            let mut list_low_txs = self.low_txs_vec.lock().unwrap();
+            if list_low_txs.len() > MAX_TRANSACTION_COUNT {
+                let oldest = list_low_txs.get(0).unwrap();
+                info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                map_low_txs.remove(oldest);
+            }
+            
+            map_low_txs.insert(tx.hash.clone(), tx.clone());
+            list_low_txs.push(tx.hash.clone());
+        } else {
+            info!("low_tx has {:?}", tx.hash);
         }
-        locked_vec.push(tx.clone());
     }
 
     fn append_approve_tx(&self, tx: &Transaction) {
         //if low txs count is more than 10000, remove the oldest one
-        let mut locked_vec = self.approve_txs.lock().unwrap();
-        if locked_vec.len() > MAX_TRANSACTION_COUNT {
-            locked_vec.remove(0);
+        let mut list_approve_txs = self.approve_txs.lock().unwrap();
+        if list_approve_txs.len() > MAX_TRANSACTION_COUNT {
+            info!("approve_tx vec overflow");
+            list_approve_txs.remove(0);
         }
-        locked_vec.push(tx.clone());
+        list_approve_txs.push(tx.clone());
     }
     
     pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
         //get low txs by max_fee_per_gas > base_fee_per_gas
-        let mut locked_vec = self.low_txs.lock().unwrap();
-        let result = locked_vec.iter().filter(|tx| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).cloned().collect();
-        // remove the txs in result;
-        locked_vec.retain(|tx| tx.max_fee_per_gas.unwrap_or_default() <= base_fee_per_gas);
+        let mut map_low_txs = self.low_txs.lock().unwrap();
+        let mut list_low_txs = self.low_txs_vec.lock().unwrap();
+        let result: Vec<Transaction> = map_low_txs.iter().filter(|(_, tx)| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).map(|(_, tx)| tx).cloned().collect();
+        
+        info!("before low map size={:?}, low vec size={:?}, result size={:?}", map_low_txs.len(), list_low_txs.len(), result.len());
+        if result.len() > 0 {
+            let result_hash: Vec<H256> = result.iter().map(|tx|{tx.hash}).collect();
+            map_low_txs.retain(|hash, _| !result_hash.contains(hash));
+            list_low_txs.retain(|hash| !result_hash.contains(hash));
+
+            info!("after low map size={:?}, low vec size={:?}", map_low_txs.len(), list_low_txs.len());
+        }
         return result;
     }
+    
     /// get approve txs by tx.from
     /// input Address
     /// return Vec<Transaction>

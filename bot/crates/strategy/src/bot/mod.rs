@@ -196,7 +196,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 }
             });
         }
-        info!("start {:?} event auto processors", tx_processor_num);
+        info!("start {:?} event tx auto processors", tx_processor_num);
 
         for _index in 0..block_process_num {
             self.event_block_runtime.spawn(async move {
@@ -216,6 +216,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 }
             });
         }
+        info!("start {:?} event block auto processors", block_process_num);
 
         for _index in 0..action_process_num {
             self.action_runtime.spawn(async move {
