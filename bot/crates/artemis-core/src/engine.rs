@@ -103,16 +103,7 @@ where
                 info!("starting strategy... ");
                 loop {
                     match event_receiver.recv().await {
-                        Ok(event) => {
-
-                            strategy.push_event(event).await.unwrap();
-                            // if let Some(action) = strategy.process_event(event).await {
-                            //     match action_sender.send(action) {
-                            //         Ok(_) => {}
-                            //         Err(e) => error!("error sending action: {}", e),
-                            //     }
-                            // }
-                        }
+                        Ok(event) => strategy.push_event(event).await.unwrap(),
                         Err(e) => error!("error receiving event: {}", e),
                     }
                 }

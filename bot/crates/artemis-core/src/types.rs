@@ -29,8 +29,6 @@ pub trait Strategy<E, A>: Send + Sync {
     /// Process an event, and return an action if needed.
     // async fn process_event(&self, event: E) -> Option<A>;
 
-    // async fn start_auto_process(&'static self, event_processor_num: i32, action_processor_num: i32) -> Result<()>;
-
     async fn push_event(&self, event: E) -> Result<()>;
 
     async fn set_action_sender(&self, sender: Sender<A>) -> Result<()>;

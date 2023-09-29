@@ -5,9 +5,9 @@ use cfmms::pool::Pool::{UniswapV2, UniswapV3};
 use colored::Colorize;
 use ethers::{
     providers::Middleware,
-    types::{Transaction, U256}
+    types::{Transaction, U256, H256}
 };
-use foundry_evm::executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend};
+use foundry_evm::{executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend}, HashMap};
 use log::{error, info};
 use std::{collections::{BTreeSet, LinkedList}, sync::{Arc,Mutex}, time, thread};
 use tokio::{runtime, sync::broadcast::Sender};
@@ -35,12 +35,21 @@ pub struct SandoBot<M> {
     /// Keeps track of weth inventory & token dust
     sando_state_manager: SandoStateManager,
     
-    event_runtime: tokio::runtime::Runtime,
-    event_list: Arc<Mutex<LinkedList<Event>>>,
-    event_sender: Arc<Mutex<Option<Sender<Event>>>>,
+    /// Auto process txs
+    event_tx_runtime: tokio::runtime::Runtime,
+    event_tx_list: Arc<Mutex<LinkedList<Transaction>>>,
+    event_tx_sender: Arc<Mutex<Option<Sender<Event>>>>,
+
+    /// Auto process newblock
+    event_block_runtime: tokio::runtime::Runtime,
+    event_block_list: Arc<Mutex<LinkedList<NewBlock>>>,
+
+    /// Auto process action
     action_list: Arc<Mutex<LinkedList<Action>>>,
     action_runtime: tokio::runtime::Runtime,
     action_sender: Arc<Mutex<Option<Sender<Action>>>>,
+
+    processed_tx_map: Mutex<HashMap<H256, i64>>,
 }
 
 impl<M: Middleware + 'static> SandoBot<M> {
@@ -55,12 +64,15 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.searcher_signer.clone(),
                 config.sando_inception_block,
             ),
-            event_runtime: runtime::Builder::new_multi_thread().worker_threads(8).enable_all().build().unwrap(),
-            event_list: Arc::new(Mutex::new(LinkedList::new())),
-            event_sender: Arc::new(Mutex::new(None)),
+            event_tx_runtime: runtime::Builder::new_multi_thread().worker_threads(32).enable_all().build().unwrap(),
+            event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
+            event_tx_sender: Arc::new(Mutex::new(None)),
+            event_block_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            event_block_list: Arc::new(Mutex::new(LinkedList::new())),
             action_list: Arc::new(Mutex::new(LinkedList::new())),
-            action_runtime: runtime::Builder::new_multi_thread().worker_threads(1).enable_all().build().unwrap(),
+            action_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
             action_sender: Arc::new(Mutex::new(None)),
+            processed_tx_map: Mutex::new(HashMap::new()),
         }
     }
 
@@ -160,22 +172,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
 
-    pub async fn start_auto_process(&'static self, event_processor_num: i32, action_process_num: i32) -> Result<()> {
+    pub async fn start_auto_process(&'static self, tx_processor_num: i32, block_process_num: i32, action_process_num: i32) -> Result<()> {
 
         #[cfg(feature = "debug")]
         {
-            println!("bot start: event_processor_num={event_processor_num}, action_process_num={action_process_num}");
+            info!("bot start: tx_processor_num={tx_processor_num},block_process_num={block_process_num},action_process_num={action_process_num}");
         }
-        for _index in 0..event_processor_num {
-            self.event_runtime.spawn(async move {
+        for _index in 0..tx_processor_num {
+            self.event_tx_runtime.spawn(async move {
                 loop {
-                    match self.pop_event().await {
+                    match self.pop_event_tx().await {
                         Some(event) => {
                             // #[cfg(feature = "debug")]
                             // {
-                            //     println!("bot running: event processor {_index} process_event");
+                            //     info!("bot running: event tx processor {_index} process_event");
                             // }
-                            let _ = self.process_event(event).await;
+                            let _ = self.process_event_tx(event).await;
                         },
                         None => {
                             thread::sleep(time::Duration::from_millis(10));
@@ -184,7 +196,26 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 }
             });
         }
-        log_info_cyan!("start {:?} event auto processors", event_processor_num);
+        info!("start {:?} event auto processors", tx_processor_num);
+
+        for _index in 0..block_process_num {
+            self.event_block_runtime.spawn(async move {
+                loop {
+                    match self.pop_event_block().await {
+                        // #[cfg(feature = "debug")]
+                        // {
+                        //     info!("bot running: event block processor {_index} process_event");
+                        // }
+                        Some(event) => {
+                            let _ = self.process_event_block(event).await;
+                        },
+                        None => {
+                            thread::sleep(time::Duration::from_millis(100));
+                        }
+                    }
+                }
+            });
+        }
 
         for _index in 0..action_process_num {
             self.action_runtime.spawn(async move {
@@ -201,7 +232,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         Some(action) => {
                             #[cfg(feature = "debug")]
                             {
-                                println!("bot running: action processor {_index} process_event");
+                                info!("bot running: action processor {_index} process_event");
                             }
                             match action_sender.unwrap().send(action) {
                                 Ok(_) => {},
@@ -215,6 +246,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 }
             });
         }
+        info!("start {:?} action auto processors", action_process_num);
+
         Ok(())
     }
     
@@ -243,7 +276,7 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
 
     async fn set_event_sender(&self, sender: Sender<Event>) -> Result<()> {
 
-        let mut locker = self.event_sender.lock().unwrap();
+        let mut locker = self.event_tx_sender.lock().unwrap();
         if locker.is_none() {
             *locker = Some(sender);
         }
@@ -251,8 +284,17 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
     }
 
     async fn push_event(&self, event: Event) -> Result<()> {
-        let mut locked_list = self.event_list.lock().unwrap();
-        locked_list.push_back(event);
+        match event {
+            Event::NewBlock(block) => {
+                let mut list_block = self.event_block_list.lock().unwrap();
+                list_block.push_back(block);
+            },
+            Event::NewTransaction(tx) => {
+                let mut list_tx = self.event_tx_list.lock().unwrap();
+                list_tx.push_back(tx);
+            },
+        }
+
         Ok(())
     }
 
@@ -261,21 +303,25 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
 impl<M: Middleware + 'static> SandoBot<M> {
 
     async fn push_action(&self, action: Action) -> Result<()> {
-        let mut locked_list = self.action_list.lock().unwrap();
-        locked_list.push_back(action);
+        let mut list_action = self.action_list.lock().unwrap();
+        list_action.push_back(action);
         Ok(())
     }
 
-    /// Process incoming events
-    async fn process_event(&self, event: Event) -> Result<()> {
-        match event {
-            Event::NewBlock(block) => self.process_new_block(block).await.unwrap(),
-            Event::NewTransaction(tx) => {
-                if let Some(action) = self.process_new_tx(tx).await {
-                   self.push_action(action).await?;
-                }
-            }
+    /// Process incoming events of transaction
+    async fn process_event_tx(&self, event: Transaction) -> Result<()> {
+        // info!("proc tx {:?}", event.hash);
+        if let Some(action) = self.process_new_tx(event).await {
+           self.push_action(action).await?;
         }
+
+        Ok(())
+    }
+
+    /// Process incoming events of newblock
+    async fn process_event_block(&self, event: NewBlock) -> Result<()> {
+        // info!("proc newblock {:?}", event.number);
+        self.process_new_block(event).await.unwrap();
 
         Ok(())
     }
@@ -288,23 +334,34 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     async fn get_event_sender(&self) -> Option<Sender<Event>> {
     
-        let locker = self.event_sender.lock().unwrap();
+        let locker = self.event_tx_sender.lock().unwrap();
         return locker.clone();
     }
 
-    async fn pop_event(&self) -> Option<Event> {
-        let mut locked_list = self.event_list.lock().unwrap();
-        if !locked_list.is_empty() {
-            locked_list.pop_front()
+    async fn pop_event_tx(&self) -> Option<Transaction> {
+        let mut list_tx = self.event_tx_list.lock().unwrap();
+        if !list_tx.is_empty() {
+            info!("event tx list len={}", list_tx.len());
+            list_tx.pop_front()
+        } else {
+            None
+        }
+    }
+
+    async fn pop_event_block(&self) -> Option<NewBlock> {
+        let mut list_block = self.event_block_list.lock().unwrap();
+        if !list_block.is_empty() {
+            info!("event block list len={}", list_block.len());
+            list_block.pop_front()
         } else {
             None
         }
     }
 
     async fn pop_action(&self) -> Option<Action> {
-        let mut locked_list = self.action_list.lock().unwrap();
-        if !locked_list.is_empty() {
-            locked_list.pop_front()
+        let mut list_action = self.action_list.lock().unwrap();
+        if !list_action.is_empty() {
+            list_action.pop_front()
         } else {
             None
         }
@@ -345,8 +402,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     for tx in low_txs {
                         let hash = tx.hash;
                         match sender.send(Event::NewTransaction(tx)) {
-                            Ok(_) => info!("resend low tx {}", hash),
-                            Err(e) => error!("error resending low tx {}: {}", hash, e),
+                            Ok(_) => info!("resent low tx {:?}", hash),
+                            Err(e) => error!("error resending low tx {:?}: {}", hash, e),
                         }
                     }
                 }
@@ -355,6 +412,26 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
         
         Ok(())
+    }
+
+    fn check_tx_processed(&self, tx_hash: H256) -> bool {
+
+        let mut hist_txs = self.processed_tx_map.lock().unwrap();
+        let mut processed = false;
+        let now_ts = chrono::Local::now().timestamp();
+        if hist_txs.contains_key(&tx_hash.clone()) {
+            processed = true;
+            let hist_ts = hist_txs.get(&tx_hash.clone()).unwrap_or(&0);
+            if now_ts - hist_ts > 3600 {
+                // cache an hour txs
+                hist_txs.remove(&tx_hash.clone());
+                info!("remove tx:{:?}", tx_hash);
+            }
+        } else {
+            hist_txs.insert(tx_hash, now_ts);
+        }
+
+        processed
     }
 
     /// Process new txs as they come in
@@ -366,17 +443,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         // ignore txs that we can't include in next block
         // enhancement: simulate all txs regardless, store result, and use result when tx can included
-        if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas {
-            log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
+        if victim_tx.max_fee_per_gas.unwrap_or_default() < next_block.base_fee_per_gas || victim_tx.max_fee_per_gas.unwrap_or_default() < latest_block.base_fee_per_gas {
+            // log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
             self.sando_state_manager.append_low_tx(&victim_tx);
             return None;
         }
 
         if self.sando_state_manager.check_sig_id(&victim_tx) {
-            // log_info_cyan!("{:?} approve", victim_tx.hash);
+            log_info_cyan!("{:?} approve", victim_tx.hash);
             return None;
         }
-        
+
+        // check if tx had been processed
+        if self.check_tx_processed(victim_tx.hash) {
+            info!("{:?} had processed", victim_tx.hash);
+            return None;
+        }
         
         // check if tx is a swap
         let (touched_pools, touched_pools_reverse) = self
@@ -396,7 +478,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // no touched pools = no sandwich opps
         let mut sando_bundles = vec![];
         if !touched_pools.is_empty() {
-            log_info_cyan!("process sandwich={:?}", victim_tx.hash);
+            log_info_cyan!("process sandwich={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.nonce, victim_tx.transaction_type);
             for pool in touched_pools {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -457,7 +539,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if !touched_pools_reverse.is_empty() {
-            log_info_cyan!("process reverse_sandwich={:?}", victim_tx.hash);
+            log_info_cyan!("process reverse sandwich={:?},noce={:?},type={:?}", victim_tx.hash, victim_tx.nonce, victim_tx.transaction_type);
             for pool in touched_pools_reverse {
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),

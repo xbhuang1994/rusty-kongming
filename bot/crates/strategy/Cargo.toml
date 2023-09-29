@@ -31,6 +31,8 @@ colored = "2.0.0"
 log = "0.4.17"
 indicatif = "0.17.5"
 
+chrono = "0.4.23"
+
 # Artemis
 artemis-core = { path = "../artemis-core" }
 
