@@ -164,6 +164,7 @@ impl SandoStateManager {
         //if low txs count is more than 10000, remove the oldest one
         let mut locked_vec = self.low_txs.lock().unwrap();
         if locked_vec.len() > MAX_TRANSACTION_COUNT {
+            info!("low_tx vec overflow");
             locked_vec.remove(0);
         }
         locked_vec.push(tx.clone());

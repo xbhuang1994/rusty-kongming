@@ -341,7 +341,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
     async fn pop_event_tx(&self) -> Option<Transaction> {
         let mut list_tx = self.event_tx_list.lock().unwrap();
         if !list_tx.is_empty() {
-            info!("event tx list len={}", list_tx.len());
             list_tx.pop_front()
         } else {
             None
@@ -351,7 +350,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
     async fn pop_event_block(&self) -> Option<NewBlock> {
         let mut list_block = self.event_block_list.lock().unwrap();
         if !list_block.is_empty() {
-            info!("event block list len={}", list_block.len());
             list_block.pop_front()
         } else {
             None
@@ -422,7 +420,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if hist_txs.contains_key(&tx_hash.clone()) {
             processed = true;
             let hist_ts = hist_txs.get(&tx_hash.clone()).unwrap_or(&0);
-            if now_ts - hist_ts > 3600 {
+            if now_ts - hist_ts > 7200 {
                 // cache an hour txs
                 hist_txs.remove(&tx_hash.clone());
                 info!("remove tx:{:?}", tx_hash);
