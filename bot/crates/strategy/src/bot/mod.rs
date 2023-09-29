@@ -422,7 +422,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             processed = true;
             let hist_ts = hist_txs.get(&tx_hash.clone()).unwrap_or(&0);
             if now_ts - hist_ts > 7200 {
-                // cache an hour txs
+                // cache transactions for 3 hours
                 hist_txs.remove(&tx_hash.clone());
                 info!("remove tx:{:?}", tx_hash);
             }
@@ -448,8 +448,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
             return None;
         }
 
-        if self.sando_state_manager.check_sig_id(&victim_tx) {
+        if self.sando_state_manager.check_approve_by_signature(&victim_tx) {
             // log_info_cyan!("{:?} approve", victim_tx.hash);
+            return None;
+        }
+
+        if self.sando_state_manager.check_liquidity_by_signature(&victim_tx) {
+            // log_info_cyan!("{:?} liquidity", victim_tx.hash);
             return None;
         }
 
