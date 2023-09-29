@@ -449,13 +449,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
 
         if self.sando_state_manager.check_sig_id(&victim_tx) {
-            log_info_cyan!("{:?} approve", victim_tx.hash);
+            // log_info_cyan!("{:?} approve", victim_tx.hash);
             return None;
         }
 
         // check if tx had been processed
         if self.check_tx_processed(victim_tx.hash) {
-            info!("{:?} had processed", victim_tx.hash);
+            // info!("{:?} had processed", victim_tx.hash);
             return None;
         }
         

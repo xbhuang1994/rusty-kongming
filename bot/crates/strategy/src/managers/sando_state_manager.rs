@@ -23,7 +23,8 @@ pub struct SandoStateManager {
     searcher_signer: LocalWallet,
     weth_inventory: RwLock<U256>,
     token_dust: Mutex<Vec<Address>>,
-    approve_txs: Mutex<Vec<Transaction>>,
+    approve_txs: Mutex<HashMap<H256, Transaction>>,
+    approve_txs_vec: Mutex<Vec<H256>>,
     low_txs: Mutex<HashMap<H256, Transaction>>,
     low_txs_vec: Mutex<Vec<H256>>,
     token_inventory_map: Arc<Mutex<HashMap<Address, U256>>>,
@@ -42,6 +43,7 @@ impl SandoStateManager {
             weth_inventory: Default::default(),
             token_dust: Default::default(),
             approve_txs : Default::default(),
+            approve_txs_vec: Default::default(),
             low_txs: Default::default(),
             low_txs_vec: Default::default(),
             token_inventory_map: Arc::new(Mutex::new(HashMap::new())),
@@ -184,13 +186,22 @@ impl SandoStateManager {
 
     fn append_approve_tx(&self, tx: &Transaction) {
         //if low txs count is more than 10000, remove the oldest one
-        let mut list_approve_txs = self.approve_txs.lock().unwrap();
-        if list_approve_txs.len() > MAX_TRANSACTION_COUNT {
-            info!("approve_tx vec overflow");
-            list_approve_txs.remove(0);
+        let mut map_approve_txs = self.approve_txs.lock().unwrap();
+        let mut list_approve_txs = self.approve_txs_vec.lock().unwrap();
+
+        if !map_approve_txs.contains_key(&tx.hash) {
+            if list_approve_txs.len() > MAX_TRANSACTION_COUNT {
+                let oldest = list_approve_txs.remove(0);
+                map_approve_txs.remove(&oldest).unwrap();
+                // info!("approve_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                // info!("after remove approve_tx map size {:?} vec size {:?}", map_approve_txs.len(), list_approve_txs.len());
+            }
+
+            map_approve_txs.insert(tx.hash.clone(), tx.clone());
+            list_approve_txs.push(tx.hash.clone());
+        } else {
+            // info!("exists {:?} approve_tx map size {:?} vec size {:?}", tx.hash, map_approve_txs.len(), list_approve_txs.len());
         }
-        list_approve_txs.push(tx.clone());
-        info!("approve_tx size {:?}", list_approve_txs.len());
     }
     
     pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
@@ -214,13 +225,20 @@ impl SandoStateManager {
     /// input Address
     /// return Vec<Transaction>
     pub fn get_approve_txs(&self,from: &Address) -> Vec<Transaction> {
-        let locked_vec = self.approve_txs.lock().unwrap();
-        locked_vec.iter().filter(|tx| tx.from == *from).cloned().collect()
+        let map_approve_txs = self.approve_txs.lock().unwrap();
+        let result: Vec<Transaction> = map_approve_txs.iter().filter(|(_, tx)| tx.from == *from).map(|(_, tx)| tx).cloned().collect();
+        return result;
     }
     
     fn remove_approve_tx(&self, tx: &Transaction) {
-        let mut locked_vec = self.approve_txs.lock().unwrap();
-        locked_vec.retain(|t| !(tx.from == t.from && tx.nonce >= t.nonce))
+        let mut map_approve_txs = self.approve_txs.lock().unwrap();
+        let mut list_appprove_txs = self.approve_txs_vec.lock().unwrap();
+        let remove_hash: Vec<H256> = map_approve_txs.iter().filter(|(_, t)| tx.from == t.from && tx.nonce >= t.nonce).map(|(hash, _)| hash).cloned().collect();
+        if remove_hash.len() > 0 {
+            map_approve_txs.retain(|hash, _| remove_hash.contains(hash));
+            list_appprove_txs.retain(|hash| remove_hash.contains(hash));
+            // info!("after remove approve map size={:?}, approve vec size={:?}", map_approve_txs.len(), list_appprove_txs.len());
+        }
     }
 
 }
