@@ -45,6 +45,8 @@ where
             //    Err(simulate_error) => error!("Error simulating bundle: {:?}", simulate_error),
             //}
 
+            /* Annotated for testing */
+            /*
             // Send bundle.
             let pending_bundle = self.fb_client.send_bundle(&bundle).await;
 
@@ -52,6 +54,10 @@ where
                 Ok(res) => info!("Simulation Result: {:?}", res.await),
                 Err(send_error) => error!("Error sending bundle: {:?}", send_error),
             }
+            */
+            /* Annotated for testing */
+
+            info!("flashbots execute block={},hash_0={}", bundle.block().unwrap_or_default(), bundle.transaction_hashes()[0]);
         }
 
         Ok(())

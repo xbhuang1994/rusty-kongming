@@ -233,7 +233,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         Some(action) => {
                             #[cfg(feature = "debug")]
                             {
-                                info!("bot running: action processor {_index} process_event");
+                                info!("bot running: action processor {_index} send action");
                             }
                             match action_sender.unwrap().send(action) {
                                 Ok(_) => {},
@@ -401,7 +401,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     for tx in low_txs {
                         let hash = tx.hash;
                         match sender.send(Event::NewTransaction(tx)) {
-                            Ok(_) => info!("resent low tx {:?}", hash),
+                            Ok(_) => {/*info!("resent low tx {:?}", hash);*/},
                             Err(e) => error!("error resending low tx {:?}: {}", hash, e),
                         }
                     }

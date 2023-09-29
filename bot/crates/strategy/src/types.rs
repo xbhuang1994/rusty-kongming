@@ -309,7 +309,7 @@ impl SandoRecipe {
 
         ensure!(
             max_fee >= self.target_block.base_fee_per_gas,
-            "[FAILED TO CREATE BUNDLE] backrun maxfee less than basefee"
+            format!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee {:?}", max_fee, self.target_block.base_fee_per_gas)
         );
 
         let effective_miner_tip = max_fee.checked_sub(self.target_block.base_fee_per_gas);
@@ -347,11 +347,19 @@ impl SandoRecipe {
             .set_simulation_block(self.target_block.number - 1)
             .set_simulation_timestamp(self.target_block.timestamp.as_u64());
 
-        let _profit = self
+        let _profit_min = self
             .revenue
             .checked_sub(
                 (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
                     + (U256::from(self.backrun_gas_used) * max_fee),
+            )
+            .unwrap_or_default();
+
+        let _profit_max = self
+            .revenue
+            .checked_sub(
+                (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
+                    + (U256::from(self.backrun_gas_used) * self.target_block.base_fee_per_gas),
             )
             .unwrap_or_default();
         #[cfg(feature = "debug")]
@@ -359,7 +367,7 @@ impl SandoRecipe {
             use colored::Colorize;
             use crate::log_info_cyan;
             use log::info;
-            log_info_cyan!("find effective meets 0_hash={:?}, profit={:?}, next_block={:?}", _log_hash_0, _profit, self.target_block.number);
+            log_info_cyan!("find effective meets 0_hash={:?}, profit=({:?}:{:?}), next_block={:?}", _log_hash_0, _profit_min, _profit_max, self.target_block.number);
         }
         Ok(bundle_request)
     }
