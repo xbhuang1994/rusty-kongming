@@ -51,7 +51,7 @@ where
             let pending_bundle = self.fb_client.send_bundle(&bundle).await;
 
             match pending_bundle {
-                Ok(res) => info!("Simulation Result: {:?}", res.await),
+                Ok(res) => info!("Sending Result: {:?}", res.await),
                 Err(send_error) => error!("Error sending bundle: {:?}", send_error),
             }
             */

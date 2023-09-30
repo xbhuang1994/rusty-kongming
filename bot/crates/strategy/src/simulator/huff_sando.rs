@@ -21,7 +21,7 @@ use crate::tx_utils::huff_sando_interface::{
     v2::{v2_create_frontrun_payload_multi,v2_create_backrun_payload_multi},
     v3::{v3_create_backrun_payload_multi, v3_create_frontrun_payload_multi},
 };
-use crate::types::{BlockInfo, RawIngredients, SandoRecipe};
+use crate::types::{BlockInfo, RawIngredients, SandoRecipe, SandwichSwapType};
 
 use super::salmonella_inspector::{IsSandoSafu, SalmonellaInspectoooor};
 
@@ -342,5 +342,6 @@ pub fn create_recipe(
         backrun_gas_used,
         revenue,
         *next_block,
+        SandwichSwapType::Forward
     ))
 }

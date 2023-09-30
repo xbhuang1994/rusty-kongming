@@ -531,6 +531,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
                 match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Forward).await {
                     Ok(s) => {
+                        let ss = s.clone();
                         let _bundle = match s
                             .to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),

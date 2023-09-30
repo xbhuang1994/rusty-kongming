@@ -217,6 +217,7 @@ fn calculate_next_block_base_fee(block: &BlockInfo) -> U256 {
 }
 
 /// All details for capturing a sando opp
+#[derive(Clone)]
 pub struct SandoRecipe {
     head_txs: Vec<Transaction>,
     frontrun: TxEnv,
@@ -226,6 +227,7 @@ pub struct SandoRecipe {
     backrun_gas_used: u64,
     revenue: U256,
     target_block: BlockInfo,
+    swap_type: SandwichSwapType,
 }
 
 impl SandoRecipe {
@@ -238,6 +240,7 @@ impl SandoRecipe {
         backrun_gas_used: u64,
         revenue: U256,
         target_block: BlockInfo,
+        swap_type: SandwichSwapType,
     ) -> Self {
         Self {
             head_txs,
@@ -248,6 +251,7 @@ impl SandoRecipe {
             backrun_gas_used,
             revenue,
             target_block,
+            swap_type,
         }
     }
 
@@ -273,6 +277,8 @@ impl SandoRecipe {
             .get_transaction_count(searcher.address(), Some(self.target_block.number.into()))
             .await
             .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
+
+        let signed_head_txs: Vec<Bytes> = self.head_txs.into_iter().map(|head| head.rlp()).collect();
 
         let frontrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
@@ -333,7 +339,11 @@ impl SandoRecipe {
         let signed_backrun = sign_eip1559(backrun_tx, &searcher).await?;
 
         // construct bundle
-        let mut bundled_transactions: Vec<Bytes> = vec![signed_frontrun];
+        let mut bundled_transactions: Vec<Bytes> = vec![];
+        if signed_head_txs.len() > 0 {
+            bundled_transactions.append(&mut signed_head_txs.clone());
+        }
+        bundled_transactions.push(signed_frontrun);
         bundled_transactions.append(&mut signed_meat_txs.clone());
         bundled_transactions.push(signed_backrun);
 
@@ -364,7 +374,7 @@ impl SandoRecipe {
             .unwrap_or_default();
         #[cfg(feature = "debug")]
         {
-            log::info!("find effective meets 0_hash={:?}, profit=({:?}:{:?}), next_block={:?}", _log_hash_0, _profit_min, _profit_max, self.target_block.number);
+            log::info!("find {:?} meets 0_hash {:?} profit ({:?}:{:?}) next_block {:?}", self.swap_type, _log_hash_0, _profit_min, _profit_max, self.target_block.number);
         }
         Ok(bundle_request)
     }
