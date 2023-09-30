@@ -22,7 +22,7 @@ impl SandoRecipeManager {
         let mut pendding = self.pendding_recipes.lock().unwrap();
         let uuid = recipe.get_uuid();
         pendding.push(recipe);
-        info!("pendding recipes after push {:?} length is {:?}", uuid, pendding.len());
+        // info!("pendding recipes after push {:?} length is {:?}", uuid, pendding.len());
     }
 
     /// remove recipes has same hash with 'tx',
@@ -32,8 +32,8 @@ impl SandoRecipeManager {
         let mut pendding = self.pendding_recipes.lock().unwrap();
         let len_before = pendding.len();
         if len_before > 0 {
-            pendding.retain(|r| { 
-                let meats = r.get_meats();
+            pendding.retain_mut(|recipe| { 
+                let meats = recipe.get_meats();
                 for meat in meats {
                     if meat.hash == tx.hash {
                         return false;
@@ -41,20 +41,19 @@ impl SandoRecipeManager {
                         return false;
                     }
                 }
-                let heads = r.get_head_txs();
-                for head in heads {
-                    if head.hash == tx.hash {
-                        return false;
-                    } else if head.from == tx.from && head.nonce <= tx.nonce {
-                        return false;
-                    }
-                }
+
+                // remove head_tx of committed before
+                let mut head_txs = recipe.get_head_txs().clone();
+                head_txs.retain(|head| 
+                    !(head.hash == tx.hash || head.from == tx.from && head.nonce <= tx.nonce)
+                );
+                recipe.set_head_txs(head_txs);
+
                 return true;
             });
+            let _len_after = pendding.len();
+            // info!("pendding recipes remove with tx {:?} from {:?} nonce {:?}, before len {:?} after len {:?}", tx.hash, tx.from, tx.nonce, len_before, _len_after);
         }
-        let len_after = pendding.len();
-        info!("pendding recipes remove with tx {:?} from {:?} nonce {:?}, before len {:?} after len {:?}",
-            tx.hash, tx.from, tx.nonce, len_before, len_after);
     }
 
     pub fn update_pendding_recipe(&self, block_txs: &Vec<Transaction>) {
@@ -65,7 +64,7 @@ impl SandoRecipeManager {
     }
 
     /// get and remove recipes with UniswapV2
-    pub fn find_pendding_recipes_pool_usv2(&self) -> Vec<SandoRecipe> {
+    pub fn get_pendding_recipes_pool_usv2(&self) -> Vec<SandoRecipe> {
 
         let mut pendding = self.pendding_recipes.lock().unwrap();
         let found_recipes: Vec<SandoRecipe> = pendding.iter().filter(
@@ -77,13 +76,13 @@ impl SandoRecipeManager {
         if found_recipes.len() > 0 {
             let uuids: Vec<String> = found_recipes.iter().map(|s|s.get_uuid()).collect();
             pendding.retain(|s| !uuids.contains(&s.get_uuid()));
-            info!("pendding recipes after find pool_usv2 length is {:?}", pendding.len());
+            // info!("pendding recipes after get pool_usv2 length is {:?}", pendding.len());
         }
         found_recipes
     }
 
     /// get and remove recipes with UniswapV3
-    pub fn find_pendding_recipes_pool_usv3(&self) -> Vec<SandoRecipe> {
+    pub fn get_pendding_recipes_pool_usv3(&self) -> Vec<SandoRecipe> {
 
         let mut pendding = self.pendding_recipes.lock().unwrap();
         let found_recipes: Vec<SandoRecipe> = pendding.iter().filter(
@@ -95,7 +94,7 @@ impl SandoRecipeManager {
         if found_recipes.len() > 0 {
             let uuids: Vec<String> = found_recipes.iter().map(|s|s.get_uuid()).collect();
             pendding.retain(|s| !uuids.contains(&s.get_uuid()));
-            info!("pendding recipes after find pool_usv3 length is {:?}", pendding.len());
+            // info!("pendding recipes after get pool_usv3 length is {:?}", pendding.len());
         }
         found_recipes
     }

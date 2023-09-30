@@ -232,6 +232,8 @@ pub struct SandoRecipe {
     target_pool: Pool,
     profit_max: U256,
     uuid: String,
+    start_end_token: Address,
+    intermediary_token: Address,
 }
 
 impl SandoRecipe {
@@ -246,6 +248,9 @@ impl SandoRecipe {
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
         target_pool: Pool,
+        start_end_token: Address,
+        intermediary_token: Address,
+
     ) -> Self {
         Self {
             head_txs,
@@ -260,6 +265,8 @@ impl SandoRecipe {
             target_pool,
             profit_max: U256::from(0),
             uuid: format!("{}", Uuid::new_v4()),
+            start_end_token: start_end_token,
+            intermediary_token: intermediary_token,
         }
     }
 
@@ -299,6 +306,10 @@ impl SandoRecipe {
 
     pub fn get_head_txs(&self) -> &Vec<Transaction> {
         &self.head_txs
+    }
+
+    pub fn set_head_txs(&mut self, head_txs: Vec<Transaction>) {
+        self.head_txs = head_txs;
     }
 
     /// turn recipe into a signed bundle that can be sumbitted to flashbots

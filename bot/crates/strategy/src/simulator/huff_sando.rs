@@ -344,5 +344,7 @@ pub fn create_recipe(
         *next_block,
         SandwichSwapType::Forward,
         ingredients.get_target_pool(),
+        ingredients.get_start_end_token(),
+        ingredients.get_intermediary_token()
     ))
 }

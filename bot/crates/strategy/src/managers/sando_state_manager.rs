@@ -160,6 +160,7 @@ impl SandoStateManager {
     }
 
     pub fn check_liquidity_by_signature(&self, tx: &Transaction) -> bool {
+        // todo
         let sig_approve = ethers::utils::id("transfer(address,uint256)");
         if tx.input.0.starts_with(&sig_approve) {
             true

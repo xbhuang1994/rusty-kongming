@@ -79,6 +79,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
     }
 
+    /// re-check if the pendding-recipes are sandwichable at new block
+    async fn is_sandwichable_multi(&self, pendding_recipes: Vec<SandoRecipe>) -> Result<Vec<SandoRecipe>> {
+
+        Ok(vec![])
+    }
+
     /// Main logic for the strategy
     /// Checks if the passed `RawIngredients` is sandwichable
     pub async fn is_sandwichable(
@@ -190,7 +196,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             // {
                             //     info!("bot running: event tx processor {_index} process_event");
                             // }
-                            let _ = self.process_event_tx(event).await;
+                            match self.process_event_tx(event).await {
+                                Ok(_) => {},
+                                Err(e) => {error!("bot running event tx processor {_index} error {}", e)}
+                            }
                         },
                         None => {
                             thread::sleep(time::Duration::from_millis(10));
@@ -332,14 +341,26 @@ impl<M: Middleware + 'static> SandoBot<M> {
     /// Process incoming events of newblock
     async fn process_event_block(&self, event: NewBlock) -> Result<()> {
         // info!("proc newblock {:?}", event.number);
-        self.process_new_block(event).await.unwrap();
+        self.process_new_block(event.clone()).await.unwrap();
 
         // sleep 10.5 seconds wait for refresh pendding recepies, then make huge bundle
-        info!("before find pendding recipes");
+        // info!("before process pendding recipes");
         thread::sleep(time::Duration::from_millis(10_500));
-        let pendding_recipes_usv2 = self.sando_recipe_manager.find_pendding_recipes_pool_usv2();
-        let pendding_recipes_usv3 = self.sando_recipe_manager.find_pendding_recipes_pool_usv3();
-        info!("after found pendding recipes usv2 {:?} receipes, usv3 {:?} recipes", pendding_recipes_usv2.len(), pendding_recipes_usv3.len());
+        self.process_pendding_recipes(event.clone()).await.unwrap();
+        Ok(())
+    }
+
+    async fn process_pendding_recipes(&self, event: NewBlock) -> Result<()> {
+        let pendding_recipes_usv2 = self.sando_recipe_manager.get_pendding_recipes_pool_usv2();
+        let pendding_recipes_usv3 = self.sando_recipe_manager.get_pendding_recipes_pool_usv3();
+        info!("start process pendding recipes usv2 {:?} usv3 {:?}", pendding_recipes_usv2.len(), pendding_recipes_usv3.len());
+
+        if !pendding_recipes_usv2.is_empty() {
+
+        }
+        if !pendding_recipes_usv3.is_empty() {
+            
+        }
         Ok(())
     }
 
