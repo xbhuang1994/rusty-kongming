@@ -20,6 +20,7 @@ use crate::constants::DUST_OVERPAY;
 use crate::helpers::access_list_to_ethers;
 use crate::helpers::sign_eip1559;
 use crate::simulator::credit::CreditHelper;
+use uuid::Uuid;
 
 /// Core Event enum for current strategy
 #[derive(Debug, Clone)]
@@ -228,6 +229,9 @@ pub struct SandoRecipe {
     revenue: U256,
     target_block: BlockInfo,
     swap_type: SandwichSwapType,
+    target_pool: Pool,
+    profit_max: U256,
+    uuid: String,
 }
 
 impl SandoRecipe {
@@ -241,6 +245,7 @@ impl SandoRecipe {
         revenue: U256,
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
+        target_pool: Pool,
     ) -> Self {
         Self {
             head_txs,
@@ -252,6 +257,9 @@ impl SandoRecipe {
             revenue,
             target_block,
             swap_type,
+            target_pool,
+            profit_max: U256::from(0),
+            uuid: format!("{}", Uuid::new_v4()),
         }
     }
 
@@ -265,6 +273,34 @@ impl SandoRecipe {
         self.backrun_gas_used
     }
 
+    pub fn set_profit_max(&mut self, profit: U256) {
+        self.profit_max = profit;
+    }
+
+    pub fn get_profit_max(&self) -> U256 {
+        self.profit_max
+    }
+
+    pub fn get_uuid(&self) -> String {
+        self.uuid.clone()
+    }
+
+    pub fn get_swap_type(&self) -> SandwichSwapType {
+        self.swap_type.clone()
+    }
+
+    pub fn get_target_pool(&self) -> Pool {
+        self.target_pool
+    }
+
+    pub fn get_meats(&self) -> &Vec<Transaction> {
+        &self.meats
+    }
+
+    pub fn get_head_txs(&self) -> &Vec<Transaction> {
+        &self.head_txs
+    }
+
     /// turn recipe into a signed bundle that can be sumbitted to flashbots
     pub async fn to_fb_bundle<M: Middleware>(
         self,
@@ -272,7 +308,7 @@ impl SandoRecipe {
         searcher: &LocalWallet,
         has_dust: bool,
         provider: Arc<M>,
-    ) -> Result<BundleRequest> {
+    ) -> Result<(BundleRequest, U256)> {
         let nonce = provider
             .get_transaction_count(searcher.address(), Some(self.target_block.number.into()))
             .await
@@ -372,10 +408,11 @@ impl SandoRecipe {
                     + (U256::from(self.backrun_gas_used) * self.target_block.base_fee_per_gas),
             )
             .unwrap_or_default();
+
         #[cfg(feature = "debug")]
         {
-            log::info!("find {:?} meets 0_hash {:?} profit ({:?}:{:?}) next_block {:?}", self.swap_type, _log_hash_0, _profit_min, _profit_max, self.target_block.number);
+            log::info!("find {:?} meets 0_hash {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?}", self.swap_type, _log_hash_0, _profit_min, _profit_max, self.target_block.number, self.uuid);
         }
-        Ok(bundle_request)
+        Ok((bundle_request, _profit_max))
     }
 }

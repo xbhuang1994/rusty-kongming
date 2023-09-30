@@ -342,6 +342,7 @@ pub fn create_recipe(
         backrun_gas_used,
         revenue,
         *next_block,
-        SandwichSwapType::Forward
+        SandwichSwapType::Forward,
+        ingredients.get_target_pool(),
     ))
 }

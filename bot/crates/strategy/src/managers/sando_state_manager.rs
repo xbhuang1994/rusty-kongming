@@ -3,7 +3,7 @@ use colored::Colorize;
 use ethers::{
     providers::Middleware,
     signers::{LocalWallet, Signer},
-    types::{Address, BlockNumber, Filter, U256, U64, H256, Transaction, Block},
+    types::{Address, BlockNumber, Filter, U256, U64, H256, Transaction},
 };
 use log::info;
 use std::sync::{Arc, Mutex, RwLock};

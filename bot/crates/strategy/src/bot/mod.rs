@@ -17,7 +17,7 @@ use crate::{
     log_error, log_info_cyan, log_new_block_info, log_not_sandwichable, log_opportunity,
     managers::{
         block_manager::BlockManager, pool_manager::PoolManager,
-        sando_state_manager::SandoStateManager,
+        sando_state_manager::SandoStateManager, sando_recipe_manager::SandoRecipeManager,
     },
     simulator::{huff_sando::create_recipe, lil_router::find_optimal_input},
     simulator::{huff_sando_reverse::create_recipe_reverse, lil_router_reverse::find_optimal_input_reverse},
@@ -34,6 +34,8 @@ pub struct SandoBot<M> {
     block_manager: BlockManager,
     /// Keeps track of weth inventory & token dust
     sando_state_manager: SandoStateManager,
+    /// Keeps pendding sandoRecipes
+    sando_recipe_manager: SandoRecipeManager,
     
     /// Auto process txs
     event_tx_runtime: tokio::runtime::Runtime,
@@ -64,6 +66,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.searcher_signer.clone(),
                 config.sando_inception_block,
             ),
+            sando_recipe_manager: SandoRecipeManager::new(),
             event_tx_runtime: runtime::Builder::new_multi_thread().worker_threads(32).enable_all().build().unwrap(),
             event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
             event_tx_sender: Arc::new(Mutex::new(None)),
@@ -331,6 +334,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // info!("proc newblock {:?}", event.number);
         self.process_new_block(event).await.unwrap();
 
+        // sleep 10.5 seconds wait for refresh pendding recepies, then make huge bundle
+        info!("before find pendding recipes");
+        thread::sleep(time::Duration::from_millis(10_500));
+        let pendding_recipes_usv2 = self.sando_recipe_manager.find_pendding_recipes_pool_usv2();
+        let pendding_recipes_usv3 = self.sando_recipe_manager.find_pendding_recipes_pool_usv3();
+        info!("after found pendding recipes usv2 {:?} receipes, usv3 {:?} recipes", pendding_recipes_usv2.len(), pendding_recipes_usv3.len());
         Ok(())
     }
 
@@ -400,6 +409,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 }
                 self.pool_manager.update_block_info(&block_txs);
                 self.sando_state_manager.update_block_info(&block_txs);
+                self.sando_recipe_manager.update_pendding_recipe(&block_txs);
             },
             None =>{
                 log_error!("Block not found");
@@ -531,8 +541,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
                 match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Forward).await {
                     Ok(s) => {
-                        let ss = s.clone();
-                        let _bundle = match s
+                        let mut cloned_recipe = s.clone();
+                        let (bundle, profit_max) = match s
                             .to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
@@ -548,7 +558,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             }
                         };
 
-                        sando_bundles.push(_bundle);
+                        cloned_recipe.set_profit_max(profit_max);
+                        sando_bundles.push(bundle);
+                        self.sando_recipe_manager.push_pendding_recipe(cloned_recipe);
                     }
                     Err(e) => {
                         log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
@@ -604,7 +616,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
                 match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Reverse).await {
                     Ok(s) => {
-                        let _bundle = match s
+                        let mut cloned_recipe = s.clone();
+                        let (bundle, profit_max) = match s
                             .to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
@@ -620,7 +633,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             }
                         };
 
-                        sando_bundles.push(_bundle);
+                        cloned_recipe.set_profit_max(profit_max);
+                        sando_bundles.push(bundle);
+                        self.sando_recipe_manager.push_pendding_recipe(cloned_recipe);
                     }
                     Err(e) => {
                         log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)

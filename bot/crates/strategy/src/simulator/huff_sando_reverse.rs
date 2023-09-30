@@ -617,6 +617,7 @@ pub fn create_recipe_reverse(
                 revenue,
                 next_block,
                 SandwichSwapType::Forward,
+                ingredients.get_target_pool(),
             ))
         }
     }
