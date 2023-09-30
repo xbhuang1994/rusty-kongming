@@ -417,7 +417,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     for tx in low_txs {
                         let hash = tx.hash;
                         match sender.send(Event::NewTransaction(tx)) {
-                            Ok(_) => {info!("resent low tx {:?}", hash);},
+                            Ok(_) => {/*info!("resent low tx {:?}", hash);*/},
                             Err(e) => error!("error resending low tx {:?}: {}", hash, e),
                         }
                     }
