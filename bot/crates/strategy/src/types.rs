@@ -364,10 +364,7 @@ impl SandoRecipe {
             .unwrap_or_default();
         #[cfg(feature = "debug")]
         {
-            use colored::Colorize;
-            use crate::log_info_cyan;
-            use log::info;
-            log_info_cyan!("find effective meets 0_hash={:?}, profit=({:?}:{:?}), next_block={:?}", _log_hash_0, _profit_min, _profit_max, self.target_block.number);
+            log::info!("find effective meets 0_hash={:?}, profit=({:?}:{:?}), next_block={:?}", _log_hash_0, _profit_min, _profit_max, self.target_block.number);
         }
         Ok(bundle_request)
     }

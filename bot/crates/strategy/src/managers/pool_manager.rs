@@ -140,16 +140,8 @@ impl<M: Middleware + 'static> PoolManager<M> {
                 }
                 match self.mem_touched_pools.get_mut(&pool_address){
                     Some(mut mem_touched_pool) => {
-                        match victim_tx.recover_from(){
-                            Ok(tx_from) => {
-                                let mut touched_tx = victim_tx.clone(); 
-                                touched_tx.from = tx_from;
-                                mem_touched_pool.append_transaction(&touched_tx, to > from);
-                            },
-                            Err(_) => {
-                                return Err(anyhow!("failed to recover from victim tx"));
-                            }
-                        }
+                        let touched_tx = victim_tx.clone(); 
+                        mem_touched_pool.append_transaction(&touched_tx, to > from);
                     },
                     None => {
                         return Err(anyhow!("Pool {} not found", pool_address))

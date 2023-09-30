@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use ethers::{providers::Middleware, signers::Signer};
 use ethers_flashbots::{BundleRequest, FlashbotsMiddleware};
 use reqwest::Url;
-use tracing::{error, info};
+use tracing::log::{info, error};
 
 use crate::types::Executor;
 

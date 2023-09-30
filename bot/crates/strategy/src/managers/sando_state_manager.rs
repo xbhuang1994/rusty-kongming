@@ -236,7 +236,11 @@ impl SandoStateManager {
     /// return Vec<Transaction>
     pub fn get_approve_txs(&self,from: &Address) -> Vec<Transaction> {
         let map_approve_txs = self.approve_txs.lock().unwrap();
-        let result: Vec<Transaction> = map_approve_txs.iter().filter(|(_, tx)| tx.from == *from).map(|(_, tx)| tx).cloned().collect();
+        let mut result: Vec<Transaction> = map_approve_txs.iter().filter(|(_, tx)| tx.from == *from).map(|(_, tx)| tx).cloned().collect();
+        if result.len() > 1 {
+            // sort by noce
+            result.sort_by_key(|t| t.nonce);
+        }
         return result;
     }
     
