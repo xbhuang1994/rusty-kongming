@@ -39,7 +39,7 @@ pub fn create_recipe_huge(
     #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    // #[cfg(feature = "debug")]
+    #[cfg(feature = "debug")]
     {
         inject_huff_sando(
             &mut fork_db,
@@ -92,7 +92,7 @@ pub fn create_recipe_huge(
     // setup evm for frontrun transaction
     let mut frontrun_tx_env = TxEnv {
         caller: searcher.0.into(),
-        gas_limit: 700000,
+        gas_limit: 700000 * 10,
         gas_price: next_block.base_fee_per_gas.into(),
         gas_priority_fee: None,
         transact_to: TransactTo::Call(sando_address.0.into()),
@@ -193,7 +193,7 @@ pub fn create_recipe_huge(
     // setup evm for backrun transaction
     let mut backrun_tx_env = TxEnv {
         caller: searcher.0.into(),
-        gas_limit: 700000,
+        gas_limit: 700000 * 10,
         gas_price: next_block.base_fee_per_gas.into(),
         gas_priority_fee: None,
         transact_to: TransactTo::Call(sando_address.0.into()),
