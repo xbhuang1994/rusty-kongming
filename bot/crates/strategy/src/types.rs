@@ -39,7 +39,7 @@ pub enum Action {
 #[derive(Debug, Clone, PartialEq)]
 pub enum SandwichSwapType {
     Forward,
-    Reverse,
+    Reverse
 }
 
 impl fmt::Display for SandwichSwapType {
@@ -217,6 +217,44 @@ fn calculate_next_block_base_fee(block: &BlockInfo) -> U256 {
     }
 }
 
+pub fn calculate_bribe_for_max_fee(revenue: U256,
+    frontrun_gas_used: u64,
+    backrun_gas_used: u64,
+    base_fee_per_gas: U256,
+    has_dust: bool) -> Result<U256> {
+
+    // calc bribe (bribes paid in backrun)
+    let revenue_minus_frontrun_tx_fee = revenue
+        .checked_sub(U256::from(frontrun_gas_used) * base_fee_per_gas)
+        .ok_or_else(|| {
+        anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
+        })?;
+
+    // eat a loss (overpay) to get dust onto the sando contract (more: https://twitter.com/libevm/status/1474870661373779969)
+    let bribe_amount = if !has_dust {
+        revenue_minus_frontrun_tx_fee + *DUST_OVERPAY
+    } else {
+        // bribe away 99.9999999% of revenue lmeow
+        revenue_minus_frontrun_tx_fee * 999999999 / 1000000000
+    };
+
+    let max_fee = bribe_amount / backrun_gas_used;
+
+    ensure!(
+        max_fee >= base_fee_per_gas,
+        format!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee {:?}", max_fee, base_fee_per_gas)
+    );
+
+    let effective_miner_tip = max_fee.checked_sub(base_fee_per_gas);
+
+    ensure!(
+        !effective_miner_tip.is_none(),
+        "[FAILED TO CREATE BUNDLE] negative miner tip"
+    );
+
+    Ok(max_fee)
+}
+
 /// All details for capturing a sando opp
 #[derive(Clone)]
 pub struct SandoRecipe {
@@ -229,7 +267,7 @@ pub struct SandoRecipe {
     revenue: U256,
     target_block: BlockInfo,
     swap_type: SandwichSwapType,
-    target_pool: Pool,
+    target_pool: Option<Pool>,
     profit_max: U256,
     uuid: String,
     start_end_token: Address,
@@ -247,7 +285,7 @@ impl SandoRecipe {
         revenue: U256,
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
-        target_pool: Pool,
+        target_pool: Option<Pool>,
         start_end_token: Address,
         intermediary_token: Address,
 
@@ -262,12 +300,19 @@ impl SandoRecipe {
             revenue,
             target_block,
             swap_type,
-            target_pool,
+            target_pool: target_pool,
             profit_max: U256::from(0),
             uuid: format!("{}", Uuid::new_v4()),
             start_end_token: start_end_token,
             intermediary_token: intermediary_token,
         }
+    }
+
+    pub fn get_frontrun(&self) -> &TxEnv {
+        &self.frontrun
+    }
+    pub fn get_backrun(&self) -> &TxEnv {
+        &self.backrun
     }
 
     pub fn get_revenue(&self) -> U256 {
@@ -296,7 +341,7 @@ impl SandoRecipe {
         self.swap_type.clone()
     }
 
-    pub fn get_target_pool(&self) -> Pool {
+    pub fn get_target_pool(&self) -> Option<Pool> {
         self.target_pool
     }
 
@@ -327,6 +372,7 @@ impl SandoRecipe {
         searcher: &LocalWallet,
         has_dust: bool,
         provider: Arc<M>,
+        is_huge: bool,
     ) -> Result<(BundleRequest, U256)> {
         let nonce = provider
             .get_transaction_count(searcher.address(), Some(self.target_block.number.into()))
@@ -350,35 +396,18 @@ impl SandoRecipe {
         let _log_hash_0 = self.meats[0].hash;
         let signed_meat_txs: Vec<Bytes> = self.meats.into_iter().map(|meat| meat.rlp()).collect();
 
-        // calc bribe (bribes paid in backrun)
-        let revenue_minus_frontrun_tx_fee = self
-            .revenue
-            .checked_sub(U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
-            .ok_or_else(|| {
-                anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
-            })?;
-
-        // eat a loss (overpay) to get dust onto the sando contract (more: https://twitter.com/libevm/status/1474870661373779969)
-        let bribe_amount = if !has_dust {
-            revenue_minus_frontrun_tx_fee + *DUST_OVERPAY
-        } else {
-            // bribe away 99.9999999% of revenue lmeow
-            revenue_minus_frontrun_tx_fee * 999999999 / 1000000000
-        };
-
-        let max_fee = bribe_amount / self.backrun_gas_used;
-
-        ensure!(
-            max_fee >= self.target_block.base_fee_per_gas,
-            format!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee {:?}", max_fee, self.target_block.base_fee_per_gas)
+        let max_fee_result = calculate_bribe_for_max_fee(
+            self.revenue,
+            self.frontrun_gas_used,
+            self.backrun_gas_used,
+            self.target_block.base_fee_per_gas,
+            has_dust
         );
-
-        let effective_miner_tip = max_fee.checked_sub(self.target_block.base_fee_per_gas);
-
         ensure!(
-            !effective_miner_tip.is_none(),
-            "[FAILED TO CREATE BUNDLE] negative miner tip"
+            max_fee_result.is_ok(),
+            max_fee_result.err().unwrap()
         );
+        let max_fee = max_fee_result.unwrap();
 
         let backrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
@@ -428,9 +457,9 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
-        #[cfg(feature = "debug")]
+        // #[cfg(feature = "debug")]
         {
-            log::info!("find {:?} meets 0_hash {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?}", self.swap_type, _log_hash_0, _profit_min, _profit_max, self.target_block.number, self.uuid);
+            log::info!("find {:?} {:?} meets 0_hash {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?}", is_huge, self.swap_type, _log_hash_0, _profit_min, _profit_max, self.target_block.number, self.uuid);
         }
         Ok((bundle_request, _profit_max))
     }

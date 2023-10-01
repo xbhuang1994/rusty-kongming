@@ -18,7 +18,7 @@ impl SandoRecipeManager {
     }
 
     pub fn push_pendding_recipe(&self, recipe: SandoRecipe) {
-        let pool = recipe.get_target_pool();
+        let pool = recipe.get_target_pool().unwrap();
         let uuid = recipe.get_uuid();
         let mut map = self.pendding_recipes.lock().unwrap();
         let mut len = 1;

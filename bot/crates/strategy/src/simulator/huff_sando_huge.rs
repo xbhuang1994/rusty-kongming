@@ -1,68 +1,64 @@
 use anvil::eth::util::get_precompiles_for;
 use anyhow::{anyhow, Result};
-use cfmms::pool::Pool::{UniswapV2, UniswapV3};
 use ethers::abi::Address;
-use ethers::types::U256;
+use ethers::types::{U256, Transaction};
 use foundry_evm::executor::TxEnv;
 use foundry_evm::executor::{
     fork::SharedBackend, inspector::AccessListTracer, ExecutionResult, TransactTo,
 };
 use foundry_evm::revm::{
     db::CacheDB,
-    primitives::{Address as rAddress, U256 as rU256},
+    primitives::{Address as rAddress},
     EVM,
 };
 
 use crate::helpers::access_list_to_revm;
 use crate::simulator::setup_block_state;
-use crate::tx_utils::huff_sando_interface::common::five_byte_encoder::FiveByteMetaData;
 use crate::tx_utils::huff_sando_interface::common::limit_block_height;
-use crate::tx_utils::huff_sando_interface::{
-    v2::{v2_create_frontrun_payload_multi,v2_create_backrun_payload_multi},
-    v3::{v3_create_backrun_payload_multi, v3_create_frontrun_payload_multi},
-};
-use crate::types::{BlockInfo, RawIngredients, SandoRecipe, SandwichSwapType};
+use crate::types::{BlockInfo, SandoRecipe, SandwichSwapType};
+use crate::constants::WETH_ADDRESS;
 
 use super::salmonella_inspector::{IsSandoSafu, SalmonellaInspectoooor};
 
-use super::huff_helper::{get_erc20_balance, v2_get_amount_out, inject_huff_sando};
+use super::huff_helper::{get_erc20_balance, inject_huff_sando};
 
 /// finds if sandwich is profitable + salmonella free
-pub fn create_recipe(
-    ingredients: &RawIngredients,
+pub fn create_recipe_huge(
     next_block: &BlockInfo,
-    optimal_in: U256,
-    sando_start_bal: U256,
+    frontrun_data: Vec<u8>,
+    backrun_data: Vec<u8>,
+    head_txs: Vec<Transaction>,
+    meats: Vec<Transaction>,
+    start_sando_bal: U256,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
 ) -> Result<SandoRecipe> {
 
-    if optimal_in.is_zero() {
-        return Err(anyhow!("[huffsando: ZeroOtimal]"))
-    }
-
+    
     #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    #[cfg(feature = "debug")]
+    // #[cfg(feature = "debug")]
     {
         inject_huff_sando(
             &mut fork_db,
             sando_address.0.into(),
             searcher.0.into(),
-            sando_start_bal,
+            start_sando_bal,
         );
     }
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
 
+    let frontrun_value = U256::zero();
+    let backrun_value = U256::zero();
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     HEAD TRANSACTION/s                     */
     /*.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    for head_tx in ingredients.get_head_txs_ref().iter() {
+    for head_tx in head_txs.iter() {
         evm.env.tx.caller = rAddress::from_slice(&head_tx.from.0);
         evm.env.tx.transact_to =
             TransactTo::Call(rAddress::from_slice(&head_tx.to.unwrap_or_default().0));
@@ -92,34 +88,6 @@ pub fn create_recipe(
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    FRONTRUN TRANSACTION                    */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    // encode frontrun_in before passing to sandwich contract
-    // let frontrun_in = WethEncoder::decode(WethEncoder::encode(optimal_in));
-    let frontrun_in = FiveByteMetaData::encode(optimal_in, 0).decode();
-    // caluclate frontrun_out using encoded frontrun_in
-    let frontrun_out = match ingredients.get_target_pool() {
-        UniswapV2(p) => {
-            evm.env.tx.gas_price = next_block.base_fee_per_gas.into();
-            evm.env.tx.gas_limit = 700000;
-            evm.env.tx.value = rU256::ZERO;
-            v2_get_amount_out(frontrun_in, p, true, &mut evm)?
-        }
-        UniswapV3(_) => U256::zero(),
-    };
-
-    // create tx.data and tx.value for frontrun_in
-    let (frontrun_data, frontrun_value) = match ingredients.get_target_pool() {
-        UniswapV2(p) => v2_create_frontrun_payload_multi(
-            p,
-            ingredients.get_intermediary_token(),
-            frontrun_in,
-            frontrun_out
-        ),
-        UniswapV3(p) => v3_create_frontrun_payload_multi(
-            p,
-            ingredients.get_intermediary_token(),
-            frontrun_in,
-        ),
-    };
 
     // setup evm for frontrun transaction
     let mut frontrun_tx_env = TxEnv {
@@ -182,7 +150,7 @@ pub fn create_recipe(
     // *                     MEAT TRANSACTION/s                     */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     let mut is_meat_good = Vec::new();
-    for meat in ingredients.get_meats_ref().iter() {
+    for meat in meats.iter() {
         evm.env.tx.caller = rAddress::from_slice(&meat.from.0);
         evm.env.tx.transact_to =
             TransactTo::Call(rAddress::from_slice(&meat.to.unwrap_or_default().0));
@@ -221,41 +189,6 @@ pub fn create_recipe(
     // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     // *                    BACKRUN TRANSACTION                     */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
-    // encode backrun_in before passing to sandwich contract
-    let backrun_token_in = ingredients.get_intermediary_token();
-    let backrun_token_out = ingredients.get_start_end_token();
-
-    // keep some dust
-    let backrun_in = get_erc20_balance(backrun_token_in, sando_address, next_block, &mut evm)?;
-    let backrun_in = match ingredients.get_target_pool() {
-        UniswapV2(_) => {
-            let mut backrun_in_encoded = FiveByteMetaData::encode(backrun_in, 1);
-            backrun_in_encoded.decrement_four_bytes();
-            backrun_in_encoded.decode()
-        }
-        UniswapV3(_) => {
-            let backrun_in_encoded = FiveByteMetaData::encode(backrun_in, 1);
-            backrun_in_encoded.decode()
-        }
-    };
-
-    // caluclate backrun_out using encoded backrun_in
-    let backrun_out = match ingredients.get_target_pool() {
-        UniswapV2(p) => {
-            let out = v2_get_amount_out(backrun_in, p, false, &mut evm)?;
-            out
-        }
-        UniswapV3(_p) => U256::zero(), // we don't need to know backrun out for v3
-    };
-    
-    // create tx.data and tx.value for backrun_in
-    let (backrun_data, backrun_value) = match ingredients.get_target_pool() {
-        UniswapV2(p) => v2_create_backrun_payload_multi(p, backrun_token_in, backrun_in, backrun_out),
-        UniswapV3(p) => (
-            v3_create_backrun_payload_multi(p, backrun_token_in, backrun_in),
-            U256::zero(),
-        ),
-    };
 
     // setup evm for backrun transaction
     let mut backrun_tx_env = TxEnv {
@@ -319,15 +252,14 @@ pub fn create_recipe(
     // *                      GENERATE REPORTS                      */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     // caluclate revenue from balance change
-    let post_sando_bal = get_erc20_balance(backrun_token_out, sando_address, next_block, &mut evm)?;
+    let post_sando_bal = get_erc20_balance(*WETH_ADDRESS, sando_address, next_block, &mut evm)?;
     
     let revenue = post_sando_bal
-        .checked_sub(sando_start_bal)
+        .checked_sub(start_sando_bal)
         .unwrap_or_default();
 
     // filter only passing meat txs
-    let good_meats_only = ingredients
-        .get_meats_ref()
+    let good_meats_only = meats
         .iter()
         .zip(is_meat_good.iter())
         .filter(|&(_, &b)| b)
@@ -335,7 +267,7 @@ pub fn create_recipe(
         .collect();
 
     Ok(SandoRecipe::new(
-        ingredients.get_head_txs_ref().clone(),
+        head_txs.clone(),
         frontrun_tx_env,
         frontrun_gas_used,
         good_meats_only,
@@ -344,8 +276,8 @@ pub fn create_recipe(
         revenue,
         *next_block,
         SandwichSwapType::Forward,
-        Some(ingredients.get_target_pool()),
-        ingredients.get_start_end_token(),
-        ingredients.get_intermediary_token()
+        None,
+        Default::default(),
+        Default::default(),
     ))
 }

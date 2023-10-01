@@ -22,7 +22,11 @@ use crate::{
     },
     simulator::{huff_sando::create_recipe, lil_router::find_optimal_input},
     simulator::{huff_sando_reverse::create_recipe_reverse, lil_router_reverse::find_optimal_input_reverse},
-    types::{Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType},
+    simulator::huff_sando_huge::create_recipe_huge,
+    types::{
+        Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType,
+        calculate_bribe_for_max_fee
+    },
     helpers::calculate_inventory_for_debug,
 };
 
@@ -53,7 +57,7 @@ pub struct SandoBot<M> {
     action_sender: Arc<Mutex<Option<Sender<Action>>>>,
 
     /// Auto process huge sandwich
-    huge_task_list: Arc<Mutex<LinkedList<(Pool, Vec<SandoRecipe>, NewBlock)>>>,
+    huge_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
     huge_task_runtime: tokio::runtime::Runtime,
 
     processed_tx_map: Mutex<HashMap<H256, i64>>,
@@ -86,11 +90,135 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
     }
 
-    /// re-check the pendding-recipes are sandwichable at new block and re-make huge sandwich
-    async fn make_sandwichable_huge(&self, pool: Pool, recipes: Vec<SandoRecipe>, new_block: NewBlock) -> Result<Vec<SandoRecipe>> {
+    /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
+    async fn is_sandwichable_huge(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, new_block: NewBlock) -> Result<Vec<SandoRecipe>> {
 
-        //todo
-        Ok(vec![])
+        let block_info = BlockInfo{
+            number: new_block.number,
+            base_fee_per_gas: new_block.base_fee_per_gas,
+            timestamp: new_block.timestamp,
+            gas_used: Some(new_block.gas_used),
+            gas_limit: Some(new_block.gas_limit),
+        };
+        let mut handlers = vec![];
+        for (target_pool, recipes) in recipes_map.iter_mut() {
+            recipes.sort_by_key(|r| r.get_revenue());
+            recipes.reverse();
+
+            let start_end_token = recipes[0].get_start_end_token();
+            let intermediary_token = recipes[0].get_intermediary_token();
+            let swap_type = recipes[0].get_swap_type();
+
+            let meats: Vec<Transaction> = recipes.iter()
+                .flat_map(|recipe| recipe.get_meats().clone())
+                .collect();
+            let mut head_txs: Vec<Transaction> = recipes.iter()
+                .flat_map(|recipe| recipe.get_head_txs().clone())
+                .collect();
+            // delete duplicate tx with same hash
+            head_txs.dedup_by_key(|recipe| recipe.hash);
+
+            let ingredients = RawIngredients::new(
+                head_txs,
+                meats,
+                start_end_token,
+                intermediary_token,
+                *target_pool,
+            );
+
+            let handler = tokio::spawn(self.is_sandwichable(
+                ingredients, block_info.clone(), swap_type
+            ));
+            handlers.push(handler);
+        }
+        let handler_results = futures::future::try_join_all(handlers).await;
+        let optimal_recipes = match handler_results {
+            Ok(recipe_results) => {
+                let mut recipes: Vec<SandoRecipe> = vec![];
+                for result in recipe_results {
+                    match result {
+                        Ok(recipe) => {
+                            recipes.push(recipe.clone());
+                        },
+                        Err(_) => {}
+                    }
+                }
+                recipes
+            },
+            Err(e) => {
+                error!("One of the tasks panicked: {}", e);
+                vec![]
+            }
+        };
+        if optimal_recipes.len() == 0 {
+            return Ok(vec![]);
+        }
+        info!("huge optimal recipes size {:?}", optimal_recipes.len());
+
+        let mut head_txs: Vec<Transaction> = Vec::new();
+        let mut frontrun_data = Vec::new();
+        let mut backrun_data = Vec::new();
+        let mut meats: Vec<Transaction> = Vec::new();
+        for recipe in optimal_recipes {
+            let max_fee = calculate_bribe_for_max_fee(
+                recipe.get_revenue(),
+                recipe.get_frontrun_gas_used(),
+                recipe.get_backrun_gas_used(),
+                block_info.base_fee_per_gas,
+                false
+            );
+            match max_fee {
+                Ok(_) => {
+                    head_txs.extend(recipe.get_head_txs().clone());
+                    frontrun_data.extend(Vec::from(recipe.get_frontrun().clone().data));
+                    backrun_data.extend(Vec::from(recipe.get_backrun().clone().data));
+                    meats.extend(recipe.get_meats().clone());
+                },
+                Err(e) => {
+                    error!("calculating {:?} max fee error {}", recipe.get_uuid(), e);
+                }
+            }
+        }
+        if meats.is_empty() {
+            return Ok(vec![]);
+        }
+
+        let shared_backend = SharedBackend::spawn_backend_thread(
+            self.provider.clone(),
+            BlockchainDb::new(
+                BlockchainDbMeta {
+                    cfg_env: Default::default(),
+                    block_env: Default::default(),
+                    hosts: BTreeSet::from(["".to_string()]),
+                },
+                None,
+            ), /* default because not accounting for this atm */
+            Some((new_block.number - 1).into()),
+        );
+
+        // enhancement: should set another inventory when reverse
+        let token_inventory = if cfg!(feature = "debug") {
+            // spoof weth balance when the debug feature is active
+            (*crate::constants::WETH_FUND_AMT).into()
+        } else {
+            self.sando_state_manager.get_weth_inventory()
+        };
+
+        let huge_recipe = create_recipe_huge(
+            &block_info,
+            frontrun_data,
+            backrun_data,
+            head_txs,
+            meats,
+            token_inventory,
+            self.sando_state_manager.get_searcher_address(),
+            self.sando_state_manager.get_sando_address(),
+            shared_backend.clone(),
+        )?;
+
+        info!("make sandwich huge {:?}", huge_recipe.get_uuid());
+
+        Ok(vec![huge_recipe])
     }
 
     /// Main logic for the strategy
@@ -151,7 +279,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     token_inventory,
                     self.sando_state_manager.get_searcher_address(),
                     self.sando_state_manager.get_sando_address(),
-                    shared_backend,
+                    shared_backend.clone(),
                 )?;
             },
             SandwichSwapType::Reverse => {
@@ -170,7 +298,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     token_inventory,
                     self.sando_state_manager.get_searcher_address(),
                     self.sando_state_manager.get_sando_address(),
-                    shared_backend,
+                    shared_backend.clone(),
                 )?
             },
         };
@@ -284,8 +412,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
             self.huge_task_runtime.spawn(async move {
                 loop {
                     match self.pop_huge_task().await {
-                        Some((pool, recipes, new_block)) => {
-                            match self.make_sandwichable_huge(pool, recipes, new_block).await {
+                        Some((recipes_map, new_block)) => {
+                            match self.is_sandwichable_huge(&mut recipes_map.clone(), new_block).await {
                                 Ok(huge_recipes) => {
 
                                     let mut bundles = vec![];
@@ -295,6 +423,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             self.sando_state_manager.get_searcher_signer(),
                                             false,
                                             self.provider.clone(),
+                                            true,
                                         ).await {
                                             Ok((bundle, _profit_max)) => {
                                                 bundles.push(bundle);
@@ -414,14 +543,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
     async fn process_pendding_recipes(&self, event: NewBlock) -> Result<()> {
         let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes();
         info!("start process pendding recipes {:?} groups by pool", pendding_recipes_group.len());
-
-        for (pool, recipes) in pendding_recipes_group.iter() {
-            self.push_huge_task(pool.clone(), recipes.clone(), event.clone()).await.unwrap();
-        }
+        self.push_huge_task(pendding_recipes_group, event.clone()).await.unwrap();
         Ok(())
     }
 
-    async fn pop_huge_task(&self) -> Option<(Pool, Vec<SandoRecipe>, NewBlock)> {
+    async fn pop_huge_task(&self) -> Option<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)> {
         let mut task_list = self.huge_task_list.lock().unwrap();
         if task_list.len() > 0 {
             task_list.pop_front()
@@ -430,9 +556,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
     }
 
-    async fn push_huge_task(&self, pool: Pool, recipes: Vec<SandoRecipe>, new_block: NewBlock) -> Result<()> {
+    async fn push_huge_task(&self, recipes_maps: HashMap<Pool, Vec<SandoRecipe>>, new_block: NewBlock) -> Result<()> {
         let mut task_list = self.huge_task_list.lock().unwrap();
-        task_list.push_back((pool, recipes, new_block));
+        task_list.push_back((recipes_maps, new_block));
         Ok(())
     }
 
@@ -641,6 +767,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
                                 self.provider.clone(),
+                                false,
                             )
                             .await
                         {
@@ -716,6 +843,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
                                 self.provider.clone(),
+                                false
                             )
                             .await
                         {

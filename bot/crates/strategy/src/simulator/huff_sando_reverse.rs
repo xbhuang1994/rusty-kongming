@@ -617,7 +617,7 @@ pub fn create_recipe_reverse(
                 revenue,
                 next_block,
                 SandwichSwapType::Forward,
-                ingredients.get_target_pool(),
+                Some(ingredients.get_target_pool()),
                 ingredients.get_start_end_token(),
                 ingredients.get_intermediary_token()
             ))
