@@ -1,15 +1,16 @@
 use anyhow::Result;
 use artemis_core::{collectors::block_collector::NewBlock, types::Strategy};
 use async_trait::async_trait;
+use cfmms::pool::Pool;
 use cfmms::pool::Pool::{UniswapV2, UniswapV3};
 use colored::Colorize;
 use ethers::{
     providers::Middleware,
     types::{Transaction, U256, H256}
 };
-use foundry_evm::{executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend}, HashMap};
+use foundry_evm::executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend};
 use log::{error, info};
-use std::{collections::{BTreeSet, LinkedList}, sync::{Arc,Mutex}, time, thread};
+use std::{collections::{BTreeSet, LinkedList, HashMap}, sync::{Arc,Mutex}, time, thread};
 use tokio::{runtime, sync::broadcast::Sender};
 
 use crate::{
@@ -51,6 +52,10 @@ pub struct SandoBot<M> {
     action_runtime: tokio::runtime::Runtime,
     action_sender: Arc<Mutex<Option<Sender<Action>>>>,
 
+    /// Auto process huge sandwich
+    huge_task_list: Arc<Mutex<LinkedList<(Pool, Vec<SandoRecipe>, NewBlock)>>>,
+    huge_task_runtime: tokio::runtime::Runtime,
+
     processed_tx_map: Mutex<HashMap<H256, i64>>,
 }
 
@@ -67,7 +72,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.sando_inception_block,
             ),
             sando_recipe_manager: SandoRecipeManager::new(),
-            event_tx_runtime: runtime::Builder::new_multi_thread().worker_threads(32).enable_all().build().unwrap(),
+            event_tx_runtime: runtime::Builder::new_multi_thread().worker_threads(32).enable_all().enable_time().build().unwrap(),
             event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
             event_tx_sender: Arc::new(Mutex::new(None)),
             event_block_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
@@ -76,12 +81,15 @@ impl<M: Middleware + 'static> SandoBot<M> {
             action_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
             action_sender: Arc::new(Mutex::new(None)),
             processed_tx_map: Mutex::new(HashMap::new()),
+            huge_task_list: Arc::new(Mutex::new(LinkedList::new())),
+            huge_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
         }
     }
 
-    /// re-check if the pendding-recipes are sandwichable at new block
-    async fn is_sandwichable_multi(&self, pendding_recipes: Vec<SandoRecipe>) -> Result<Vec<SandoRecipe>> {
+    /// re-check the pendding-recipes are sandwichable at new block and re-make huge sandwich
+    async fn make_sandwichable_huge(&self, pool: Pool, recipes: Vec<SandoRecipe>, new_block: NewBlock) -> Result<Vec<SandoRecipe>> {
 
+        //todo
         Ok(vec![])
     }
 
@@ -181,14 +189,16 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
 
-    pub async fn start_auto_process(&'static self, tx_processor_num: i32, block_process_num: i32, action_process_num: i32) -> Result<()> {
+    pub async fn start_auto_process(&'static self, tx_processor_num: i32, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
 
         #[cfg(feature = "debug")]
         {
-            info!("bot start: tx_processor_num={tx_processor_num},block_process_num={block_process_num},action_process_num={action_process_num}");
+            info!("bot start: tx_processor_num={tx_processor_num},block_process_num={block_process_num},action_process_num={action_process_num},huge_process_num={huge_process_num}");
         }
+
         for _index in 0..tx_processor_num {
             self.event_tx_runtime.spawn(async move {
+                let mut _count = 0;
                 loop {
                     match self.pop_event_tx().await {
                         Some(event) => {
@@ -198,11 +208,20 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             // }
                             match self.process_event_tx(event).await {
                                 Ok(_) => {},
-                                Err(e) => {error!("bot running event tx processor {_index} error {}", e)}
+                                Err(e) => error!("bot running event tx processor {_index} error {}", e)
                             }
                         },
                         None => {
-                            thread::sleep(time::Duration::from_millis(10));
+                            tokio::time::sleep(time::Duration::from_millis(10)).await;
+                            #[cfg(feature = "debug")]
+                            {
+                                if _count == 200 {
+                                    info!("bot runnint event tx processor {_index} pop none");
+                                    _count = 0;
+                                } else {
+                                    _count+=1;
+                                }
+                            }
                         },
                     }
                 }
@@ -222,7 +241,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             let _ = self.process_event_block(event).await;
                         },
                         None => {
-                            thread::sleep(time::Duration::from_millis(100));
+                            tokio::time::sleep(time::Duration::from_millis(100)).await;
                         }
                     }
                 }
@@ -237,7 +256,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     match action_sender {
                         Some(_) => {},
                         None => {
-                            thread::sleep(time::Duration::from_millis(10));
+                            tokio::time::sleep(time::Duration::from_millis(10)).await;
                             continue;
                         }
                     }
@@ -260,6 +279,48 @@ impl<M: Middleware + 'static> SandoBot<M> {
             });
         }
         info!("start {:?} action auto processors", action_process_num);
+
+        for _index in 0..huge_process_num {
+            self.huge_task_runtime.spawn(async move {
+                loop {
+                    match self.pop_huge_task().await {
+                        Some((pool, recipes, new_block)) => {
+                            match self.make_sandwichable_huge(pool, recipes, new_block).await {
+                                Ok(huge_recipes) => {
+
+                                    let mut bundles = vec![];
+                                    for huge in huge_recipes {
+                                        match huge.to_fb_bundle(
+                                            self.sando_state_manager.get_sando_address(),
+                                            self.sando_state_manager.get_searcher_signer(),
+                                            false,
+                                            self.provider.clone(),
+                                        ).await {
+                                            Ok((bundle, _profit_max)) => {
+                                                bundles.push(bundle);
+                                            },
+                                            Err(e) => {
+                                                error!("fail make huge sandwich error:{}", e)
+                                            }
+                                        }
+                                    }
+                                    if bundles.len() > 0 {
+                                        self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+                                    }
+                                },
+                                Err(e) => {
+                                    error!("process huge sandwich error: {}", e);
+                                }
+                            }
+                        },
+                        None => {
+                            tokio::time::sleep(time::Duration::from_millis(50)).await;
+                        }
+                    }
+                }
+            });
+        }
+        info!("start {:?} huge auto processors", huge_process_num);
 
         Ok(())
     }
@@ -345,22 +406,33 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         // sleep 10.5 seconds wait for refresh pendding recepies, then make huge bundle
         // info!("before process pendding recipes");
-        thread::sleep(time::Duration::from_millis(10_500));
+        tokio::time::sleep(time::Duration::from_millis(10_500)).await;
         self.process_pendding_recipes(event.clone()).await.unwrap();
         Ok(())
     }
 
     async fn process_pendding_recipes(&self, event: NewBlock) -> Result<()> {
-        let pendding_recipes_usv2 = self.sando_recipe_manager.get_pendding_recipes_pool_usv2();
-        let pendding_recipes_usv3 = self.sando_recipe_manager.get_pendding_recipes_pool_usv3();
-        info!("start process pendding recipes usv2 {:?} usv3 {:?}", pendding_recipes_usv2.len(), pendding_recipes_usv3.len());
+        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes();
+        info!("start process pendding recipes {:?} groups by pool", pendding_recipes_group.len());
 
-        if !pendding_recipes_usv2.is_empty() {
+        for (pool, recipes) in pendding_recipes_group.iter() {
+            self.push_huge_task(pool.clone(), recipes.clone(), event.clone()).await.unwrap();
+        }
+        Ok(())
+    }
 
+    async fn pop_huge_task(&self) -> Option<(Pool, Vec<SandoRecipe>, NewBlock)> {
+        let mut task_list = self.huge_task_list.lock().unwrap();
+        if task_list.len() > 0 {
+            task_list.pop_front()
+        } else {
+            None
         }
-        if !pendding_recipes_usv3.is_empty() {
-            
-        }
+    }
+
+    async fn push_huge_task(&self, pool: Pool, recipes: Vec<SandoRecipe>, new_block: NewBlock) -> Result<()> {
+        let mut task_list = self.huge_task_list.lock().unwrap();
+        task_list.push_back((pool, recipes, new_block));
         Ok(())
     }
 

@@ -312,6 +312,14 @@ impl SandoRecipe {
         self.head_txs = head_txs;
     }
 
+    pub fn get_start_end_token(&self) -> Address {
+        self.start_end_token.clone()
+    }
+
+    pub fn get_intermediary_token(&self) -> Address {
+        self.intermediary_token.clone()
+    }
+
     /// turn recipe into a signed bundle that can be sumbitted to flashbots
     pub async fn to_fb_bundle<M: Middleware>(
         self,

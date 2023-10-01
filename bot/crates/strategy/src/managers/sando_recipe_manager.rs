@@ -1,13 +1,12 @@
-use std::sync::Mutex;
+use std::{sync::{Mutex,RwLock}, collections::HashMap};
 use ethers::types::Transaction;
 use crate::types::SandoRecipe;
 use log::info;
-use cfmms::pool::Pool::{UniswapV2, UniswapV3};
+use cfmms::pool::Pool;
 
 pub struct SandoRecipeManager {
 
-    pendding_recipes: Mutex<Vec<SandoRecipe>>,
-
+    pendding_recipes: Mutex<HashMap<Pool, RwLock<Vec<SandoRecipe>>>>,
 }
 
 impl SandoRecipeManager {
@@ -19,19 +18,30 @@ impl SandoRecipeManager {
     }
 
     pub fn push_pendding_recipe(&self, recipe: SandoRecipe) {
-        let mut pendding = self.pendding_recipes.lock().unwrap();
+        let pool = recipe.get_target_pool();
         let uuid = recipe.get_uuid();
-        pendding.push(recipe);
-        // info!("pendding recipes after push {:?} length is {:?}", uuid, pendding.len());
+        let mut map = self.pendding_recipes.lock().unwrap();
+        let mut len = 1;
+        if let Some(recipe_vec) = map.get(&pool) {
+            let mut writer = recipe_vec.write().unwrap();
+            writer.push(recipe);
+            len = writer.len();
+        } else {
+            let new_vec = RwLock::new(vec![recipe]);
+            map.insert(pool, new_vec);
+        }
+        info!("pendding recipes after push {:?} pool length is {:?}", uuid, len);
     }
 
     /// remove recipes has same hash with 'tx',
     /// and remove recipes has same 'from' and smaller nonce with 'tx'.
     fn remove_pendding_recipe(&self, tx: &Transaction) {
 
-        let mut pendding = self.pendding_recipes.lock().unwrap();
-        let len_before = pendding.len();
-        if len_before > 0 {
+        let mut map = self.pendding_recipes.lock().unwrap();
+        
+        for (pool, recipes) in map.iter_mut() {
+            let mut pendding = recipes.write().unwrap();
+            let len_before = pendding.len();
             pendding.retain_mut(|recipe| { 
                 let meats = recipe.get_meats();
                 for meat in meats {
@@ -52,7 +62,7 @@ impl SandoRecipeManager {
                 return true;
             });
             let _len_after = pendding.len();
-            // info!("pendding recipes remove with tx {:?} from {:?} nonce {:?}, before len {:?} after len {:?}", tx.hash, tx.from, tx.nonce, len_before, _len_after);
+            info!("pendding recipes remove with tx {:?} from {:?} nonce {:?}, before len {:?} after len {:?}", tx.hash, tx.from, tx.nonce, len_before, _len_after);
         }
     }
 
@@ -63,40 +73,54 @@ impl SandoRecipeManager {
         }
     }
 
-    /// get and remove recipes with UniswapV2
-    pub fn get_pendding_recipes_pool_usv2(&self) -> Vec<SandoRecipe> {
+    /// get all repices group by pool
+    pub fn get_all_pendding_recipes(&self) -> HashMap<Pool, Vec<SandoRecipe>> {
 
-        let mut pendding = self.pendding_recipes.lock().unwrap();
-        let found_recipes: Vec<SandoRecipe> = pendding.iter().filter(
-            |r| match r.get_target_pool() {
-                UniswapV2(_) => true,
-                _ => false
-            }
-        ).cloned().collect();
-        if found_recipes.len() > 0 {
-            let uuids: Vec<String> = found_recipes.iter().map(|s|s.get_uuid()).collect();
-            pendding.retain(|s| !uuids.contains(&s.get_uuid()));
-            // info!("pendding recipes after get pool_usv2 length is {:?}", pendding.len());
+        let mut map = self.pendding_recipes.lock().unwrap();
+        let mut result: HashMap<Pool, Vec<SandoRecipe>> = HashMap::new();
+        for (k, v) in map.iter() {
+            let reader = v.read().unwrap();
+            let vec = (*reader).clone();
+            result.insert(k.clone(), vec);
         }
-        found_recipes
+        map.clear();
+        return result;
     }
 
-    /// get and remove recipes with UniswapV3
-    pub fn get_pendding_recipes_pool_usv3(&self) -> Vec<SandoRecipe> {
+    // /// get and remove recipes with UniswapV2
+    // pub fn get_pendding_recipes_pool_usv2(&self) -> Vec<SandoRecipe> {
 
-        let mut pendding = self.pendding_recipes.lock().unwrap();
-        let found_recipes: Vec<SandoRecipe> = pendding.iter().filter(
-            |r| match r.get_target_pool() {
-                UniswapV3(_) => true,
-                _ => false
-            }
-        ).cloned().collect();
-        if found_recipes.len() > 0 {
-            let uuids: Vec<String> = found_recipes.iter().map(|s|s.get_uuid()).collect();
-            pendding.retain(|s| !uuids.contains(&s.get_uuid()));
-            // info!("pendding recipes after get pool_usv3 length is {:?}", pendding.len());
-        }
-        found_recipes
-    }
+    //     let mut pendding = self.pendding_recipes.lock().unwrap();
+    //     let found_recipes: Vec<SandoRecipe> = pendding.iter().filter(
+    //         |r| match r.get_target_pool() {
+    //             UniswapV2(_) => true,
+    //             _ => false
+    //         }
+    //     ).cloned().collect();
+    //     if found_recipes.len() > 0 {
+    //         let uuids: Vec<String> = found_recipes.iter().map(|s|s.get_uuid()).collect();
+    //         pendding.retain(|s| !uuids.contains(&s.get_uuid()));
+    //         // info!("pendding recipes after get pool_usv2 length is {:?}", pendding.len());
+    //     }
+    //     found_recipes
+    // }
+
+    // /// get and remove recipes with UniswapV3
+    // pub fn get_pendding_recipes_pool_usv3(&self) -> Vec<SandoRecipe> {
+
+    //     let mut pendding = self.pendding_recipes.lock().unwrap();
+    //     let found_recipes: Vec<SandoRecipe> = pendding.iter().filter(
+    //         |r| match r.get_target_pool() {
+    //             UniswapV3(_) => true,
+    //             _ => false
+    //         }
+    //     ).cloned().collect();
+    //     if found_recipes.len() > 0 {
+    //         let uuids: Vec<String> = found_recipes.iter().map(|s|s.get_uuid()).collect();
+    //         pendding.retain(|s| !uuids.contains(&s.get_uuid()));
+    //         // info!("pendding recipes after get pool_usv3 length is {:?}", pendding.len());
+    //     }
+    //     found_recipes
+    // }
 
 }
