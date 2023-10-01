@@ -206,8 +206,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         let huge_recipe = create_recipe_huge(
             &block_info,
-            frontrun_data,
-            backrun_data,
+            frontrun_data.into(),
+            backrun_data.into(),
             head_txs,
             meats,
             token_inventory,
