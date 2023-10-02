@@ -88,7 +88,7 @@ async fn main() -> Result<()> {
 
     // get cpu core number
     let cpu_num = num_cpus::get() as i32;
-    let _ = STRATEGY.get().unwrap().start_auto_process(cpu_num, 1, 4, 1).await?;
+    let _ = STRATEGY.get().unwrap().start_auto_process(cpu_num, 2, 4, 2).await?;
 
     // Setup flashbots executor
     let executor = Box::new(FlashbotsExecutor::new(
