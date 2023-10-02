@@ -232,10 +232,12 @@ pub fn create_recipe_huge(
     match backrun_result {
         ExecutionResult::Success { .. } => { /* continue */ }
         ExecutionResult::Revert { output, .. } => {
+
+            log::info!("revert backrun data: {:?}", hex::encode(backrun_data));
             return Err(anyhow!("[huffsando: REVERT] backrun: {:?}", output));
         }
         ExecutionResult::Halt { reason, .. } => {
-            return Err(anyhow!("[huffsando: HALT] backrun: {:?}", reason))
+            return Err(anyhow!("[huffsando: HALT] backrun: {:?}", reason));
         }
     };
     match salmonella_inspector.is_sando_safu() {
