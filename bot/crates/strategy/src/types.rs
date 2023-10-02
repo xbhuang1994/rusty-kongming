@@ -11,7 +11,7 @@ use ethers::providers::Middleware;
 use ethers::signers::LocalWallet;
 use ethers::signers::Signer;
 use ethers::types::{
-    Address, Block, Eip1559TransactionRequest, Transaction, H256, U256, U64,
+    Address, Block, Bytes, Eip1559TransactionRequest, Transaction, H256, U256, U64,
 };
 
 use ethers_flashbots::BundleRequest;
