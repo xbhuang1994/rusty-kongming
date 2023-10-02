@@ -402,10 +402,12 @@ impl SandoRecipe {
 
         let mut meat_hashs: Vec<String> = vec![];
         let mut signed_meat_txs: Vec<Bytes> = vec![];
-        self.meats.into_iter().map(|meat| {
+        self.meats.into_iter().for_each(|meat| {
                 meat_hashs.push(format!("{:?}", meat.hash));
-                signed_meat_txs.push(meat.rlp());}
+                signed_meat_txs.push(meat.rlp());
+            }
         );
+        println!("meat_hashs count {:?} signed_meat_txs count {:?}", meat_hashs.len(), signed_meat_txs.len());
         // let signed_meat_txs: Vec<Bytes> = self.meats.into_iter().map(|meat| meat.rlp()).collect();
 
         let max_fee_result = calculate_bribe_for_max_fee(
@@ -471,9 +473,9 @@ impl SandoRecipe {
 
         #[cfg(feature = "debug")]
         {
+            let hashs = meat_hashs.join("|");
             log::info!("find {:?} {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?} meats {:?}",
-                is_huge, self.swap_type, _profit_min, _profit_max, self.target_block.number, self.uuid,
-                meat_hashs.join("|")
+                is_huge, self.swap_type, _profit_min, _profit_max, self.target_block.number, self.uuid, hashs
             );
         }
         Ok((bundle_request, _profit_max))
