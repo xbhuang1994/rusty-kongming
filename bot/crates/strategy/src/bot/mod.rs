@@ -170,8 +170,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
             match max_fee {
                 Ok(_) => {
                     head_txs.extend(recipe.get_head_txs().clone());
-                    frontrun_data.extend(Vec::from(recipe.get_frontrun().clone().data));
-                    backrun_data.extend(Vec::from(recipe.get_backrun().clone().data));
+                    frontrun_data.extend(Vec::from(recipe.get_frontrun().data.clone()));
+                    backrun_data.extend(Vec::from(recipe.get_backrun().data.clone()));
                     meats.extend(recipe.get_meats().clone());
                 },
                 Err(e) => {

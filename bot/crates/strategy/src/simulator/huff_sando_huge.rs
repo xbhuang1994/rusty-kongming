@@ -98,7 +98,7 @@ pub fn create_recipe_huge(
         gas_priority_fee: None,
         transact_to: TransactTo::Call(sando_address.0.into()),
         value: frontrun_value.into(),
-        data: limit_block_height(frontrun_data, next_block.number).into(),
+        data: limit_block_height(frontrun_data.clone().into(), next_block.number).into(),
         chain_id: None,
         nonce: None,
         access_list: Default::default(),
