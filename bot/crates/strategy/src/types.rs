@@ -457,7 +457,7 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
-        // #[cfg(feature = "debug")]
+        #[cfg(feature = "debug")]
         {
             log::info!("find {:?} {:?} meets 0_hash {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?}", is_huge, self.swap_type, _log_hash_0, _profit_min, _profit_max, self.target_block.number, self.uuid);
         }

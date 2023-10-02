@@ -39,7 +39,7 @@ impl SandoRecipeManager {
 
         let mut map = self.pendding_recipes.lock().unwrap();
         
-        for (pool, recipes) in map.iter_mut() {
+        for (_pool, recipes) in map.iter_mut() {
             let mut pendding = recipes.write().unwrap();
             let len_before = pendding.len();
             pendding.retain_mut(|recipe| { 

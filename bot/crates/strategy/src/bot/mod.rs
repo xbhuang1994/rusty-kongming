@@ -93,13 +93,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
     /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
     async fn is_sandwichable_huge(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, new_block: NewBlock) -> Result<Vec<SandoRecipe>> {
 
-        let block_info = BlockInfo{
+        let new_block_info = BlockInfo{
             number: new_block.number,
             base_fee_per_gas: new_block.base_fee_per_gas,
             timestamp: new_block.timestamp,
             gas_used: Some(new_block.gas_used),
             gas_limit: Some(new_block.gas_limit),
         };
+        let target_block_info = new_block_info.get_next_block();
         let mut handlers = vec![];
         for (target_pool, recipes) in recipes_map.iter_mut() {
             recipes.sort_by_key(|r| r.get_revenue());
@@ -127,7 +128,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             );
 
             let handler = tokio::spawn(self.is_sandwichable(
-                ingredients, block_info.clone(), swap_type
+                ingredients, target_block_info.clone(), swap_type
             ));
             handlers.push(handler);
         }
@@ -164,7 +165,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 recipe.get_revenue(),
                 recipe.get_frontrun_gas_used(),
                 recipe.get_backrun_gas_used(),
-                block_info.base_fee_per_gas,
+                target_block_info.base_fee_per_gas,
                 false
             );
             match max_fee {
@@ -205,7 +206,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         };
 
         let huge_recipe = create_recipe_huge(
-            &block_info,
+            &target_block_info,
             frontrun_data.into(),
             backrun_data.into(),
             head_txs,
