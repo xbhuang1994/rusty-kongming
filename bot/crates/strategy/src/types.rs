@@ -11,8 +11,9 @@ use ethers::providers::Middleware;
 use ethers::signers::LocalWallet;
 use ethers::signers::Signer;
 use ethers::types::{
-    Address, Block, Bytes, Eip1559TransactionRequest, Transaction, H256, U256, U64,
+    Address, Block, Eip1559TransactionRequest, Transaction, H256, U256, U64,
 };
+
 use ethers_flashbots::BundleRequest;
 use foundry_evm::executor::TxEnv;
 
@@ -272,6 +273,7 @@ pub struct SandoRecipe {
     uuid: String,
     start_end_token: Address,
     intermediary_token: Address,
+    frontrun_data: Option<Vec<u8>>,
 }
 
 impl SandoRecipe {
@@ -288,7 +290,7 @@ impl SandoRecipe {
         target_pool: Option<Pool>,
         start_end_token: Address,
         intermediary_token: Address,
-
+        frontrun_data: Option<Vec<u8>>,
     ) -> Self {
         Self {
             head_txs,
@@ -305,6 +307,7 @@ impl SandoRecipe {
             uuid: format!("{}", Uuid::new_v4()),
             start_end_token: start_end_token,
             intermediary_token: intermediary_token,
+            frontrun_data: frontrun_data,
         }
     }
 
@@ -363,6 +366,10 @@ impl SandoRecipe {
 
     pub fn get_intermediary_token(&self) -> Address {
         self.intermediary_token.clone()
+    }
+
+    pub fn get_frontrun_data(&self) -> Option<Vec<u8>> {
+        self.frontrun_data.clone()
     }
 
     /// turn recipe into a signed bundle that can be sumbitted to flashbots

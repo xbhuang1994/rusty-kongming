@@ -129,7 +129,7 @@ pub fn create_recipe(
         gas_priority_fee: None,
         transact_to: TransactTo::Call(sando_address.0.into()),
         value: frontrun_value.into(),
-        data: limit_block_height(frontrun_data, next_block.number).into(),
+        data: limit_block_height(frontrun_data.clone(), next_block.number).into(),
         chain_id: None,
         nonce: None,
         access_list: Default::default(),
@@ -346,6 +346,7 @@ pub fn create_recipe(
         SandwichSwapType::Forward,
         Some(ingredients.get_target_pool()),
         ingredients.get_start_end_token(),
-        ingredients.get_intermediary_token()
+        ingredients.get_intermediary_token(),
+        Some(frontrun_data.clone().into()),
     ))
 }
