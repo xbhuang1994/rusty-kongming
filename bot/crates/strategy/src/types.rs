@@ -379,7 +379,7 @@ impl SandoRecipe {
         searcher: &LocalWallet,
         has_dust: bool,
         provider: Arc<M>,
-        is_huge: bool,
+        _is_huge: bool,
     ) -> Result<(BundleRequest, U256)> {
         let nonce = provider
             .get_transaction_count(searcher.address(), Some(self.target_block.number.into()))
@@ -474,7 +474,7 @@ impl SandoRecipe {
         {
             let hashs = meat_hashs.join("|");
             log::info!("build bundle {:?}(is_huge) {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?} meats {:?}",
-                is_huge, self.swap_type, _profit_min, _profit_max, self.target_block.number, self.uuid, hashs
+                _is_huge, self.swap_type, _profit_min, _profit_max, self.target_block.number, self.uuid, hashs
             );
         }
         Ok((bundle_request, _profit_max))
