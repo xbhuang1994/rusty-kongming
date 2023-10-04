@@ -104,9 +104,13 @@ macro_rules! log_not_sandwichable {
 
 #[macro_export]
 macro_rules! log_opportunity {
-    ($swap_type:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
+    ($swap_type:expr, $head_txs:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
         
         info!("\n{}", format!("[OPPORTUNITY {} DETECTED]", $swap_type.to_string()).green().on_black().bold());
+        info!(
+            "{}",
+            format!("head_txs: {}", $head_txs.to_string().green().on_black()).bold()
+        );
         info!(
             "{}",
             format!("meats: {}", $meats.to_string().green().on_black()).bold()

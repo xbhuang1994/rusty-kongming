@@ -357,12 +357,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
         
         log_opportunity!(
             swap_type,
+            ingredients.print_head_txs(),
             ingredients.print_meats(),
             optimal_input.as_u128() as f64 / 1e18,
             recipe.get_revenue().as_u128() as f64 / 1e18,
             recipe.get_frontrun_gas_used(),
-            recipe.get_backrun_gas_used()    
-            
+            recipe.get_backrun_gas_used() 
         );
 
         Ok(recipe)

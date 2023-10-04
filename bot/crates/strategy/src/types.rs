@@ -131,6 +131,20 @@ impl RawIngredients {
         s.push(']');
         s
     }
+
+    // Used for logging
+    pub fn print_head_txs(&self) -> String {
+        let mut s = String::new();
+        s.push('[');
+        for (i, x) in self.head_txs.iter().enumerate() {
+            s.push_str(&format!("{:?}", x.hash));
+            if i != self.head_txs.len() - 1 {
+                s.push_str(",");
+            }
+        }
+        s.push(']');
+        s
+    }
 }
 
 #[derive(Default, Clone, Copy)]
