@@ -398,15 +398,15 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         },
                         None => {
                             tokio::time::sleep(time::Duration::from_millis(10)).await;
-                            #[cfg(feature = "debug")]
-                            {
-                                if _count == 200 {
-                                    info!("bot runnint event tx processor {_index} pop none");
-                                    _count = 0;
-                                } else {
-                                    _count+=1;
-                                }
-                            }
+                            // #[cfg(feature = "debug")]
+                            // {
+                            //     if _count == 200 {
+                            //         info!("bot runnint event tx processor {_index} pop none");
+                            //         _count = 0;
+                            //     } else {
+                            //         _count+=1;
+                            //     }
+                            // }
                         },
                     }
                 }
