@@ -98,7 +98,7 @@ async fn can_sandwich_uni_v2() {
     let target_block = block_num_to_info(17754167, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward, false)
         .await
         .unwrap();
 }
@@ -127,7 +127,7 @@ async fn can_sandwich_sushi_swap() {
     let target_block = block_num_to_info(16873148, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward, false)
         .await
         .unwrap();
 }
@@ -161,7 +161,7 @@ async fn can_sandwich_multi_v2_swaps() {
     let target_block = block_num_to_info(16780625, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward, false)
         .await
         .unwrap();
 }
@@ -190,7 +190,7 @@ async fn can_sandwich_uni_v3() {
     let target_block = block_num_to_info(16863225, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Forward, false)
         .await
         .unwrap();
 }
@@ -219,7 +219,7 @@ async fn can_reverse_sandwich_uni_v2() {
     let target_block = block_num_to_info(17926193, client.clone()).await;
 
     let _ = bot
-        .is_sandwichable(ingredients, target_block, SandwichSwapType::Reverse)
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Reverse, false)
         .await
         .unwrap();
 }

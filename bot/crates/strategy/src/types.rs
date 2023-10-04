@@ -21,6 +21,9 @@ use crate::constants::DUST_OVERPAY;
 use crate::helpers::access_list_to_ethers;
 use crate::helpers::sign_eip1559;
 use crate::simulator::credit::CreditHelper;
+use crate::log_bundle;
+use log::info;
+use colored::Colorize;
 use uuid::Uuid;
 
 /// Core Event enum for current strategy
@@ -393,14 +396,21 @@ impl SandoRecipe {
         searcher: &LocalWallet,
         has_dust: bool,
         provider: Arc<M>,
-        _is_huge: bool,
+        is_huge: bool,
     ) -> Result<(BundleRequest, U256)> {
         let nonce = provider
             .get_transaction_count(searcher.address(), Some(self.target_block.number.into()))
             .await
             .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
 
-        let signed_head_txs: Vec<Bytes> = self.head_txs.into_iter().map(|head| head.rlp()).collect();
+        let mut head_hashs: Vec<String> = vec![];
+        let mut signed_head_txs: Vec<Bytes> = vec![];
+        self.head_txs.into_iter().for_each(|head| {
+                head_hashs.push(format!("{:?}", head.hash));
+                signed_head_txs.push(head.rlp());
+            }
+        );
+        // let signed_head_txs: Vec<Bytes> = self.head_txs.into_iter().map(|head| head.rlp()).collect();
 
         let frontrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
@@ -468,7 +478,7 @@ impl SandoRecipe {
             .set_simulation_block(self.target_block.number - 1)
             .set_simulation_timestamp(self.target_block.timestamp.as_u64());
 
-        let _profit_min = self
+        let profit_min = self
             .revenue
             .checked_sub(
                 (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
@@ -476,7 +486,7 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
-        let _profit_max = self
+        let profit_max = self
             .revenue
             .checked_sub(
                 (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
@@ -484,13 +494,20 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
-        #[cfg(feature = "debug")]
-        {
-            let hashs = meat_hashs.join("|");
-            log::info!("build bundle {:?}(is_huge) {:?} profit ({:?}:{:?}) next_block {:?} uuid {:?} meats {:?}",
-                _is_huge, self.swap_type, _profit_min, _profit_max, self.target_block.number, self.uuid, hashs
-            );
-        }
-        Ok((bundle_request, _profit_max))
+        log_bundle!(
+            is_huge,
+            self.uuid,
+            self.swap_type,
+            meat_hashs.join(","),
+            head_hashs.join(","),
+            self.target_block.number,
+            self.revenue,
+            self.frontrun_gas_used,
+            self.backrun_gas_used,
+            profit_min,
+            profit_max
+        );
+
+        Ok((bundle_request, profit_max))
     }
 }

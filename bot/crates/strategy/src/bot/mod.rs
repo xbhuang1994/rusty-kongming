@@ -166,7 +166,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 );
 
                 let handler = tokio::spawn(self.is_sandwichable(
-                    ingredients, target_block.clone(), swap_type
+                    ingredients, target_block.clone(), swap_type, true
                 ));
                 handlers.push(handler);
             }
@@ -280,6 +280,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         ingredients: RawIngredients,
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
+        for_huge: bool,
     ) -> Result<SandoRecipe> {
         // setup shared backend
         let shared_backend = SharedBackend::spawn_backend_thread(
@@ -356,6 +357,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         };
         
         log_opportunity!(
+            for_huge,
             swap_type,
             ingredients.print_head_txs(),
             ingredients.print_meats(),
@@ -821,7 +823,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     pool,
                 );
 
-                match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Forward).await {
+                match self.is_sandwichable(
+                        ingredients,
+                        next_block.clone(),
+                        SandwichSwapType::Forward,
+                        false
+                    ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
                         let (bundle, profit_max) = match s
@@ -897,7 +904,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     pool,
                 );
 
-                match self.is_sandwichable(ingredients, next_block.clone(), SandwichSwapType::Reverse).await {
+                match self.is_sandwichable(
+                        ingredients,
+                        next_block.clone(),
+                        SandwichSwapType::Reverse,
+                        false
+                    ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
                         let (bundle, profit_max) = match s
