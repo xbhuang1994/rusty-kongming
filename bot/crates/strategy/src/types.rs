@@ -78,6 +78,7 @@ pub struct RawIngredients {
     /// Which pool are we targetting
     target_pool: Pool,
     credit_helper: CreditHelper,
+    uuid: String,
 }
 
 impl RawIngredients {
@@ -95,7 +96,12 @@ impl RawIngredients {
             intermediary_token,
             target_pool,
             credit_helper: CreditHelper::new(),
+            uuid: format!("{}", Uuid::new_v4()),
         }
+    }
+
+    pub fn get_uuid(&self) -> String {
+        self.uuid.clone()
     }
 
     pub fn get_start_end_token(&self) -> Address {
@@ -305,6 +311,7 @@ impl SandoRecipe {
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
         target_pool: Option<Pool>,
+        uuid: String,
         start_end_token: Address,
         intermediary_token: Address,
         frontrun_data: Option<Vec<u8>>,
@@ -320,8 +327,8 @@ impl SandoRecipe {
             target_block,
             swap_type,
             target_pool: target_pool,
+            uuid: uuid,
             profit_max: U256::from(0),
-            uuid: format!("{}", Uuid::new_v4()),
             start_end_token: start_end_token,
             intermediary_token: intermediary_token,
             frontrun_data: frontrun_data,

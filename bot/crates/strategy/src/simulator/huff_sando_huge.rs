@@ -33,6 +33,7 @@ pub fn create_recipe_huge(
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
+    uuid: String,
 ) -> Result<SandoRecipe> {
 
     
@@ -280,6 +281,7 @@ pub fn create_recipe_huge(
         *next_block,
         SandwichSwapType::Forward,
         None,
+        uuid,
         Default::default(),
         Default::default(),
         None,

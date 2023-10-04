@@ -171,12 +171,15 @@ macro_rules! log_bundle {
 
 #[macro_export]
 macro_rules! log_opportunity {
-    ($for_huge:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
+    ($for_huge:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
         
         info!("{}", format!("[OPPORTUNITY DETECTED]"));
         info!(
             "{}",
-            format!("for huge: {}", $for_huge.to_string().green().on_black())
+            format!("for_huge: {}, uuid: {}",
+                $for_huge.to_string().green().on_black(),
+                $uuid.to_string().green().on_black()
+            )
         );
         info!(
             "{}",

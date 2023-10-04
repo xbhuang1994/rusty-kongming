@@ -30,6 +30,7 @@ use crate::{
     },
     helpers::calculate_inventory_for_debug,
 };
+use uuid::Uuid;
 
 pub struct SandoBot<M> {
     /// Ethers client
@@ -264,6 +265,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 self.sando_state_manager.get_searcher_address(),
                 self.sando_state_manager.get_sando_address(),
                 shared_backend.clone(),
+                format!("{}", Uuid::new_v4())
             )?;
 
             info!("make sandwich huge {:?}", huge_recipe.get_uuid());
@@ -358,6 +360,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         
         log_opportunity!(
             for_huge,
+            ingredients.get_uuid(),
             swap_type,
             ingredients.print_head_txs(),
             ingredients.print_meats(),
@@ -444,10 +447,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     }
                     match self.pop_action().await {
                         Some(action) => {
-                            #[cfg(feature = "debug")]
-                            {
-                                info!("bot running: action processor {_index} send action");
-                            }
+                            // #[cfg(feature = "debug")]
+                            // {
+                            //     info!("bot running: action processor {_index} send action");
+                            // }
                             match action_sender.unwrap().send(action) {
                                 Ok(_) => {},
                                 Err(e) => error!("error sending action: {}", e),
