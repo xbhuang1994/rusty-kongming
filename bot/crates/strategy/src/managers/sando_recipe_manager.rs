@@ -41,7 +41,7 @@ impl SandoRecipeManager {
         
         for (_pool, recipes) in map.iter_mut() {
             let mut pendding = recipes.write().unwrap();
-            let len_before = pendding.len();
+            let _len_before = pendding.len();
             pendding.retain_mut(|recipe| { 
                 let meats = recipe.get_meats();
                 for meat in meats {
@@ -62,7 +62,7 @@ impl SandoRecipeManager {
                 return true;
             });
             let _len_after = pendding.len();
-            info!("pendding recipes remove with tx {:?} from {:?} nonce {:?}, before len {:?} after len {:?}", tx.hash, tx.from, tx.nonce, len_before, _len_after);
+            // info!("pendding recipes remove with tx {:?} from {:?} nonce {:?}, before len {:?} after len {:?}", tx.hash, tx.from, tx.nonce, _len_before, _len_after);
         }
     }
 

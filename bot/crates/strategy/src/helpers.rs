@@ -105,66 +105,61 @@ macro_rules! log_not_sandwichable {
 #[macro_export]
 macro_rules! log_bundle {
     ($is_huge:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $block_number:expr, $revenue:expr, $frontrun_gas_used:expr, $backrun_gas_used:expr, $profit_min:expr, $profit_max:expr) => {
-        info!("{}", format!("[BUNDLE BUILT]"));
+        info!("{}", format!("[BUILT BUNDLE]"));
         info!(
             "{}",
             format!("is_huge: {}, uuid: {}",
-                $is_huge.to_string().green().on_black(),
-                $uuid.to_string().green().on_black()
+                $is_huge.to_string(),
+                $uuid.to_string()
             )
         );
         info!(
             "{}",
-            format!("swap type: {}", $swap_type.to_string().green().on_black()).bold()
+            format!("swap type: {}", $swap_type.to_string())
         );
         info!(
             "{}",
-            format!("head_txs: {}", $head_txs.to_string().green().on_black()).bold()
+            format!("head_txs: {}", $head_txs.to_string())
         );
         info!(
             "{}",
-            format!("meats: {}", $meats.to_string().green().on_black()).bold()
+            format!("meats: {}", $meats.to_string())
         );
         info!(
             "{}",
             format!(
                 "taget_block_number: {} ",
-                $block_number.to_string().green().on_black()
+                $block_number.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "revenue      : {} wETH",
-                $revenue.to_string().green().on_black()
+                $revenue.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "frontrun_gas_used: {} ",
-                $frontrun_gas_used.to_string().green().on_black()
+                $frontrun_gas_used.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "backrun_gas_used: {} ",
-                $backrun_gas_used.to_string().green().on_black()
+                $backrun_gas_used.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "expect profit: [{} ~ {}] ",
-                $profit_min.to_string().green().on_black(),
-                $profit_max.to_string().green().on_black()
+                $profit_min.to_string(),
+                $profit_max.to_string()
             )
-            .bold()
         );
     };
 }
@@ -177,56 +172,111 @@ macro_rules! log_opportunity {
         info!(
             "{}",
             format!("for_huge: {}, uuid: {}",
-                $for_huge.to_string().green().on_black(),
-                $uuid.to_string().green().on_black()
+                $for_huge.to_string(),
+                $uuid.to_string()
             )
         );
         info!(
             "{}",
-            format!("swap type: {}", $swap_type.to_string().green().on_black()).bold()
+            format!("swap type: {}", $swap_type.to_string())
         );
         info!(
             "{}",
-            format!("head_txs: {}", $head_txs.to_string().green().on_black()).bold()
+            format!("head_txs: {}", $head_txs.to_string())
         );
         info!(
             "{}",
-            format!("meats: {}", $meats.to_string().green().on_black()).bold()
+            format!("meats: {}", $meats.to_string())
         );
         info!(
             "{}",
             format!(
                 "optimal_input: {} wETH/Other",
-                $optimal_input.to_string().green().on_black()
+                $optimal_input.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "revenue      : {} wETH",
-                $revenue.to_string().green().on_black()
+                $revenue.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "frontrun_gas_used: {} ",
-                $frontrun_gas_used.to_string().green().on_black()
+                $frontrun_gas_used.to_string()
             )
-            .bold()
         );
         info!(
             "{}",
             format!(
                 "backrun_gas_used: {} ",
-                $backrun_gas_used.to_string().green().on_black()
+                $backrun_gas_used.to_string()
             )
-            .bold()
         );
     }};
 }
+
+// #[macro_export]
+// macro_rules! log_opportunity {
+//     ($for_huge:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
+        
+//         info!("{}", format!("[OPPORTUNITY DETECTED]"));
+//         info!(
+//             "{}",
+//             format!("for_huge: {}, uuid: {}",
+//                 $for_huge.to_string().green().on_black(),
+//                 $uuid.to_string().green().on_black()
+//             )
+//         );
+//         info!(
+//             "{}",
+//             format!("swap type: {}", $swap_type.to_string().green().on_black()).bold()
+//         );
+//         info!(
+//             "{}",
+//             format!("head_txs: {}", $head_txs.to_string().green().on_black()).bold()
+//         );
+//         info!(
+//             "{}",
+//             format!("meats: {}", $meats.to_string().green().on_black()).bold()
+//         );
+//         info!(
+//             "{}",
+//             format!(
+//                 "optimal_input: {} wETH/Other",
+//                 $optimal_input.to_string().green().on_black()
+//             )
+//             .bold()
+//         );
+//         info!(
+//             "{}",
+//             format!(
+//                 "revenue      : {} wETH",
+//                 $revenue.to_string().green().on_black()
+//             )
+//             .bold()
+//         );
+//         info!(
+//             "{}",
+//             format!(
+//                 "frontrun_gas_used: {} ",
+//                 $frontrun_gas_used.to_string().green().on_black()
+//             )
+//             .bold()
+//         );
+//         info!(
+//             "{}",
+//             format!(
+//                 "backrun_gas_used: {} ",
+//                 $backrun_gas_used.to_string().green().on_black()
+//             )
+//             .bold()
+//         );
+//     }};
+// }
 
 #[macro_export]
 macro_rules! startup_info_log {
