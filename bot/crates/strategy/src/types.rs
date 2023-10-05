@@ -83,14 +83,14 @@ pub struct RawIngredients {
 
 impl RawIngredients {
     pub fn new(
-        front_txs: Vec<Transaction>,
+        head_txs: Vec<Transaction>,
         meats: Vec<Transaction>,
         start_end_token: Address,
         intermediary_token: Address,
         target_pool: Pool,
     ) -> Self {
         Self {
-            head_txs: front_txs,
+            head_txs: head_txs,
             meats,
             start_end_token,
             intermediary_token,
