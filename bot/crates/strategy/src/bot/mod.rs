@@ -798,7 +798,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools.is_empty() {
             for pool in touched_pools {
                 let (head_hashs, head_txs) = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Forward);
-                log_info_cyan!("process sandwich {:?} from {:?} noce {:?} pool {:?} front_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
+                log_info_cyan!("process sandwich {:?} from {:?} noce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
                 
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -867,7 +867,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools_reverse.is_empty() {
             for pool in touched_pools_reverse {
                 let (head_hashs, head_txs) = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Reverse);
-                log_info_cyan!("process reverse sandwich {:?} from {:?} noce {:?} pool {:?} front_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
+                log_info_cyan!("process reverse sandwich {:?} from {:?} noce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
                 
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
