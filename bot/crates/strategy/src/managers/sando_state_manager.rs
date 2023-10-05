@@ -219,14 +219,14 @@ impl SandoStateManager {
             if list_liquidity_txs.len() > MAX_TRANSACTION_COUNT {
                 let oldest = list_liquidity_txs.remove(0);
                 map_liquidity_txs.remove(&oldest).unwrap();
-                info!("liquidity_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
-                info!("after remove liquidity_tx map size {:?} vec size {:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
+                // info!("liquidity_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                // info!("after remove liquidity_tx map size {:?} vec size {:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
             }
 
             map_liquidity_txs.insert(tx.hash.clone(), tx.clone());
             list_liquidity_txs.push(tx.hash.clone());
         } else {
-            info!("exists {:?} liquidity_tx map size {:?} vec size {:?}", tx.hash, map_liquidity_txs.len(), list_liquidity_txs.len());
+            // info!("exists {:?} liquidity_tx map size {:?} vec size {:?}", tx.hash, map_liquidity_txs.len(), list_liquidity_txs.len());
         }
     }
 
@@ -284,7 +284,7 @@ impl SandoStateManager {
     fn remove_approve_tx(&self, tx: &Transaction) {
         let mut map_approve_txs = self.approve_txs.lock().unwrap();
         let mut list_appprove_txs = self.approve_txs_vec.lock().unwrap();
-        let remove_hash: Vec<H256> = map_approve_txs.iter().filter(|(_, t)| tx.from == t.from && tx.nonce >= t.nonce).map(|(hash, _)| hash).cloned().collect();
+        let remove_hash: Vec<H256> = map_approve_txs.iter().filter(|(_, t)| tx.hash == t.hash || tx.from == t.from && tx.nonce >= t.nonce).map(|(hash, _)| hash).cloned().collect();
         if remove_hash.len() > 0 {
             map_approve_txs.retain(|hash, _| remove_hash.contains(hash));
             list_appprove_txs.retain(|hash| remove_hash.contains(hash));
@@ -312,7 +312,7 @@ impl SandoStateManager {
         if remove_hash.len() > 0 {
             map_liquidity_txs.retain(|hash, _| remove_hash.contains(hash));
             list_liquidity_txs.retain(|hash| remove_hash.contains(hash));
-            info!("after remove liquidity map size={:?}, liquidity vec size={:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
+            // info!("after remove liquidity map size={:?}, liquidity vec size={:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
         }
     }
 
