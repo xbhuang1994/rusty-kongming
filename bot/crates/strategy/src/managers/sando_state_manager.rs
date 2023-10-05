@@ -153,6 +153,7 @@ impl SandoStateManager {
         let sig_approve = ethers::utils::id("approve(address,uint256)");
         if tx.input.0.starts_with(&sig_approve) {
             self.append_approve_tx(&tx.clone());
+            // info!("tx approve {:?} to {:?} input: {:?}", &tx.hash, &tx.to.unwrap_or_default(), hex::encode(&tx.input.0));
             true
         } else {
             false
@@ -161,8 +162,13 @@ impl SandoStateManager {
 
     pub fn check_liquidity_by_signature(&self, tx: &Transaction) -> bool {
         // todo
-        let sig_approve = ethers::utils::id("transfer(address,uint256)");
-        if tx.input.0.starts_with(&sig_approve) {
+        let sig_transfer = ethers::utils::id("transfer(address,uint256)");
+        let sig_transfer_from = ethers::utils::id("transferFrom(address,address,uint256)");
+        if tx.input.0.starts_with(&sig_transfer) {
+            // info!("tx transfer {:?} to {:?} input: {:?}", &tx.hash, &tx.to.unwrap_or_default(), hex::encode(&tx.input.0));
+            true
+        } else if tx.input.0.starts_with(&sig_transfer_from) {
+            // info!("tx transfer_from {:?} to {:?} input: {:?}", &tx.hash, &tx.to.unwrap_or_default(), hex::encode(&tx.input.0));
             true
         } else {
             false
