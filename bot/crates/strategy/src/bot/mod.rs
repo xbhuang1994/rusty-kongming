@@ -798,6 +798,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools.is_empty() {
             log_info_cyan!("process sandwich {:?} from {:?} noce {:?} type {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, victim_tx.transaction_type);
             for pool in touched_pools {
+
+                let front_txs = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Forward);
+                
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
                     UniswapV3(p) => (p.token_a, p.token_b),
@@ -819,7 +822,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 };
                 
                 let ingredients = RawIngredients::new(
-                    vec![],
+                    front_txs,
                     vec![victim_tx.clone()],
                     start_end_token,
                     intermediary_token,
@@ -867,18 +870,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
             for pool in touched_pools_reverse {
 
-                let mut front_txs = vec![];
-                let approve_txs = self.sando_state_manager.get_approve_txs(&victim_tx.from);
-                if approve_txs.len() > 0 {
-                    for approve_tx in approve_txs {
-                        front_txs.push(approve_tx.clone());
-                        #[cfg(feature = "debug")]
-                        {
-                            info!("process reverse sandwich {:?} approve tx {:?} ", victim_tx.hash, approve_tx.hash);
-                        }
-                    }
-                }
-
+                let front_txs = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Reverse);
+                
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
                     UniswapV3(p) => (p.token_a, p.token_b),

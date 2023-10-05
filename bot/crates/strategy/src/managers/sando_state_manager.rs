@@ -3,7 +3,7 @@ use colored::Colorize;
 use ethers::{
     providers::Middleware,
     signers::{LocalWallet, Signer},
-    types::{Address, BlockNumber, Filter, U256, U64, H256, Transaction},
+    types::{Address, BlockNumber, Filter, U256, U64, H256, H160, Transaction},
 };
 use log::info;
 use std::sync::{Arc, Mutex, RwLock};
@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex, RwLock};
 use crate::{
     abi::Erc20,
     constants::{ERC20_TRANSFER_EVENT_SIG, WETH_ADDRESS},
-    startup_info_log,
+    startup_info_log, types::SandwichSwapType,
 };
 use std::collections::HashMap;
 
@@ -23,10 +23,14 @@ pub struct SandoStateManager {
     searcher_signer: LocalWallet,
     weth_inventory: RwLock<U256>,
     token_dust: Mutex<Vec<Address>>,
+    // use map for dunplicate transaction
     approve_txs: Mutex<HashMap<H256, Transaction>>,
+    // use vec for sort by timestamp
     approve_txs_vec: Mutex<Vec<H256>>,
     low_txs: Mutex<HashMap<H256, Transaction>>,
     low_txs_vec: Mutex<Vec<H256>>,
+    liquidity_txs: Mutex<HashMap<H256, Transaction>>,
+    liquidity_txs_vec: Mutex<Vec<H256>>,
     token_inventory_map: Arc<Mutex<HashMap<Address, U256>>>,
 }
 
@@ -46,6 +50,8 @@ impl SandoStateManager {
             approve_txs_vec: Default::default(),
             low_txs: Default::default(),
             low_txs_vec: Default::default(),
+            liquidity_txs: Default::default(),
+            liquidity_txs_vec: Default::default(),
             token_inventory_map: Arc::new(Mutex::new(HashMap::new())),
         }
     }
@@ -165,9 +171,11 @@ impl SandoStateManager {
         let sig_transfer = ethers::utils::id("transfer(address,uint256)");
         let sig_transfer_from = ethers::utils::id("transferFrom(address,address,uint256)");
         if tx.input.0.starts_with(&sig_transfer) {
+            self.append_liquidity_tx(tx);
             // info!("tx transfer {:?} to {:?} input: {:?}", &tx.hash, &tx.to.unwrap_or_default(), hex::encode(&tx.input.0));
             true
         } else if tx.input.0.starts_with(&sig_transfer_from) {
+            self.append_liquidity_tx(tx);
             // info!("tx transfer_from {:?} to {:?} input: {:?}", &tx.hash, &tx.to.unwrap_or_default(), hex::encode(&tx.input.0));
             true
         } else {
@@ -179,10 +187,11 @@ impl SandoStateManager {
         for tx in block_txs {
             // info!("remove_approve_tx by from {:?}", tx.from);
             self.remove_approve_tx(tx);
+            self.remove_liquidity_tx(tx);
         }
     }
     pub fn append_low_tx(&self, tx: &Transaction) {
-        //if low txs count is more than 10000, remove the oldest one
+        //if approve txs count is more than 10000, remove the oldest one
         let mut map_low_txs = self.low_txs.lock().unwrap();
         let mut list_low_txs = self.low_txs_vec.lock().unwrap();
         
@@ -200,6 +209,27 @@ impl SandoStateManager {
             // info!("exists {:?} map size {:?} vec size {:?}", tx.hash, map_low_txs.len(), list_low_txs.len());
         }
     }
+
+    fn append_liquidity_tx(&self, tx: &Transaction) {
+        //if liquidity txs count is more than 10000, remove the oldest one
+        let mut map_liquidity_txs = self.liquidity_txs.lock().unwrap();
+        let mut list_liquidity_txs = self.liquidity_txs_vec.lock().unwrap();
+
+        if !map_liquidity_txs.contains_key(&tx.hash) {
+            if list_liquidity_txs.len() > MAX_TRANSACTION_COUNT {
+                let oldest = list_liquidity_txs.remove(0);
+                map_liquidity_txs.remove(&oldest).unwrap();
+                info!("liquidity_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                info!("after remove liquidity_tx map size {:?} vec size {:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
+            }
+
+            map_liquidity_txs.insert(tx.hash.clone(), tx.clone());
+            list_liquidity_txs.push(tx.hash.clone());
+        } else {
+            info!("exists {:?} liquidity_tx map size {:?} vec size {:?}", tx.hash, map_liquidity_txs.len(), list_liquidity_txs.len());
+        }
+    }
+
 
     fn append_approve_tx(&self, tx: &Transaction) {
         //if low txs count is more than 10000, remove the oldest one
@@ -241,7 +271,7 @@ impl SandoStateManager {
     /// get approve txs by tx.from
     /// input Address
     /// return Vec<Transaction>
-    pub fn get_approve_txs(&self,from: &Address) -> Vec<Transaction> {
+    fn get_approve_txs(&self,from: &Address) -> Vec<Transaction> {
         let map_approve_txs = self.approve_txs.lock().unwrap();
         let mut result: Vec<Transaction> = map_approve_txs.iter().filter(|(_, tx)| tx.from == *from).map(|(_, tx)| tx).cloned().collect();
         if result.len() > 1 {
@@ -259,6 +289,47 @@ impl SandoStateManager {
             map_approve_txs.retain(|hash, _| remove_hash.contains(hash));
             list_appprove_txs.retain(|hash| remove_hash.contains(hash));
             // info!("after remove approve map size={:?}, approve vec size={:?}", map_approve_txs.len(), list_appprove_txs.len());
+        }
+    }
+
+    /// get liquidity txs with same pool
+    /// input pool_address
+    /// return Vec<Transaction>
+    fn get_liquidity_txs(&self, pool_address: H160) -> Vec<Transaction> {
+        let map_liquidity_txs = self.liquidity_txs.lock().unwrap();
+        let mut result: Vec<Transaction> = map_liquidity_txs.iter().filter(|(_, tx)| tx.to.unwrap_or_default() == pool_address).map(|(_, tx)| tx).cloned().collect();
+        if result.len() > 1 {
+            // sort by noce
+            result.sort_by_key(|t| t.nonce);
+        }
+        return result;
+    }
+    
+    fn remove_liquidity_tx(&self, tx: &Transaction) {
+        let mut map_liquidity_txs = self.liquidity_txs.lock().unwrap();
+        let mut list_liquidity_txs = self.liquidity_txs_vec.lock().unwrap();
+        let remove_hash: Vec<H256> = map_liquidity_txs.iter().filter(|(_, t)| tx.hash == t.hash || tx.from == t.from && tx.nonce >= t.nonce).map(|(hash, _)| hash).cloned().collect();
+        if remove_hash.len() > 0 {
+            map_liquidity_txs.retain(|hash, _| remove_hash.contains(hash));
+            list_liquidity_txs.retain(|hash| remove_hash.contains(hash));
+            info!("after remove liquidity map size={:?}, liquidity vec size={:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
+        }
+    }
+
+    pub fn get_head_txs(&self, from: &Address, pool_address: H160, swap_type: SandwichSwapType) -> Vec<Transaction> {
+
+        let mut head_txs = self.get_liquidity_txs(pool_address);
+        if swap_type == SandwichSwapType::Forward {
+            head_txs
+        } else {
+            let approve_txs = self.get_approve_txs(from);
+            if approve_txs.len() > 0 {
+                head_txs.extend(approve_txs);
+            }
+            if head_txs.len() > 1 {
+                head_txs.sort_by_key(|t| t.nonce);
+            }
+            head_txs
         }
     }
 
