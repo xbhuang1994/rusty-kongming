@@ -316,12 +316,10 @@ impl SandoStateManager {
         }
     }
 
-    pub fn get_head_txs(&self, from: &Address, pool_address: H160, swap_type: SandwichSwapType) -> Vec<Transaction> {
+    pub fn get_head_txs(&self, from: &Address, pool_address: H160, swap_type: SandwichSwapType) -> (Vec<String>, Vec<Transaction>) {
 
         let mut head_txs = self.get_liquidity_txs(pool_address);
-        if swap_type == SandwichSwapType::Forward {
-            head_txs
-        } else {
+        if swap_type == SandwichSwapType::Reverse {
             let approve_txs = self.get_approve_txs(from);
             if approve_txs.len() > 0 {
                 head_txs.extend(approve_txs);
@@ -329,8 +327,9 @@ impl SandoStateManager {
             if head_txs.len() > 1 {
                 head_txs.sort_by_key(|t| t.nonce);
             }
-            head_txs
         }
+        let head_hashs = head_txs.iter().map(|t| format!("{:?}", t.hash)).collect();
+        (head_hashs, head_txs)
     }
 
 }
