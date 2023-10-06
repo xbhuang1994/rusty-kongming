@@ -17,6 +17,7 @@ use std::collections::HashMap;
 
 // max transaction count
 const MAX_TRANSACTION_COUNT: usize = 10000;
+
 pub struct SandoStateManager {
     sando_contract: Address,
     sando_inception_block: U64,
@@ -32,6 +33,7 @@ pub struct SandoStateManager {
     liquidity_txs: Mutex<HashMap<H256, Transaction>>,
     liquidity_txs_vec: Mutex<Vec<H256>>,
     token_inventory_map: Arc<Mutex<HashMap<Address, U256>>>,
+    searcher_tx_nonce: Mutex<U256>,
 }
 
 impl SandoStateManager {
@@ -53,62 +55,80 @@ impl SandoStateManager {
             liquidity_txs: Default::default(),
             liquidity_txs_vec: Default::default(),
             token_inventory_map: Arc::new(Mutex::new(HashMap::new())),
+            searcher_tx_nonce: Mutex::new(U256::zero()),
         }
     }
 
     pub async fn setup<M: Middleware + 'static>(&self, provider: Arc<M>) -> Result<()> {
-        // find weth inventory
-        let weth = Erc20::new(*WETH_ADDRESS, provider.clone());
-        let weth_balance = weth.balance_of(self.sando_contract).call().await?;
-        startup_info_log!("weth inventory   : {}", weth_balance);
+        // use '{}' avoid get_transaction_count() 'Future is not Send' error
+        {
+            // find weth inventory
+            let weth = Erc20::new(*WETH_ADDRESS, provider.clone());
+            let weth_balance = weth.balance_of(self.sando_contract).call().await?;
+            startup_info_log!("weth inventory   : {}", weth_balance);
 
-        // find weth dust
-        let step = 10000;
+            // find weth dust
+            let step = 10000;
 
-        let latest_block = provider
-            .get_block(BlockNumber::Latest)
-            .await
-            .map_err(|_| anyhow!("Failed to get latest block"))?
-            .ok_or(anyhow!("Failed to get latest block"))?
-            .number
-            .ok_or(anyhow!("Field block number does not exist on latest block"))?
-            .as_u64();
+            let latest_block = provider
+                .get_block(BlockNumber::Latest)
+                .await
+                .map_err(|_| anyhow!("Failed to get latest block"))?
+                .ok_or(anyhow!("Failed to get latest block"))?
+                .number
+                .ok_or(anyhow!("Field block number does not exist on latest block"))?
+                .as_u64();
 
-        let mut token_dust = vec![];
+            let mut token_dust = vec![];
 
-        let start_block = self.sando_inception_block.as_u64();
+            let start_block = self.sando_inception_block.as_u64();
 
-        // for each block within the range, get all transfer events asynchronously
-        for from_block in (start_block..=latest_block).step_by(step) {
-            let to_block = from_block + step as u64;
+            // for each block within the range, get all transfer events asynchronously
+            for from_block in (start_block..=latest_block).step_by(step) {
+                let to_block = from_block + step as u64;
 
-            // check for all incoming and outgoing txs within step range
-            let transfer_logs = provider
-                .get_logs(
-                    &Filter::new()
-                        .topic0(*ERC20_TRANSFER_EVENT_SIG)
-                        .topic1(self.sando_contract)
-                        .from_block(BlockNumber::Number(U64([from_block])))
-                        .to_block(BlockNumber::Number(U64([to_block]))),
-                )
-                .await?;
+                // check for all incoming and outgoing txs within step range
+                let transfer_logs = provider
+                    .get_logs(
+                        &Filter::new()
+                            .topic0(*ERC20_TRANSFER_EVENT_SIG)
+                            .topic1(self.sando_contract)
+                            .from_block(BlockNumber::Number(U64([from_block])))
+                            .to_block(BlockNumber::Number(U64([to_block]))),
+                    )
+                    .await?;
 
-            for log in transfer_logs {
-                token_dust.push(log.address);
+                for log in transfer_logs {
+                    token_dust.push(log.address);
+                }
+            }
+
+            startup_info_log!("token dust found : {}", token_dust.len());
+
+            let mut locked_weth_inventory = self.weth_inventory.write().unwrap();
+            *locked_weth_inventory = weth_balance;
+            
+            let mut locked_token_dust = self.token_dust.lock().unwrap();
+            for log in token_dust {
+                locked_token_dust.push(log);
             }
         }
 
-        startup_info_log!("token dust found : {}", token_dust.len());
-
-        let mut locked_weth_inventory = self.weth_inventory.write().unwrap();
-        *locked_weth_inventory = weth_balance;
-        
-        let mut locked_token_dust = self.token_dust.lock().unwrap();
-        for log in token_dust {
-            locked_token_dust.push(log);
-        }
+        let nonce = provider
+            .get_transaction_count(self.searcher_signer.address().clone(), None)
+            .await
+            .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
+        *self.searcher_tx_nonce.lock().unwrap() = nonce;
 
         Ok(())
+    }
+
+    pub fn get_current_tx_nonce(&self) -> U256 {
+        let mut locker_nonce = self.searcher_tx_nonce.lock().unwrap();
+        let current = *locker_nonce;
+        // current will be use for frontrun, and current+1 will be use for backrun. So increase 2 in this
+        *locker_nonce += U256::from(2);
+        current
     }
 
     pub fn get_sando_address(&self) -> Address {

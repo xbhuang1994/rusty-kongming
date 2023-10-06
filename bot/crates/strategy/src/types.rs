@@ -397,19 +397,22 @@ impl SandoRecipe {
     }
 
     /// turn recipe into a signed bundle that can be sumbitted to flashbots
-    pub async fn to_fb_bundle<M: Middleware>(
+    // pub async fn to_fb_bundle<M: Middleware>(
+    pub async fn to_fb_bundle(
         self,
         sando_address: Address,
         searcher: &LocalWallet,
         has_dust: bool,
-        provider: Arc<M>,
+        // provider: Arc<M>,
+        tx_nonce: U256,
         is_huge: bool,
     ) -> Result<(BundleRequest, U256)> {
-        let nonce = provider
-            .get_transaction_count(searcher.address(), Some(self.target_block.number.into()))
-            .await
-            .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
+        // let tx_nonce = provider
+        //     .get_transaction_count(searcher.address(), None)
+        //     .await
+        //     .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
 
+        // info!("bundle nonce start from {:?}", tx_nonce);
         let mut head_hashs: Vec<String> = vec![];
         let mut signed_head_txs: Vec<Bytes> = vec![];
         self.head_txs.into_iter().for_each(|head| {
@@ -424,7 +427,7 @@ impl SandoRecipe {
             gas: Some((U256::from(self.frontrun_gas_used) * 10) / 7),
             value: Some(self.frontrun.value.into()),
             data: Some(self.frontrun.data.into()),
-            nonce: Some(nonce),
+            nonce: Some(tx_nonce),
             access_list: access_list_to_ethers(self.frontrun.access_list),
             max_fee_per_gas: Some(self.target_block.base_fee_per_gas.into()),
             ..Default::default()
@@ -458,7 +461,7 @@ impl SandoRecipe {
             gas: Some((U256::from(self.backrun_gas_used) * 10) / 7),
             value: Some(self.backrun.value.into()),
             data: Some(self.backrun.data.into()),
-            nonce: Some(nonce),
+            nonce: Some(tx_nonce + 1),
             access_list: access_list_to_ethers(self.backrun.access_list),
             max_priority_fee_per_gas: Some(max_fee),
             max_fee_per_gas: Some(max_fee),
