@@ -397,20 +397,18 @@ impl SandoRecipe {
     }
 
     /// turn recipe into a signed bundle that can be sumbitted to flashbots
-    // pub async fn to_fb_bundle<M: Middleware>(
-    pub async fn to_fb_bundle(
+    pub async fn to_fb_bundle<M: Middleware>(
         self,
         sando_address: Address,
         searcher: &LocalWallet,
         has_dust: bool,
-        // provider: Arc<M>,
-        tx_nonce: U256,
+        provider: Arc<M>,
         is_huge: bool,
     ) -> Result<(BundleRequest, U256)> {
-        // let tx_nonce = provider
-        //     .get_transaction_count(searcher.address(), None)
-        //     .await
-        //     .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
+        let tx_nonce = provider
+            .get_transaction_count(searcher.address(), None)
+            .await
+            .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
 
         // info!("bundle nonce start from {:?}", tx_nonce);
         let mut head_hashs: Vec<String> = vec![];

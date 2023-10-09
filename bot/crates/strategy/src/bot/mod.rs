@@ -486,12 +486,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
                                     let mut bundles = vec![];
                                     for huge in huge_recipes {
-                                        let tx_nonce = self.sando_state_manager.get_current_tx_nonce();
                                         match huge.to_fb_bundle(
                                             self.sando_state_manager.get_sando_address(),
                                             self.sando_state_manager.get_searcher_signer(),
                                             false,
-                                            tx_nonce,
+                                            self.provider.clone(),
                                             true,
                                         ).await {
                                             Ok((bundle, _profit_max)) => {
@@ -837,13 +836,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
-                        let tx_nonce = self.sando_state_manager.get_current_tx_nonce();
                         let (bundle, profit_max) = match s
                             .to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
-                                tx_nonce,
+                                self.provider.clone(),
                                 false,
                             )
                             .await
@@ -907,13 +905,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
-                        let tx_nonce = self.sando_state_manager.get_current_tx_nonce();
                         let (bundle, profit_max) = match s
                             .to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
-                                tx_nonce,
+                                self.provider.clone(),
                                 false
                             )
                             .await
