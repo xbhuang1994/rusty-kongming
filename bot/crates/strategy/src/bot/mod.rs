@@ -126,14 +126,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
     /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
-    async fn is_sandwichable_huge(&'static self, _recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+    async fn is_sandwichable_huge(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
 
         let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
         let mut huge_recipes = vec![];
         // enhancement: if merge all swap_types, should delete duplicate meats also like head_txs
         for swap_type in swap_types.iter() {
 
-            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&_recipes_map, swap_type);
+            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
             let mut handlers = vec![];
             for (target_pool, recipes) in filtered_recipes_map.iter_mut() {
                 if recipes.is_empty() {
@@ -199,6 +199,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
             let mut frontrun_data = Vec::new();
             let mut backrun_data = Vec::new();
             let mut meats: Vec<Transaction> = Vec::new();
+            let mut sando_weth_balance = U256::zero();
+            let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
             for recipe in optimal_recipes {
                 let max_fee = calculate_bribe_for_max_fee(
                     recipe.get_revenue(),
@@ -215,6 +217,17 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 frontrun_data.extend(data.clone());
                                 backrun_data.extend(recipe.get_backrun().data.clone());
                                 meats.extend(recipe.get_meats().clone());
+
+                                // set sando token balance for recipe creation
+                                if recipe.get_start_end_token() == *WETH_ADDRESS {
+                                    sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+                                } else {
+                                    let mut balance = recipe.get_frontrun_optimal_in();
+                                    if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+                                        balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+                                    }
+                                    sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                                }
                             },
                             None => {}
                         }
@@ -247,21 +260,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 Some((target_block.number - 1).into()),
             );
 
-            // enhancement: should set another inventory when reverse
-            let token_inventory = if cfg!(feature = "debug") {
-                // spoof weth balance when the debug feature is active
-                (*crate::constants::WETH_FUND_AMT).into()
-            } else {
-                self.sando_state_manager.get_weth_inventory()
-            };
-
             let huge_recipe = create_recipe_huge(
                 &target_block,
                 frontrun_data.into(),
                 backrun_data.into(),
                 head_txs,
                 meats,
-                token_inventory,
+                sando_weth_balance,
+                sando_tokens_balance,
                 self.sando_state_manager.get_searcher_address(),
                 self.sando_state_manager.get_sando_address(),
                 shared_backend.clone(),

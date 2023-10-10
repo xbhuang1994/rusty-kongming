@@ -10,7 +10,7 @@ use dashmap::DashMap;
 use ethers::{
     abi,
     providers::Middleware,
-    types::{Address, Block, BlockNumber, Diff, TraceType, Transaction, H160, H256, U256},
+    types::{Address, BlockNumber, Diff, TraceType, Transaction, H160, H256, U256},
 };
 use log::info;
 use std::{path::Path, str::FromStr, sync::Arc};

@@ -42,27 +42,24 @@ fn pre_get_intermediary_balance(
     shared_backend: SharedBackend,
 ) -> Result<U256> {
 
-    #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    #[cfg(feature = "debug")]
-    {
-        inject_huff_sando(
-            &mut fork_db,
-            sando_address.0.into(),
-            searcher.0.into(),
-            sando_start_bal,
-        );
+    inject_huff_sando(
+        &mut fork_db,
+        sando_address.0.into(),
+        searcher.0.into(),
+        sando_start_bal,
+    );
 
-        // as start_end token is not WETH, credit xxxx tokens for use
-        let credit_helper_ref = ingredients.get_credit_helper_ref();
-        credit_helper_ref.credit_token_amount(
-            ingredients.get_start_end_token().clone(),
-            &mut fork_db,
-            sando_address.0.into(),
-            sando_start_bal,
-        );
-    }
+    // as start_end token is not WETH, credit xxxx tokens for use
+    let credit_helper_ref = ingredients.get_credit_helper_ref();
+    credit_helper_ref.credit_token_balance(
+        ingredients.get_start_end_token().clone(),
+        &mut fork_db,
+        sando_address.0.into(),
+        sando_start_bal,
+    );
+    
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
@@ -275,27 +272,24 @@ pub fn create_recipe_reverse(
             break;
         }
 
-        #[allow(unused_mut)]
         let mut fork_db = CacheDB::new(shared_backend.clone());
 
-        #[cfg(feature = "debug")]
-        {
-            inject_huff_sando(
-                &mut fork_db,
-                sando_address.0.into(),
-                searcher.0.into(),
-                sando_start_bal,
-            );
+        inject_huff_sando(
+            &mut fork_db,
+            sando_address.0.into(),
+            searcher.0.into(),
+            sando_start_bal,
+        );
 
-            // as start_end token is not WETH, credit xxxx tokens for use
-            let credit_helper_ref = ingredients.get_credit_helper_ref();
-            credit_helper_ref.credit_token_amount(
-                ingredients.get_start_end_token().clone(),
-                &mut fork_db,
-                sando_address.0.into(),
-                sando_start_bal,
-            );
-        }
+        // as start_end token is not WETH, credit xxxx tokens for use
+        let credit_helper_ref = ingredients.get_credit_helper_ref();
+        credit_helper_ref.credit_token_balance(
+            ingredients.get_start_end_token().clone(),
+            &mut fork_db,
+            sando_address.0.into(),
+            sando_start_bal,
+        );
+        
         let mut evm = EVM::new();
         evm.database(fork_db);
         let next_block = next_block.clone();
@@ -622,6 +616,7 @@ pub fn create_recipe_reverse(
                 ingredients.get_start_end_token(),
                 ingredients.get_intermediary_token(),
                 Some(frontrun_data.clone().into()),
+                optimal_in,
             ))
         }
     }

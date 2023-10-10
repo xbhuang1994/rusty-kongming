@@ -142,7 +142,6 @@ pub fn v2_get_amount_out(
     Ok(amount_out)
 }
 
-// #[cfg(feature = "debug")]
 pub fn inject_huff_sando(
     db: &mut CacheDB<SharedBackend>,
     huff_sando_addy: foundry_evm::executor::B160,

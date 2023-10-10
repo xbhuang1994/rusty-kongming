@@ -71,17 +71,30 @@ impl CreditHelper {
             .unwrap();
     }
 
-    pub fn credit_token_amount(
+    pub fn credit_multi_tokens_balance(
+        &self,
+        token_amouts: &HashMap<Address, U256>, 
+        fork_db: &mut CacheDB<SharedBackend>,
+        sando_address: Address
+    ) {
+        if token_amouts.len() > 0 {
+            for (input_token, amount) in token_amouts.iter() {
+                self.credit_token_balance(*input_token, fork_db, sando_address, *amount);
+            }
+        }
+    }
+
+    pub fn credit_token_balance(
         &self,
         input_token: Address,
         fork_db: &mut CacheDB<SharedBackend>,
-        credit_addr: Address,
+        sando_address: Address,
         amount: U256,
     ) {
         let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
         // give sandwich contract some weth for swap
         let slot: U256 = ethers::utils::keccak256(abi::encode(&[
-            abi::Token::Address(credit_addr.0.into()),
+            abi::Token::Address(sando_address.0.into()),
             abi::Token::Uint(U256::from(slot_item.index)),
         ]))
         .into();

@@ -297,6 +297,7 @@ pub struct SandoRecipe {
     start_end_token: Address,
     intermediary_token: Address,
     frontrun_data: Option<Vec<u8>>,
+    frontrun_optimal_in: U256,
 }
 
 impl SandoRecipe {
@@ -315,6 +316,7 @@ impl SandoRecipe {
         start_end_token: Address,
         intermediary_token: Address,
         frontrun_data: Option<Vec<u8>>,
+        frontrun_optimal_in: U256,
     ) -> Self {
         Self {
             head_txs,
@@ -332,6 +334,7 @@ impl SandoRecipe {
             start_end_token: start_end_token,
             intermediary_token: intermediary_token,
             frontrun_data: frontrun_data,
+            frontrun_optimal_in: frontrun_optimal_in,
         }
     }
 
@@ -394,6 +397,10 @@ impl SandoRecipe {
 
     pub fn get_frontrun_data(&self) -> Option<Vec<u8>> {
         self.frontrun_data.clone()
+    }
+
+    pub fn get_frontrun_optimal_in(&self) -> U256 {
+        self.frontrun_optimal_in
     }
 
     /// turn recipe into a signed bundle that can be sumbitted to flashbots

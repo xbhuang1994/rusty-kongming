@@ -42,18 +42,15 @@ pub fn create_recipe(
         return Err(anyhow!("[huffsando: ZeroOtimal]"))
     }
 
-    #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    #[cfg(feature = "debug")]
-    {
-        inject_huff_sando(
-            &mut fork_db,
-            sando_address.0.into(),
-            searcher.0.into(),
-            sando_start_bal,
-        );
-    }
+    inject_huff_sando(
+        &mut fork_db,
+        sando_address.0.into(),
+        searcher.0.into(),
+        sando_start_bal,
+    );
+
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
@@ -349,5 +346,6 @@ pub fn create_recipe(
         ingredients.get_start_end_token(),
         ingredients.get_intermediary_token(),
         Some(frontrun_data.clone().into()),
+        optimal_in,
     ))
 }

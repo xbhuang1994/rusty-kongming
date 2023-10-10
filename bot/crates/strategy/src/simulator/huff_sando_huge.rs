@@ -11,6 +11,7 @@ use foundry_evm::revm::{
     primitives::{Address as rAddress},
     EVM,
 };
+use std::collections::HashMap;
 
 use crate::helpers::access_list_to_revm;
 use crate::simulator::setup_block_state;
@@ -21,6 +22,7 @@ use crate::constants::WETH_ADDRESS;
 use super::salmonella_inspector::{IsSandoSafu, SalmonellaInspectoooor};
 
 use super::huff_helper::{get_erc20_balance, inject_huff_sando};
+use crate::simulator::credit::CreditHelper;
 
 /// finds if sandwich is profitable + salmonella free
 pub fn create_recipe_huge(
@@ -29,26 +31,31 @@ pub fn create_recipe_huge(
     backrun_data: Vec<u8>,
     head_txs: Vec<Transaction>,
     meats: Vec<Transaction>,
-    start_sando_bal: U256,
+    start_sando_weth_balance: U256,
+    start_sando_tokens_balance: HashMap<Address, U256>,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
     uuid: String,
 ) -> Result<SandoRecipe> {
 
-    
-    #[allow(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    #[cfg(feature = "debug")]
-    {
-        inject_huff_sando(
-            &mut fork_db,
-            sando_address.0.into(),
-            searcher.0.into(),
-            start_sando_bal,
-        );
-    }
+    inject_huff_sando(
+        &mut fork_db,
+        sando_address.0.into(),
+        searcher.0.into(),
+        start_sando_weth_balance,
+    );
+
+    // huge sandwich may contain many other tokens, set their balance in sando
+    let credit_helper_ref = CreditHelper::new();
+    credit_helper_ref.credit_multi_tokens_balance(
+        &start_sando_tokens_balance,
+        &mut fork_db,
+        sando_address.0.into()
+    );
+    
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
@@ -256,10 +263,10 @@ pub fn create_recipe_huge(
     // *                      GENERATE REPORTS                      */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     // caluclate revenue from balance change
-    let post_sando_bal = get_erc20_balance(*WETH_ADDRESS, sando_address, next_block, &mut evm)?;
+    let post_sando_weth_balance = get_erc20_balance(*WETH_ADDRESS, sando_address, next_block, &mut evm)?;
     
-    let revenue = post_sando_bal
-        .checked_sub(start_sando_bal)
+    let revenue = post_sando_weth_balance
+        .checked_sub(start_sando_weth_balance)
         .unwrap_or_default();
 
     // filter only passing meat txs
@@ -285,5 +292,6 @@ pub fn create_recipe_huge(
         Default::default(),
         Default::default(),
         None,
+        U256::zero(),
     ))
 }
