@@ -28,7 +28,7 @@ use crate::{
         Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType,
         calculate_bribe_for_max_fee
     },
-    helpers::calculate_inventory_for_debug,
+    helpers::{calculate_inventory_for_debug, get_start_token_decimal}
 };
 use uuid::Uuid;
 
@@ -305,18 +305,21 @@ impl<M: Middleware + 'static> SandoBot<M> {
         );
 
         // enhancement: should set another inventory when reverse
-        let token_inventory = if cfg!(feature = "debug") {
+        let (token_inventory, token_decimal) = if cfg!(feature = "debug") {
             // spoof weth balance when the debug feature is active
             // (*crate::constants::WETH_FUND_AMT).into()
             calculate_inventory_for_debug(&ingredients)
         } else {
             if swap_type == SandwichSwapType::Forward {
-                self.sando_state_manager.get_weth_inventory()
+                (self.sando_state_manager.get_weth_inventory(), 1e18 as u32)
             } else {
-                self.sando_state_manager.get_token_inventory(
-                    ingredients.get_start_end_token(),
-                    self.provider.clone()
-                ).await
+                (
+                    self.sando_state_manager.get_token_inventory(
+                        ingredients.get_start_end_token(),
+                        self.provider.clone()
+                    ).await,
+                    get_start_token_decimal(&ingredients)
+                )
             }
         };
 
@@ -370,7 +373,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             swap_type,
             ingredients.print_head_txs(),
             ingredients.print_meats(),
-            optimal_input.as_u128() as f64 / 1e18,
+            optimal_input.as_u128() as f64 / token_decimal as f64,
             recipe.get_revenue().as_u128() as f64 / 1e18,
             recipe.get_frontrun_gas_used(),
             recipe.get_backrun_gas_used() 

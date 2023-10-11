@@ -117,7 +117,7 @@ impl CreditHelper {
         self.slot_index_map.contains_key(&input_token.clone())
     }
 
-    pub fn get_token_decimal(&self, input_token: Address) -> u32 {
+    pub fn get_token_decimals(&self, input_token: Address) -> u32 {
         if self.slot_index_map.contains_key(&input_token) {
             self.slot_index_map[&input_token].decimals
         } else {

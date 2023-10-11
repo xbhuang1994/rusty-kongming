@@ -15,7 +15,7 @@ use foundry_evm::{
     utils::{b160_to_h160, h160_to_b160, ru256_to_u256, u256_to_ru256},
 };
 use crate::types::RawIngredients;
-use crate::constants::{WETH_ADDRESS, FUND_AMT_BASE};
+use crate::constants::{WETH_ADDRESS, FUND_OTHER_AMT_BASE};
 
 /// Sign eip1559 transactions
 pub async fn sign_eip1559(
@@ -67,21 +67,40 @@ pub fn access_list_to_revm(access_list: AccessList) -> Vec<(B160, Vec<rU256>)> {
 /// get inventory for token when debug
 pub fn calculate_inventory_for_debug(
         ingredients: &RawIngredients,
-    ) -> U256 {
+    ) -> (U256, u32) {
     if ingredients.get_start_end_token() == *WETH_ADDRESS {
-        (*crate::constants::WETH_FUND_AMT).into()
+        ((*crate::constants::WETH_FUND_AMT).into(), 1e18 as u32)
     } else {
         if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
             let decimals = ingredients.get_credit_helper_ref()
-                .get_token_decimal(
+                .get_token_decimals(
                     ingredients.get_start_end_token()
                 );
             if decimals > 0 {
-                let inventory = U256::pow(U256::from(10), U256::from(decimals)).checked_mul(U256::from(FUND_AMT_BASE)).unwrap_or_default();
-                return inventory;
+                let inventory = U256::pow(U256::from(10), U256::from(decimals)).checked_mul(U256::from(FUND_OTHER_AMT_BASE)).unwrap_or_default();
+                return (inventory, decimals);
             }
         }
-        U256::zero()
+        (U256::zero(), 1)
+    }
+}
+
+/// get token decimal
+pub fn get_start_token_decimal(
+        ingredients: &RawIngredients,
+    ) -> u32 {
+    if ingredients.get_start_end_token() == *WETH_ADDRESS {
+        1e18 as u32
+    } else {
+        if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
+            let decimals = ingredients.get_credit_helper_ref()
+                .get_token_decimals(
+                    ingredients.get_start_end_token()
+                );
+            decimals
+        } else {
+            1
+        }
     }
 }
 
