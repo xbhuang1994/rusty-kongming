@@ -77,12 +77,17 @@ pub fn calculate_inventory_for_debug(
                     ingredients.get_start_end_token()
                 );
             if decimals > 0 {
-                let inventory = U256::pow(U256::from(10), U256::from(decimals)).checked_mul(U256::from(FUND_OTHER_AMT_BASE)).unwrap_or_default();
+                let token_decimals = calculate_token_decimals(decimals);
+                let inventory = U256::from(token_decimals).checked_mul(U256::from(FUND_OTHER_AMT_BASE)).unwrap_or_default();
                 return (inventory, decimals);
             }
         }
         (U256::zero(), 1)
     }
+}
+
+pub fn calculate_token_decimals(decimals: u32) -> u128 {
+    U256::pow(U256::from(10), U256::from(decimals)).as_u128()
 }
 
 /// get token decimal

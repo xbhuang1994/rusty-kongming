@@ -28,7 +28,7 @@ use crate::{
         Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType,
         calculate_bribe_for_max_fee
     },
-    helpers::{calculate_inventory_for_debug, get_start_token_decimal}
+    helpers::{calculate_inventory_for_debug, get_start_token_decimal, calculate_token_decimals}
 };
 use uuid::Uuid;
 
@@ -347,7 +347,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 )?;
             },
             SandwichSwapType::Reverse => {
-                info!("start_token {:?} token_inventory {:?} token_decimals {:?}", &ingredients.get_start_end_token(), token_inventory, token_decimals);
                 optimal_input = find_optimal_input_reverse(
                     &ingredients,
                     &target_block,
@@ -374,7 +373,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             swap_type,
             ingredients.print_head_txs(),
             ingredients.print_meats(),
-            optimal_input.as_u128() as f64 / token_decimals as f64,
+            optimal_input.as_u128() as f64 / calculate_token_decimals(token_decimals) as f64,
             recipe.get_revenue().as_u128() as f64 / 1e18,
             recipe.get_frontrun_gas_used(),
             recipe.get_backrun_gas_used() 
