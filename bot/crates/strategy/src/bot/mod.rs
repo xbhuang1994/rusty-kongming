@@ -271,6 +271,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 self.sando_state_manager.get_searcher_address(),
                 self.sando_state_manager.get_sando_address(),
                 shared_backend.clone(),
+                swap_type.clone(),
                 format!("{}", Uuid::new_v4())
             )?;
 

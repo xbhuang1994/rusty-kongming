@@ -69,7 +69,7 @@ pub fn calculate_inventory_for_debug(
         ingredients: &RawIngredients,
     ) -> (U256, u32) {
     if ingredients.get_start_end_token() == *WETH_ADDRESS {
-        ((*crate::constants::WETH_FUND_AMT).into(), 1e18 as u32)
+        ((*crate::constants::WETH_FUND_AMT).into(), 18)
     } else {
         if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
             let decimals = ingredients.get_credit_helper_ref()

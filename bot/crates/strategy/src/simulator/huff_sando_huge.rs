@@ -8,7 +8,7 @@ use foundry_evm::executor::{
 };
 use foundry_evm::revm::{
     db::CacheDB,
-    primitives::{Address as rAddress},
+    primitives::Address as rAddress,
     EVM,
 };
 use std::collections::HashMap;
@@ -36,6 +36,7 @@ pub fn create_recipe_huge(
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
+    swap_type: SandwichSwapType,
     uuid: String,
 ) -> Result<SandoRecipe> {
 
@@ -239,8 +240,6 @@ pub fn create_recipe_huge(
     match backrun_result {
         ExecutionResult::Success { .. } => { /* continue */ }
         ExecutionResult::Revert { output, .. } => {
-
-            log::info!("revert backrun data: {:?}", hex::encode(backrun_data));
             return Err(anyhow!("[huffsando: REVERT] backrun: {:?}", output));
         }
         ExecutionResult::Halt { reason, .. } => {
@@ -286,7 +285,7 @@ pub fn create_recipe_huge(
         backrun_gas_used,
         revenue,
         *next_block,
-        SandwichSwapType::Forward,
+        swap_type,
         None,
         uuid,
         Default::default(),

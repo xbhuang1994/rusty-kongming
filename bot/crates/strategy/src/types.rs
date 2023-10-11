@@ -523,6 +523,11 @@ impl SandoRecipe {
             profit_max
         );
 
+        info!("build bundle: huge={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
+            is_huge, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
+            self.revenue, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
+        );
+
         Ok((bundle_request, profit_max))
     }
 }
