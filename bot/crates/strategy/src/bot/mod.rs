@@ -305,7 +305,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         );
 
         // enhancement: should set another inventory when reverse
-        let (token_inventory, token_decimal) = if cfg!(feature = "debug") {
+        let (token_inventory, token_decimals) = if cfg!(feature = "debug") {
             // spoof weth balance when the debug feature is active
             // (*crate::constants::WETH_FUND_AMT).into()
             calculate_inventory_for_debug(&ingredients)
@@ -347,6 +347,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 )?;
             },
             SandwichSwapType::Reverse => {
+                info!("start_token {:?} token_inventory {:?} token_decimals {:?}", &ingredients.get_start_end_token(), token_inventory, token_decimals);
                 optimal_input = find_optimal_input_reverse(
                     &ingredients,
                     &target_block,
@@ -373,7 +374,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             swap_type,
             ingredients.print_head_txs(),
             ingredients.print_meats(),
-            optimal_input.as_u128() as f64 / token_decimal as f64,
+            optimal_input.as_u128() as f64 / token_decimals as f64,
             recipe.get_revenue().as_u128() as f64 / 1e18,
             recipe.get_frontrun_gas_used(),
             recipe.get_backrun_gas_used() 
