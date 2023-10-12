@@ -610,7 +610,7 @@ pub fn create_recipe_reverse(
                 backrun_gas_used,
                 revenue,
                 next_block,
-                SandwichSwapType::Forward,
+                SandwichSwapType::Reverse,
                 Some(ingredients.get_target_pool()),
                 ingredients.get_uuid(),
                 ingredients.get_start_end_token(),
