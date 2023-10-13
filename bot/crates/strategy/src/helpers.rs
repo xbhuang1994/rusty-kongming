@@ -95,7 +95,7 @@ pub fn get_start_token_decimal(
         ingredients: &RawIngredients,
     ) -> u32 {
     if ingredients.get_start_end_token() == *WETH_ADDRESS {
-        1e18 as u32
+        18
     } else {
         if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
             let decimals = ingredients.get_credit_helper_ref()

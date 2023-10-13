@@ -37,6 +37,7 @@ fn pre_get_intermediary_balance(
     next_block: &BlockInfo,
     optimal_in: U256,
     sando_start_bal: U256,
+    sando_start_web_bal: U256,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
@@ -48,7 +49,7 @@ fn pre_get_intermediary_balance(
         &mut fork_db,
         sando_address.0.into(),
         searcher.0.into(),
-        sando_start_bal,
+        sando_start_web_bal,
     );
 
     // as start_end token is not WETH, credit xxxx tokens for use
@@ -208,6 +209,7 @@ pub fn create_recipe_reverse(
     next_block: &BlockInfo,
     optimal_in: U256,
     sando_start_bal: U256,
+    sando_start_weth_bal: U256,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
@@ -222,6 +224,7 @@ pub fn create_recipe_reverse(
         &next_block.clone(),
         optimal_in,
         sando_start_bal,
+        sando_start_weth_bal,
         searcher,
         sando_address,
         shared_backend.clone()
@@ -237,7 +240,7 @@ pub fn create_recipe_reverse(
 
     // amount of weth increase
     // let weth_start_balance = U256::from(eth_to_wei(LIL_ROUTER_WETH_AMT_BASE));
-    let weth_start_balance = sando_start_bal.clone();
+    let weth_start_balance = sando_start_weth_bal.clone();
     let intermediary_increase = intermediary_balance.checked_sub(weth_start_balance).unwrap_or_default();
     let max_backrun_in = intermediary_increase.checked_sub(*MIN_REVENUE_THRESHOLD).unwrap_or_default();
     // min_backrun_in is 75%
@@ -278,7 +281,7 @@ pub fn create_recipe_reverse(
             &mut fork_db,
             sando_address.0.into(),
             searcher.0.into(),
-            sando_start_bal,
+            sando_start_weth_bal,
         );
 
         // as start_end token is not WETH, credit xxxx tokens for use
@@ -363,13 +366,12 @@ pub fn create_recipe_reverse(
                 ingredients.get_start_end_token(),
                 frontrun_in,
                 frontrun_out),
-            UniswapV3(p) => (
-                v3_create_backrun_payload_multi(
+            UniswapV3(p) => (v3_create_backrun_payload_multi(
                     p,
                     ingredients.get_start_end_token(),
                     frontrun_in),
-                U256::zero(),
-            ),
+                    U256::zero()
+                )
         };
 
         // setup evm for frontrun transaction
@@ -470,7 +472,7 @@ pub fn create_recipe_reverse(
             }
         }
 
-        let other_mid_balance = get_erc20_balance(ingredients.get_start_end_token(), sando_address, &next_block, &mut evm)?;
+        let _other_mid_balance = get_erc20_balance(ingredients.get_start_end_token(), sando_address, &next_block, &mut evm)?;
         
         // *´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
         // *                    BACKRUN TRANSACTION                     */
@@ -501,7 +503,7 @@ pub fn create_recipe_reverse(
                 p,
                 ingredients.get_start_end_token(),
                 backrun_in,
-            ),
+            )
         };
 
         // setup evm for backrun transaction
@@ -569,7 +571,7 @@ pub fn create_recipe_reverse(
         // println!("110:current_round={:?}, low={:?}, high={:?}, can_continue={:?}, other_frontrun_in={:?} intermediary_increase={:?},
         //     current_amount_in={:?}, last_amount_in={:?}, other_start_balance={:?}, other_mid_balance={:?}, other_post_balance={:?}",
         //     current_round, low_amount_in, high_amount_in, can_continue, frontrun_in, intermediary_increase,
-        //     current_amount_in, last_amount_in, other_start_balance, other_mid_balance, other_post_balance);
+        //     current_amount_in, last_amount_in, other_start_balance, _other_mid_balance, other_post_balance);
 
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;

@@ -121,7 +121,7 @@ impl CreditHelper {
         if self.slot_index_map.contains_key(&input_token) {
             self.slot_index_map[&input_token].decimals
         } else {
-            0
+            1
         }
     }
 }

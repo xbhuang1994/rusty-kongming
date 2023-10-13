@@ -57,10 +57,7 @@ where
             */
             /* Annotated for testing */
             
-            #[cfg(feature = "debug")]
-            {
-                info!("flashbots execute block={:?},hash_0={:?}", bundle.block().unwrap_or_default(), bundle.transaction_hashes()[0]);
-            }
+            info!("flashbots execute block={:?},hash_0={:?}", bundle.block().unwrap_or_default(), bundle.transaction_hashes()[0]);
         }
 
         Ok(())
