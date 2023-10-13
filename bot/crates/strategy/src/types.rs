@@ -509,7 +509,7 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
-        let revenue_log = self.revenue as f64 / 1e18 as f64;
+        let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;
         log_bundle!(
             is_huge,
             self.uuid,
