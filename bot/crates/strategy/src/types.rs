@@ -509,6 +509,7 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
+        let revenue_log = self.revenue as f64 / 1e18 as f64;
         log_bundle!(
             is_huge,
             self.uuid,
@@ -516,7 +517,7 @@ impl SandoRecipe {
             head_hashs.join(","),
             meat_hashs.join(","),
             self.target_block.number,
-            self.revenue,
+            revenue_log,
             self.frontrun_gas_used,
             self.backrun_gas_used,
             profit_min,
@@ -525,7 +526,7 @@ impl SandoRecipe {
 
         info!("build bundle: huge={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
             is_huge, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
-            self.revenue, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
+            revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
         );
 
         Ok((bundle_request, profit_max))
