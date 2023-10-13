@@ -99,7 +99,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
         for pool in pools.iter() {
             let recipes = recipes_map.get(pool).unwrap();
             let filtered_recipes: Vec<SandoRecipe> = recipes.iter().filter(|r| r.get_swap_type() == *swap_type).cloned().collect();
-            filtered_map.insert(*pool, filtered_recipes);
+            if filtered_recipes.len() > 0 {
+                filtered_map.insert(*pool, filtered_recipes);
+            }
         }
 
         filtered_map
@@ -130,7 +132,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
         let mut huge_recipes = vec![];
-        // enhancement: if merge all swap_types, should delete duplicate meats also like head_txs
+
         for swap_type in swap_types.iter() {
 
             let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
@@ -146,17 +148,33 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 let intermediary_token = recipes[0].get_intermediary_token();
                 let swap_type = recipes[0].get_swap_type();
 
-                let meats: Vec<Transaction> = recipes.iter()
+                let mut meats: Vec<Transaction> = recipes.iter()
                     .flat_map(|recipe| recipe.get_meats().clone())
                     .collect();
+
+                if meats.len() > 1 {
+                    // delete duplicate tx with same hash
+                    meats.sort_by_key(|meat| meat.hash);
+                    meats.dedup_by_key(|meat| meat.hash);
+                }
+                if meats.len() > 1 {
+                    // sort by nonce and group by 'from'
+                    meats = self.sort_tx_by_none_group_from(&meats);
+                }
+
                 let mut head_txs: Vec<Transaction> = recipes.iter()
                     .flat_map(|recipe| recipe.get_head_txs().clone())
                     .collect();
-                // delete duplicate tx with same hash
-                head_txs.sort_by_key(|recipe| recipe.hash);
-                head_txs.dedup_by_key(|recipe| recipe.hash);
-                // sort by nonce and group by 'from'
-                head_txs = self.sort_tx_by_none_group_from(&head_txs);
+
+                if head_txs.len() > 1 {
+                    // delete duplicate tx with same hash
+                    head_txs.sort_by_key(|recipe| recipe.hash);
+                    head_txs.dedup_by_key(|recipe| recipe.hash);
+                }
+                if head_txs.len() > 1 {
+                    // sort by nonce and group by 'from'
+                    head_txs = self.sort_tx_by_none_group_from(&head_txs);
+                }
 
                 let ingredients = RawIngredients::new(
                     head_txs,
@@ -240,12 +258,26 @@ impl<M: Middleware + 'static> SandoBot<M> {
             if meats.is_empty() {
                 continue;
             }
+
+            if meats.len() > 1 {
+                // delete duplicate tx with same hash
+                meats.sort_by_key(|meat| meat.hash);
+                meats.dedup_by_key(|meat| meat.hash);
+            }
+            if meats.len() > 1 {
+                // sort by nonce and group by 'from'
+                meats = self.sort_tx_by_none_group_from(&meats);
+            }
             
-            // delete duplicate tx with same hash
-            head_txs.sort_by_key(|recipe| recipe.hash);
-            head_txs.dedup_by_key(|recipe| recipe.hash);
-            // sort by nonce group by 'from'
-            head_txs = self.sort_tx_by_none_group_from(&head_txs);
+            if head_txs.len() > 1 {
+                // delete duplicate tx with same hash
+                head_txs.sort_by_key(|recipe| recipe.hash);
+                head_txs.dedup_by_key(|recipe| recipe.hash);
+            }
+            if head_txs.len() > 1 {
+                // sort by nonce group by 'from'
+                head_txs = self.sort_tx_by_none_group_from(&head_txs);
+            }
 
             let shared_backend = SharedBackend::spawn_backend_thread(
                 self.provider.clone(),
