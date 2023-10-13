@@ -68,7 +68,7 @@ where
     /// each collector, strategy, and executor. It will then orchestrate the
     /// data flow between them.
     pub async fn run(self) -> Result<JoinSet<()>, Box<dyn std::error::Error>> {
-        let (event_sender, _): (Sender<E>, _) = broadcast::channel(10240);
+        let (event_sender, _): (Sender<E>, _) = broadcast::channel(102400);
         let (action_sender, _): (Sender<A>, _) = broadcast::channel(512);
 
         let mut set = JoinSet::new();
