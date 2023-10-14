@@ -201,7 +201,7 @@ impl SandoStateManager {
             if list_low_txs.len() > MAX_TRANSACTION_COUNT {
                 let oldest = list_low_txs.remove(0);
                 map_low_txs.remove(&oldest).unwrap();
-                // info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
                 // info!("after remove map size {:?} vec size {:?}", map_low_txs.len(), list_low_txs.len());
             }
             
@@ -221,7 +221,7 @@ impl SandoStateManager {
             if list_liquidity_txs.len() > MAX_TRANSACTION_COUNT {
                 let oldest = list_liquidity_txs.remove(0);
                 map_liquidity_txs.remove(&oldest).unwrap();
-                // info!("liquidity_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                info!("liquidity_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
                 // info!("after remove liquidity_tx map size {:?} vec size {:?}", map_liquidity_txs.len(), list_liquidity_txs.len());
             }
 
@@ -242,7 +242,7 @@ impl SandoStateManager {
             if list_approve_txs.len() > MAX_TRANSACTION_COUNT {
                 let oldest = list_approve_txs.remove(0);
                 map_approve_txs.remove(&oldest).unwrap();
-                // info!("approve_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
+                info!("approve_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT, oldest);
                 // info!("after remove approve_tx map size {:?} vec size {:?}", map_approve_txs.len(), list_approve_txs.len());
             }
 
