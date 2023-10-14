@@ -42,24 +42,28 @@ pub fn create_recipe_huge(
 
     let mut fork_db = CacheDB::new(shared_backend);
 
-    inject_huff_sando(
-        &mut fork_db,
-        sando_address.0.into(),
-        searcher.0.into(),
-        start_sando_weth_balance,
-    );
+    #[cfg(feature = "debug")]
+    {
+        inject_huff_sando(
+            &mut fork_db,
+            sando_address.0.into(),
+            searcher.0.into(),
+            start_sando_weth_balance,
+        );
 
-    // huge sandwich may contain many other tokens, set their balance in sando
-    let credit_helper_ref = CreditHelper::new();
-    credit_helper_ref.credit_multi_tokens_balance(
-        &start_sando_tokens_balance,
-        &mut fork_db,
-        sando_address.0.into()
-    );
+        // huge sandwich may contain many other tokens, set their balance in sando
+        let credit_helper_ref = CreditHelper::new();
+        credit_helper_ref.credit_multi_tokens_balance(
+            &start_sando_tokens_balance,
+            &mut fork_db,
+            sando_address.0.into()
+        );
+    }
     
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
+    let start_sando_weth_balance = get_erc20_balance(*WETH_ADDRESS, sando_address, next_block, &mut evm)?;
 
     let frontrun_value = U256::zero();
     let backrun_value = U256::zero();

@@ -32,7 +32,7 @@ use super::{
 
 use crate::constants::MIN_REVENUE_THRESHOLD;
 
-fn pre_get_intermediary_balance(
+fn pre_get_start_mid_balance(
     ingredients: &RawIngredients,
     next_block: &BlockInfo,
     optimal_in: U256,
@@ -41,29 +41,36 @@ fn pre_get_intermediary_balance(
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
-) -> Result<U256> {
+) -> Result<(U256, U256, U256)> {
 
+    #[warn(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    inject_huff_sando(
-        &mut fork_db,
-        sando_address.0.into(),
-        searcher.0.into(),
-        sando_start_web_bal,
-    );
+    #[cfg(feature = "debug")]
+    {
+        inject_huff_sando(
+            &mut fork_db,
+            sando_address.0.into(),
+            searcher.0.into(),
+            sando_start_web_bal,
+        );
 
-    // as start_end token is not WETH, credit xxxx tokens for use
-    let credit_helper_ref = ingredients.get_credit_helper_ref();
-    credit_helper_ref.credit_token_balance(
-        ingredients.get_start_end_token().clone(),
-        &mut fork_db,
-        sando_address.0.into(),
-        sando_start_bal,
-    );
+        // as start_end token is not WETH, credit xxxx tokens for use
+        let credit_helper_ref = ingredients.get_credit_helper_ref();
+        credit_helper_ref.credit_token_balance(
+            ingredients.get_start_end_token().clone(),
+            &mut fork_db,
+            sando_address.0.into(),
+            sando_start_bal,
+        );
+    }
     
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
+
+    let other_start_balance = get_erc20_balance(ingredients.get_start_end_token(), sando_address, &next_block, &mut evm)?;
+    let weth_start_balance = get_erc20_balance(ingredients.get_intermediary_token(), sando_address, &next_block, &mut evm)?;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     HEAD TRANSACTION/s                     */
@@ -199,8 +206,8 @@ fn pre_get_intermediary_balance(
         }
     }
 
-    let intermediary_balance = get_erc20_balance(ingredients.get_intermediary_token(), sando_address, next_block, &mut evm)?;
-    Ok(intermediary_balance)
+    let weth_mid_balance = get_erc20_balance(ingredients.get_intermediary_token(), sando_address, next_block, &mut evm)?;
+    Ok((other_start_balance, weth_start_balance, weth_mid_balance))
 }
 
 /// finds if sandwich is profitable + salmonella free
@@ -219,7 +226,7 @@ pub fn create_recipe_reverse(
         return Err(anyhow!("[huffsando: BEGIN] ZeroOtimal"))
     }
 
-    let intermediary_balance = pre_get_intermediary_balance(
+    let (other_start_balance, weth_start_balance, weth_mid_balance) = pre_get_start_mid_balance(
         ingredients,
         &next_block.clone(),
         optimal_in,
@@ -229,19 +236,13 @@ pub fn create_recipe_reverse(
         sando_address,
         shared_backend.clone()
     )?;
-    if intermediary_balance.is_zero() {
-        return Err(anyhow!("[huffsando: PRE] ZeroBalance: {:?}", "intermediary_balance=0"));
+    if weth_mid_balance.is_zero() {
+        return Err(anyhow!("[huffsando: PRE] ZeroBalance: {:?}", "weth_mid_balance=0"));
     }
-
-    // let credit_helper_ref = ingredients.get_credit_helper_ref();
-    // let other_start_balance = credit_helper_ref.base_to_amount(
-    //     startend_token, &(LIL_ROUTER_OTHER_AMT_BASE.to_string()));
-    let other_start_balance = sando_start_bal.clone();
 
     // amount of weth increase
     // let weth_start_balance = U256::from(eth_to_wei(LIL_ROUTER_WETH_AMT_BASE));
-    let weth_start_balance = sando_start_weth_bal.clone();
-    let intermediary_increase = intermediary_balance.checked_sub(weth_start_balance).unwrap_or_default();
+    let intermediary_increase = weth_mid_balance.checked_sub(weth_start_balance).unwrap_or_default();
     let max_backrun_in = intermediary_increase.checked_sub(*MIN_REVENUE_THRESHOLD).unwrap_or_default();
     // min_backrun_in is 75%
     let min_backrun_in = intermediary_increase.checked_mul(U256::from(75)).unwrap().checked_div(U256::from(100)).unwrap();
@@ -275,23 +276,27 @@ pub fn create_recipe_reverse(
             break;
         }
 
+        #[warn(unused_mut)]
         let mut fork_db = CacheDB::new(shared_backend.clone());
 
-        inject_huff_sando(
-            &mut fork_db,
-            sando_address.0.into(),
-            searcher.0.into(),
-            sando_start_weth_bal,
-        );
+        #[cfg(feature = "debug")]
+        {
+            inject_huff_sando(
+                &mut fork_db,
+                sando_address.0.into(),
+                searcher.0.into(),
+                sando_start_weth_bal,
+            );
 
-        // as start_end token is not WETH, credit xxxx tokens for use
-        let credit_helper_ref = ingredients.get_credit_helper_ref();
-        credit_helper_ref.credit_token_balance(
-            ingredients.get_start_end_token().clone(),
-            &mut fork_db,
-            sando_address.0.into(),
-            sando_start_bal,
-        );
+            // as start_end token is not WETH, credit xxxx tokens for use
+            let credit_helper_ref = ingredients.get_credit_helper_ref();
+            credit_helper_ref.credit_token_balance(
+                ingredients.get_start_end_token().clone(),
+                &mut fork_db,
+                sando_address.0.into(),
+                sando_start_bal,
+            );
+        }
         
         let mut evm = EVM::new();
         evm.database(fork_db);

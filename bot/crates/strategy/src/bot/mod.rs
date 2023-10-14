@@ -635,11 +635,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     pub async fn start_auto_process(&'static self, tx_processor_num: i32, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
 
-        #[cfg(feature = "debug")]
-        {
-            info!("bot start: tx_processor_num={tx_processor_num},block_process_num={block_process_num},action_process_num={action_process_num},huge_process_num={huge_process_num}");
-        }
-
         for _index in 0..tx_processor_num {
             self.event_tx_runtime.spawn(async move {
                 let mut _count = 0;
@@ -657,15 +652,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         },
                         None => {
                             tokio::time::sleep(time::Duration::from_millis(10)).await;
-                            // #[cfg(feature = "debug")]
-                            // {
-                            //     if _count == 200 {
-                            //         info!("bot runnint event tx processor {_index} pop none");
-                            //         _count = 0;
-                            //     } else {
-                            //         _count+=1;
-                            //     }
-                            // }
                         },
                     }
                 }
@@ -677,10 +663,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
             self.event_block_runtime.spawn(async move {
                 loop {
                     match self.pop_event_block().await {
-                        // #[cfg(feature = "debug")]
-                        // {
-                        //     info!("bot running: event block processor {_index} process_event");
-                        // }
                         Some(event) => {
                             let _ = self.process_event_block(event).await;
                         },
@@ -706,10 +688,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     }
                     match self.pop_action().await {
                         Some(action) => {
-                            // #[cfg(feature = "debug")]
-                            // {
-                            //     info!("bot running: action processor {_index} send action");
-                            // }
                             match action_sender.unwrap().send(action) {
                                 Ok(_) => {},
                                 Err(e) => error!("error sending action: {}", e),
@@ -832,7 +810,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 }
             });
         }
-        info!("start {:?} mixed huge auto processors", huge_process_num);
+        info!("start {:?} huge mixed auto processors", huge_process_num);
 
         Ok(())
     }

@@ -42,19 +42,24 @@ pub fn create_recipe(
         return Err(anyhow!("[huffsando: ZeroOtimal]"))
     }
 
+    #[warn(unused_mut)]
     let mut fork_db = CacheDB::new(shared_backend);
 
-    inject_huff_sando(
-        &mut fork_db,
-        sando_address.0.into(),
-        searcher.0.into(),
-        sando_start_bal,
-    );
+    #[cfg(feature = "debug")]
+    {
+        inject_huff_sando(
+            &mut fork_db,
+            sando_address.0.into(),
+            searcher.0.into(),
+            sando_start_bal,
+        );
+    }
 
     let mut evm = EVM::new();
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
 
+    let sando_start_bal = get_erc20_balance(ingredients.get_start_end_token(), sando_address, next_block, &mut evm)?;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     HEAD TRANSACTION/s                     */
