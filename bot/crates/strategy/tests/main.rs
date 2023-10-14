@@ -223,3 +223,31 @@ async fn can_reverse_sandwich_uni_v2() {
         .await
         .unwrap();
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn can_another_reverse_sandwich_uni_v2() {
+    let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
+
+    let bot = setup_bot(client.clone()).await;
+
+    let ingredients = RawIngredients::new(
+        vec![],
+        vec![
+            victim_tx_hash(
+                "0xa97c3b15f8bb0903b0472b010c8c91055d6d61dd2f055f9e0cd6948eb0eb28df",
+                client.clone(),
+            )
+            .await,
+        ],
+        hex_to_address("0x4dfae3690b93c47470b03036a17b23c1be05127c"),
+        *WETH_ADDRESS,
+        hex_to_univ2_pool("0xaa9b647f42858f2db441f0aa75843a8e7fd5aff2", client.clone()).await,
+    );
+
+    let target_block = block_num_to_info(18346682, client.clone()).await;
+
+    let _ = bot
+        .is_sandwichable(ingredients, target_block, SandwichSwapType::Reverse, false)
+        .await
+        .unwrap();
+}

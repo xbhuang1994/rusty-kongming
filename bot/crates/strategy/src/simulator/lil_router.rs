@@ -84,7 +84,7 @@ pub async fn find_optimal_input(
         false
     };
     let mut highest_sando_input = U256::zero();
-    let number_of_intervals = 15;
+    let number_of_intervals = 30;
     let mut counter = 0;
 
     // continue search until termination condition is met (no point seraching down to closest wei)

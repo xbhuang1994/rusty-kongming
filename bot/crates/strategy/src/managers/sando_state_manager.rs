@@ -198,10 +198,10 @@ impl SandoStateManager {
         let mut list_low_txs = self.low_txs_vec.lock().unwrap();
         
         if !map_low_txs.contains_key(&tx.hash) {
-            if list_low_txs.len() > MAX_TRANSACTION_COUNT * 2 {
+            if list_low_txs.len() > MAX_TRANSACTION_COUNT * 3 {
                 let oldest = list_low_txs.remove(0);
                 map_low_txs.remove(&oldest).unwrap();
-                info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT * 2, oldest);
+                info!("low_tx vec overflow {:?} remove {:?}", MAX_TRANSACTION_COUNT * 3, oldest);
                 // info!("after remove map size {:?} vec size {:?}", map_low_txs.len(), list_low_txs.len());
             }
             

@@ -37,7 +37,8 @@ fn is_balance_diff_for_revenue(start_balance: U256, end_balance: U256) -> bool {
     if end_balance >= start_balance {
         diff = end_balance.checked_sub(start_balance).unwrap_or_default();
     }
-    let min_diff = start_balance.checked_div(U256::from(10000)).unwrap_or_default();
+    // 10_000
+    let min_diff = start_balance.checked_div(U256::from(50_000_000)).unwrap_or_default();
     return diff > U256::zero() && diff <= min_diff;
 }
 
