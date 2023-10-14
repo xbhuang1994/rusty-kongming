@@ -140,10 +140,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         let mut handlers = vec![];
         for swap_type in swap_types.iter() {
             let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
-            if filtered_recipes_map.is_empty() {
-                info!("[sandwich_huge_mixed] there is no {:?} recipe", swap_type);
-                return Ok(vec![])
-            }
+            
             for (target_pool, recipes) in filtered_recipes_map.iter_mut() {
                 if recipes.is_empty() {
                     continue;
