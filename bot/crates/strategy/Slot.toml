@@ -4098,3 +4098,404 @@ symbol = "QUAD"
 index = 5
 decimals = 8
 symbol = "RIC"
+
+
+[0xfa3e941d1f6b7b10ed84a0c211bfa8aee907965e]
+index = 6
+decimals = 18
+symbol = "HAY"
+
+[0x3638c9e50437f00ae53a649697f288ba68888cc1]
+index = 6
+decimals = 18
+symbol = "SCHAP"
+
+[0xc77849b15ed98e185aae9cf73b8300770d20e6bb]
+index = 1
+decimals = 18
+symbol = "TOK"
+
+[0xfa6f7881e52fdf912c4a285d78a3141b089ce859]
+index = 0
+decimals = 18
+symbol = "AVO"
+
+[0xbbd1706d16418bb136e1497a73d3af4164586da0]
+index = 0
+decimals = 18
+symbol = "HUM"
+
+[0xff56cc6b1e6ded347aa0b7676c85ab0b3d08b0fa]
+index = 1
+decimals = 18
+symbol = "ORBS"
+
+[0x9ab7bb7fdc60f4357ecfef43986818a2a3569c62]
+index = 0
+decimals = 18
+symbol = "GOG"
+
+[0xacb47686b92fdde6d233ec6445c1f8d4d0d59c38]
+index = 1
+decimals = 8
+symbol = "SWIPE"
+
+[0x7105e64bf67eca3ae9b123f0e5ca2b83b2ef2da0]
+index = 0
+decimals = 18
+symbol = "X7DAO"
+
+[0x1e4746dc744503b53b4a082cb3607b169a289090]
+index = 0
+decimals = 18
+symbol = "IPOR"
+
+[0xea319e87cf06203dae107dd8e5672175e3ee976c]
+index = 0
+decimals = 18
+symbol = "SURF"
+
+[0xdd69db25f6d620a7bad3023c5d32761d353d3de9]
+index = 6
+decimals = 18
+symbol = "GETH"
+
+[0xd38bb40815d2b0c2d2c866e0c72c5728ffc76dd9]
+index = 0
+decimals = 18
+symbol = "SIS"
+
+[0xc28e931814725bbeb9e670676fabbcb694fe7df2]
+index = 1
+decimals = 18
+symbol = "eQUAD"
+
+[0x8eedefe828a0f16c8fc80e46a87bc0f1de2d960c]
+index = 0
+decimals = 18
+symbol = "DGMV"
+
+[0x88acdd2a6425c3faae4bc9650fd7e27e0bebb7ab]
+index = 0
+decimals = 18
+symbol = "⚗️"
+
+[0x709904481e2b19d02b314f2a093cd15b403ef933]
+index = 0
+decimals = 18
+symbol = "SMOB"
+
+[0x45c2f8c9b4c0bdc76200448cc26c48ab6ffef83f]
+index = 0
+decimals = 18
+symbol = "DOMI"
+
+[0x155ff1a85f440ee0a382ea949f24ce4e0b751c65]
+index = 1
+decimals = 18
+symbol = "EYE"
+
+[0x0f71b8de197a1c84d31de0f1fa7926c365f052b3]
+index = 1
+decimals = 18
+symbol = "ARCONA"
+
+[0xff8c479134a18918059493243943150776cf8cf2]
+index = 0
+decimals = 18
+symbol = "RENQ"
+
+[0xf418588522d5dd018b425e472991e52ebbeeeeee]
+index = 3
+decimals = 18
+symbol = "PUSH"
+
+[0xefe2afb5f2a9ea8ec6d8a57fe88febcfe29db813]
+index = 51
+decimals = 18
+symbol = "bUKH"
+
+[0xee3b9b531f4c564c70e14b7b3bb7d516f33513ff]
+index = 0
+decimals = 18
+symbol = "DFIO"
+
+[0xee13af311aae7a2894266aae7d0a17fbb1dbed9d]
+index = 0
+decimals = 18
+symbol = "HOUND"
+
+[0xeae6411f2bfcf078f0f22df56ef519e43ed410a9]
+index = 18
+decimals = 9
+symbol = "GFloki"
+
+[0xe1a4c5bbb704a92599fedb191f451e0d3a1ed842]
+index = 0
+decimals = 18
+symbol = "NAME"
+
+[0xdc349913d53b446485e98b76800b6254f43df695]
+index = 4
+decimals = 9
+symbol = "BEZOGE"
+
+[0xcfeb09c3c5f0f78ad72166d55f9e6e9a60e96eec]
+index = 0
+decimals = 18
+symbol = "VEMP"
+
+[0xcbfef8fdd706cde6f208460f2bf39aa9c785f05d]
+index = 1
+decimals = 18
+symbol = "KINE"
+
+[0xca1308e38340c69e848061aa2c3880daeb958187]
+index = 1
+decimals = 9
+symbol = "HLD"
+
+[0xc7f950271d118a5bdf250dffc39128dcced8472c]
+index = 0
+decimals = 18
+symbol = "ChainbackWeb3InternetArchive"
+
+[0xc3761eb917cd790b30dad99f6cc5b4ff93c4f9ea]
+index = 4
+decimals = 18
+symbol = "ERC20"
+
+[0xbe9375c6a420d2eeb258962efb95551a5b722803]
+index = 5
+decimals = 18
+symbol = "STMX"
+
+[0xbdab72602e9ad40fc6a6852caf43258113b8f7a5]
+index = 0
+decimals = 18
+symbol = "eSOV"
+
+[0xbccd27062ae1a2bea5731c904b96edfb163aba21]
+index = 1
+decimals = 9
+symbol = "DOGS"
+
+[0xb2617246d0c6c0087f18703d576831899ca94f01]
+index = 0
+decimals = 18
+symbol = "ZIG"
+
+[0xb2089a7069861c8d90c8da3aacab8e9188c0c531]
+index = 6
+decimals = 8
+symbol = "GREEN"
+
+[0xb19189fb36c816f3e0f16065057b07b790998fdc]
+index = 0
+decimals = 18
+symbol = "SER"
+
+[0xa4e8c3ec456107ea67d3075bf9e3df3a75823db0]
+index = 0
+decimals = 18
+symbol = "LOOM"
+
+[0x9be89d2a4cd102d8fecc6bf9da793be995c22541]
+index = 0
+decimals = 8
+symbol = "BBTC"
+
+[0x96e61422b6a9ba0e068b6c5add4ffabc6a4aae27]
+index = 6
+decimals = 18
+symbol = "ibEUR"
+
+[0x961dd84059505d59f82ce4fb87d3c09bec65301d]
+index = 0
+decimals = 8
+symbol = "TXJP"
+
+[0x961c8c0b1aad0c0b10a51fef6a867e3091bcef17]
+index = 0
+decimals = 18
+symbol = "DYP"
+
+[0x93eeb426782bd88fcd4b48d7b0368cf061044928]
+index = 0
+decimals = 18
+symbol = "TRG"
+
+[0x9343e24716659a3551eb10aff9472a2dcad5db2d]
+index = 0
+decimals = 18
+symbol = "STFX"
+
+[0x9275e8386a5bdda160c0e621e9a6067b8fd88ea2]
+index = 0
+decimals = 18
+symbol = "NBNG"
+
+[0x8a3d77e9d6968b780564936d15b09805827c21fa]
+index = 0
+decimals = 18
+symbol = "UCO"
+
+[0x888888435fde8e7d4c54cab67f206e4199454c60]
+index = 0
+decimals = 18
+symbol = "DFX"
+
+[0x8287c7b963b405b7b8d467db9d79eec40625b13a]
+index = 1
+decimals = 18
+symbol = "SWINGBY"
+
+[0x7c07f7abe10ce8e33dc6c5ad68fe033085256a84]
+index = 0
+decimals = 18
+symbol = "icETH"
+
+[0x73a83269b9bbafc427e76be0a2c1a1db2a26f4c2]
+index = 1
+decimals = 18
+symbol = "0NE"
+
+[0x7103ebdbf1f89be2d53eff9b3cf996c9e775c105]
+index = 0
+decimals = 18
+symbol = "X7103"
+
+[0x6f3277ad0782a7da3eb676b85a8346a100bf9c1c]
+index = 0
+decimals = 18
+symbol = "DOGPAD"
+
+[0x6e975115250b05c828ecb8ededb091975fc20a5d]
+index = 0
+decimals = 18
+symbol = "MEU"
+
+[0x6e8908cfa881c9f6f2c64d3436e7b80b1bf0093f]
+index = 0
+decimals = 18
+symbol = "BIST"
+
+[0x6c22910c6f75f828b305e57c6a54855d8adeabf8]
+index = 0
+decimals = 9
+symbol = "SATS"
+
+[0x69e37422cb87d963367f73a119c8ce9a4d529b72]
+index = 5
+decimals = 9
+symbol = "ADVT"
+
+[0x692accdd8b86692427e0aa4752ae917df01cc56f]
+index = 0
+decimals = 18
+symbol = "SUNC"
+
+[0x66a64a8a9cdc54ef97e45a051ba1c8f3d4b41a1d]
+index = 0
+decimals = 18
+symbol = "BabyShiba"
+
+[0x64a77277e37d44957fe5815d6ff442ab8b16cc29]
+index = 0
+decimals = 9
+symbol = "DAWGS"
+
+[0x5e8422345238f34275888049021821e8e08caa1f]
+index = 0
+decimals = 18
+symbol = "frxETH"
+
+[0x5cd2fac9702d68dde5a94b1af95962bcfb80fc7d]
+index = 0
+decimals = 18
+symbol = "RWASTE"
+
+[0x4dfae3690b93c47470b03036a17b23c1be05127c]
+index = 10
+decimals = 18
+symbol = "PEPE"
+
+[0x4cf89ca06ad997bc732dc876ed2a7f26a9e7f361]
+index = 3
+decimals = 18
+symbol = "MYST"
+
+[0x32d222e1f6386b3df7065d639870be0ef76d3599]
+index = 5
+decimals = 18
+symbol = "WETH"
+
+[0x2f109021afe75b949429fe30523ee7c0d5b27207]
+index = 0
+decimals = 18
+symbol = "OCC"
+
+[0x2b89bf8ba858cd2fcee1fada378d5cd6936968be]
+index = 1
+decimals = 6
+symbol = "WSCRT"
+
+[0x27192b750ff796514f039512aaf5a3655a095ea0]
+index = 0
+decimals = 18
+symbol = "SCALES"
+
+[0x24e89bdf2f65326b94e36978a7edeac63623dafa]
+index = 0
+decimals = 18
+symbol = "TKING"
+
+[0x24c19f7101c1731b85f1127eaa0407732e36ecdd]
+index = 0
+decimals = 18
+symbol = "SGT"
+
+[0x2223bf1d7c19ef7c06dab88938ec7b85952ccd89]
+index = 1
+decimals = 18
+symbol = "KXA"
+
+[0x1f961bceaef8edf6fb2797c0293ffbde3e994614]
+index = 3
+decimals = 9
+symbol = "DINGO"
+
+[0x1baffbc23f2246040cce12f7a140c38c5dc73e46]
+index = 0
+decimals = 18
+symbol = "PIB"
+
+[0x198065e69a86cb8a9154b333aad8efe7a3c256f8]
+index = 0
+decimals = 18
+symbol = "KOY"
+
+[0x1657c8c5fd8dd0e47b986985cc0e7c46f5489b36]
+index = 0
+decimals = 18
+symbol = "BINU"
+
+[0x120a3879da835a5af037bb2d1456bebd6b54d4ba]
+index = 6
+decimals = 18
+symbol = "RVST"
+
+[0x0ec72cd6690db40b16be166858299f19d4f8e5b0]
+index = 2
+decimals = 9
+symbol = "0x0ec72cd6690db40b16be166858299f19d4f8e5b0"
+
+[0x08de69e5e9d08bb1dff0b5a7c8cc6672df7c0412]
+index = 7
+decimals = 18
+symbol = "RON"
+
+[0x06e0feb0d74106c7ada8497754074d222ec6bcdf]
+index = 6
+decimals = 18
+symbol = "BTB"
