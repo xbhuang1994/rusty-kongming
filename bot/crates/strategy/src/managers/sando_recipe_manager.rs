@@ -74,7 +74,7 @@ impl SandoRecipeManager {
     }
 
     /// get all repices group by pool
-    pub fn get_all_pendding_recipes(&self) -> HashMap<Pool, Vec<SandoRecipe>> {
+    pub fn get_all_pendding_recipes(&self, clear_map: bool) -> HashMap<Pool, Vec<SandoRecipe>> {
 
         let mut map = self.pendding_recipes.lock().unwrap();
         let mut result: HashMap<Pool, Vec<SandoRecipe>> = HashMap::new();
@@ -83,7 +83,9 @@ impl SandoRecipeManager {
             let vec = (*reader).clone();
             result.insert(k.clone(), vec);
         }
-        map.clear();
+        if clear_map {
+            map.clear();
+        }
         return result;
     }
 

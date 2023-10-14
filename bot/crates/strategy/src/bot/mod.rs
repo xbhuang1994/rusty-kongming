@@ -899,11 +899,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
     async fn process_pendding_recipes(&self, event: NewBlock) -> Result<()> {
-        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes();
+        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes(false);
         info!("start process pendding recipes {:?} groups by pool with simple strategy", pendding_recipes_group.len());
         self.push_huge_task(pendding_recipes_group, event.clone()).await.unwrap();
         
-        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes();
+        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes(true);
         info!("start process pendding recipes {:?} groups by pool with mixed strategy", pendding_recipes_group.len());
         self.push_huge_mixed_task(pendding_recipes_group, event.clone()).await.unwrap();
         
