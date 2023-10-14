@@ -411,6 +411,7 @@ impl SandoRecipe {
         has_dust: bool,
         provider: Arc<M>,
         is_huge: bool,
+        is_mixed_strategy: bool,
     ) -> Result<(BundleRequest, U256)> {
         let tx_nonce = provider
             .get_transaction_count(searcher.address(), None)
@@ -517,6 +518,7 @@ impl SandoRecipe {
         let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;
         log_bundle!(
             is_huge,
+            is_mixed_strategy,
             self.uuid,
             self.swap_type,
             head_hashs.join(","),
@@ -529,8 +531,8 @@ impl SandoRecipe {
             profit_max
         );
 
-        info!("build bundle: huge={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
-            is_huge, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
+        info!("build bundle: huge={:?} mixed={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
+            is_huge, is_mixed_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
             revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
         );
 

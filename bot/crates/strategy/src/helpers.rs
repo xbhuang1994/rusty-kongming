@@ -128,12 +128,13 @@ macro_rules! log_not_sandwichable {
 
 #[macro_export]
 macro_rules! log_bundle {
-    ($is_huge:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $block_number:expr, $revenue:expr, $frontrun_gas_used:expr, $backrun_gas_used:expr, $profit_min:expr, $profit_max:expr) => {
+    ($is_huge:expr, $is_mixed:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $block_number:expr, $revenue:expr, $frontrun_gas_used:expr, $backrun_gas_used:expr, $profit_min:expr, $profit_max:expr) => {
         info!("{}", format!("[BUILT BUNDLE]"));
         info!(
             "{}",
-            format!("is_huge: {}, uuid: {}",
+            format!("is_huge: {}, is_mixed: {}, uuid: {}",
                 $is_huge.to_string(),
+                $is_mixed.to_string(),
                 $uuid.to_string()
             )
         );

@@ -62,6 +62,9 @@ pub struct SandoBot<M> {
     huge_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
     huge_task_runtime: tokio::runtime::Runtime,
 
+    huge_mixed_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
+    huge_mixed_task_runtime: tokio::runtime::Runtime,
+
     processed_tx_map: Mutex<HashMap<H256, i64>>,
 }
 
@@ -89,6 +92,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
             processed_tx_map: Mutex::new(HashMap::new()),
             huge_task_list: Arc::new(Mutex::new(LinkedList::new())),
             huge_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            huge_mixed_task_list: Arc::new(Mutex::new(LinkedList::new())),
+            huge_mixed_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
         }
     }
 
@@ -126,8 +131,219 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         result
     }
+    
+    /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
+    /// mixed all swap types
+    async fn is_sandwichable_huge_mixed(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+        
+        let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
+        let mut handlers = vec![];
+        for swap_type in swap_types.iter() {
+            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
+            if filtered_recipes_map.is_empty() {
+                info!("[sandwich_huge_mixed] there is no {:?} recipe", swap_type);
+                return Ok(vec![])
+            }
+            for (target_pool, recipes) in filtered_recipes_map.iter_mut() {
+                if recipes.is_empty() {
+                    continue;
+                }
+                recipes.sort_by_key(|r| r.get_revenue());
+                recipes.reverse();
+    
+                let start_end_token = recipes[0].get_start_end_token();
+                let intermediary_token = recipes[0].get_intermediary_token();
+                let swap_type = recipes[0].get_swap_type();
+    
+                let mut meats: Vec<Transaction> = recipes.iter()
+                    .flat_map(|recipe| recipe.get_meats().clone())
+                    .collect();
+    
+                if meats.len() > 1 {
+                    // delete duplicate tx with same hash
+                    meats.sort_by_key(|meat| meat.hash);
+                    meats.dedup_by_key(|meat| meat.hash);
+                }
+                if meats.len() > 1 {
+                    // sort by nonce and group by 'from'
+                    meats = self.sort_tx_by_none_group_from(&meats);
+                }
+    
+                let mut head_txs: Vec<Transaction> = recipes.iter()
+                    .flat_map(|recipe| recipe.get_head_txs().clone())
+                    .collect();
+    
+                if head_txs.len() > 1 {
+                    // delete duplicate tx with same hash
+                    head_txs.sort_by_key(|recipe| recipe.hash);
+                    head_txs.dedup_by_key(|recipe| recipe.hash);
+                }
+                if head_txs.len() > 1 {
+                    // sort by nonce and group by 'from'
+                    head_txs = self.sort_tx_by_none_group_from(&head_txs);
+                }
+    
+                let ingredients = RawIngredients::new(
+                    head_txs,
+                    meats,
+                    start_end_token,
+                    intermediary_token,
+                    *target_pool,
+                );
+    
+                let handler = tokio::spawn(self.is_sandwichable(
+                    ingredients, target_block.clone(), swap_type, true
+                ));
+                handlers.push(handler);
+            }
+        }
+        let handler_results = futures::future::try_join_all(handlers).await;
+        let optimal_recipes = match handler_results {
+            Ok(recipe_results) => {
+                let mut recipes: Vec<SandoRecipe> = vec![];
+                for result in recipe_results {
+                    match result {
+                        Ok(recipe) => {
+                            recipes.push(recipe.clone());
+                        },
+                        Err(_) => {}
+                    }
+                }
+                recipes
+            },
+            Err(e) => {
+                error!("One of the tasks panicked: {}", e);
+                vec![]
+            }
+        };
+        if optimal_recipes.len() == 0 {
+            return Ok(vec![]);
+        }
+        info!("[sandwich_huge_mixed] optimal recipes size {:?}", optimal_recipes.len());
+        let mut forward_pools = vec![];
+        let mut optimal_final_recipes = vec![];
+        optimal_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Forward)
+            .for_each(|r| {
+                forward_pools.push(r.get_target_pool().unwrap().clone());
+                optimal_final_recipes.push(r.clone());
+            });
+        let optimal_reverse_recipes: Vec<SandoRecipe> = optimal_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse).cloned().collect();
+        let final_recipes_len = optimal_final_recipes.len();
+        if optimal_final_recipes.is_empty() || optimal_reverse_recipes.is_empty() {
+            info!("[sandwich_huge_mixed] one swap_type huge mixed is empty");
+            return Ok(vec![]);
+        }
+
+        for recipe in optimal_reverse_recipes.iter() {
+            if !forward_pools.contains(&recipe.get_target_pool().unwrap()) {
+                optimal_final_recipes.push(recipe.clone());
+            }
+        }
+        if optimal_final_recipes.len() == final_recipes_len {
+            info!("[sandwich_huge_mixed] no matched reverse recipe");
+            return Ok(vec![]);
+        }
+
+        let mut head_txs: Vec<Transaction> = Vec::new();
+        let mut frontrun_data = Vec::new();
+        let mut backrun_data = Vec::new();
+        let mut meats: Vec<Transaction> = Vec::new();
+        let mut sando_weth_balance = U256::zero();
+        let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
+        for recipe in optimal_recipes {
+            let max_fee = calculate_bribe_for_max_fee(
+                recipe.get_revenue(),
+                recipe.get_frontrun_gas_used(),
+                recipe.get_backrun_gas_used(),
+                target_block.base_fee_per_gas,
+                false
+            );
+            match max_fee {
+                Ok(_) => {
+                    match recipe.get_frontrun_data() {
+                        Some(data) => {
+                            head_txs.extend(recipe.get_head_txs().clone());
+                            frontrun_data.extend(data.clone());
+                            backrun_data.extend(recipe.get_backrun().data.clone());
+                            meats.extend(recipe.get_meats().clone());
+
+                            // set sando token balance for recipe creation
+                            if recipe.get_start_end_token() == *WETH_ADDRESS {
+                                sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+                            } else {
+                                let mut balance = recipe.get_frontrun_optimal_in();
+                                if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+                                    balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+                                }
+                                sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                            }
+                        },
+                        None => {}
+                    }
+                },
+                Err(e) => {
+                    error!("calculating {:?} max fee error {}", recipe.get_uuid(), e);
+                }
+            }
+        }
+        if meats.is_empty() {
+            info!("[sandwich_huge_mixed] no matched meat for recipe");
+            return Ok(vec![]);
+        }
+
+        if meats.len() > 1 {
+            // delete duplicate tx with same hash
+            meats.sort_by_key(|meat| meat.hash);
+            meats.dedup_by_key(|meat| meat.hash);
+        }
+        if meats.len() > 1 {
+            // sort by nonce and group by 'from'
+            meats = self.sort_tx_by_none_group_from(&meats);
+        }
+        
+        if head_txs.len() > 1 {
+            // delete duplicate tx with same hash
+            head_txs.sort_by_key(|recipe| recipe.hash);
+            head_txs.dedup_by_key(|recipe| recipe.hash);
+        }
+        if head_txs.len() > 1 {
+            // sort by nonce group by 'from'
+            head_txs = self.sort_tx_by_none_group_from(&head_txs);
+        }
+
+        let shared_backend = SharedBackend::spawn_backend_thread(
+            self.provider.clone(),
+            BlockchainDb::new(
+                BlockchainDbMeta {
+                    cfg_env: Default::default(),
+                    block_env: Default::default(),
+                    hosts: BTreeSet::from(["".to_string()]),
+                },
+                None,
+            ), /* default because not accounting for this atm */
+            Some((target_block.number - 1).into()),
+        );
+
+        let huge_recipe = create_recipe_huge(
+            &target_block,
+            frontrun_data.into(),
+            backrun_data.into(),
+            head_txs,
+            meats,
+            sando_weth_balance,
+            sando_tokens_balance,
+            self.sando_state_manager.get_searcher_address(),
+            self.sando_state_manager.get_sando_address(),
+            shared_backend.clone(),
+            SandwichSwapType::Forward.clone(),
+            format!("{}", Uuid::new_v4())
+        )?;
+
+        Ok(vec![huge_recipe])
+    }
 
     /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
+    /// group by swap type
     async fn is_sandwichable_huge(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
 
         let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
@@ -211,7 +427,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             if optimal_recipes.len() == 0 {
                 continue;
             }
-            info!("huge optimal recipes size {:?}", optimal_recipes.len());
+            info!("[sandwich_huge] optimal recipes size {:?} swap type {:?}", optimal_recipes.len(), swap_type);
 
             let mut head_txs: Vec<Transaction> = Vec::new();
             let mut frontrun_data = Vec::new();
@@ -307,7 +523,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 format!("{}", Uuid::new_v4())
             )?;
 
-            info!("make sandwich huge {:?}", huge_recipe.get_uuid());
+            info!("[sandwich_huge] make sandwich huge {:?}", huge_recipe.get_uuid());
             huge_recipes.push(huge_recipe);
         }
 
@@ -535,6 +751,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             false,
                                             self.provider.clone(),
                                             true,
+                                            false,
                                         ).await {
                                             Ok((bundle, _profit_max)) => {
                                                 bundles.push(bundle);
@@ -561,6 +778,61 @@ impl<M: Middleware + 'static> SandoBot<M> {
             });
         }
         info!("start {:?} huge auto processors", huge_process_num);
+
+        for _index in 0..huge_process_num {
+            self.huge_mixed_task_runtime.spawn(async move {
+                loop {
+                    match self.pop_huge_mixed_task().await {
+                        Some((recipes_map, new_block)) => {
+
+                            let new_block_info = BlockInfo{
+                                number: new_block.number,
+                                base_fee_per_gas: new_block.base_fee_per_gas,
+                                timestamp: new_block.timestamp,
+                                gas_used: Some(new_block.gas_used),
+                                gas_limit: Some(new_block.gas_limit),
+                            };
+                            let target_block = new_block_info.get_next_block();
+
+                            match self.is_sandwichable_huge_mixed(&mut recipes_map.clone(), target_block).await {
+
+                                Ok(huge_recipes) => {
+
+                                    let mut bundles = vec![];
+                                    for huge in huge_recipes {
+                                        match huge.to_fb_bundle(
+                                            self.sando_state_manager.get_sando_address(),
+                                            self.sando_state_manager.get_searcher_signer(),
+                                            false,
+                                            self.provider.clone(),
+                                            true,
+                                            true,
+                                        ).await {
+                                            Ok((bundle, _profit_max)) => {
+                                                bundles.push(bundle);
+                                            },
+                                            Err(e) => {
+                                                error!("fail make huge mixed sandwich error:{}", e)
+                                            }
+                                        }
+                                    }
+                                    if bundles.len() > 0 {
+                                        self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+                                    }
+                                },
+                                Err(e) => {
+                                    error!("process huge sandwich error: {}", e);
+                                }
+                            }
+                        },
+                        None => {
+                            tokio::time::sleep(time::Duration::from_millis(50)).await;
+                        }
+                    }
+                }
+            });
+        }
+        info!("start {:?} mixed huge auto processors", huge_process_num);
 
         Ok(())
     }
@@ -653,8 +925,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     async fn process_pendding_recipes(&self, event: NewBlock) -> Result<()> {
         let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes();
-        info!("start process pendding recipes {:?} groups by pool", pendding_recipes_group.len());
+        info!("start process pendding recipes {:?} groups by pool with simple strategy", pendding_recipes_group.len());
         self.push_huge_task(pendding_recipes_group, event.clone()).await.unwrap();
+        
+        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes();
+        info!("start process pendding recipes {:?} groups by pool with mixed strategy", pendding_recipes_group.len());
+        self.push_huge_mixed_task(pendding_recipes_group, event.clone()).await.unwrap();
+        
         Ok(())
     }
 
@@ -669,6 +946,21 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     async fn push_huge_task(&self, recipes_maps: HashMap<Pool, Vec<SandoRecipe>>, new_block: NewBlock) -> Result<()> {
         let mut task_list = self.huge_task_list.lock().unwrap();
+        task_list.push_back((recipes_maps, new_block));
+        Ok(())
+    }
+
+    async fn pop_huge_mixed_task(&self) -> Option<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)> {
+        let mut task_list = self.huge_mixed_task_list.lock().unwrap();
+        if task_list.len() > 0 {
+            task_list.pop_front()
+        } else {
+            None
+        }
+    }
+
+    async fn push_huge_mixed_task(&self, recipes_maps: HashMap<Pool, Vec<SandoRecipe>>, new_block: NewBlock) -> Result<()> {
+        let mut task_list = self.huge_mixed_task_list.lock().unwrap();
         task_list.push_back((recipes_maps, new_block));
         Ok(())
     }
@@ -886,6 +1178,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 false,
                                 self.provider.clone(),
                                 false,
+                                false,
                             )
                             .await
                         {
@@ -954,7 +1247,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
                                 self.provider.clone(),
-                                false
+                                false,
+                                false,
                             )
                             .await
                         {
