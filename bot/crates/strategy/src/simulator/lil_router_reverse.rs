@@ -45,7 +45,9 @@ async fn reset_token_inventory (
     ).await?;
 
     // value = 十分之一 * 1Eth
-    let min_value_inventory = token_exchange_rate.checked_div(U256::from(10)).unwrap_or_default();
+    let min_value_inventory = token_exchange_rate.checked_div(U256::from(1)).unwrap_or_default();
+    // info!("{:?} token_inventory {:?} token_exchange_rate{:?} min_vale_inventory {:?}",
+    //     ingredients.get_meats_ref()[0].hash, token_inventory, token_exchange_rate, min_value_inventory);
     if token_inventory < min_value_inventory {
         info!("tx {:?} token_inventory {:?} is less than min_vale_inventory {:?}",
             ingredients.get_meats_ref()[0].hash, token_inventory, min_value_inventory
