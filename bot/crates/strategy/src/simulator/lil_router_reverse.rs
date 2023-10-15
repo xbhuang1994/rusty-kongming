@@ -44,8 +44,8 @@ async fn reset_token_inventory (
         weth_start_balance
     ).await?;
 
-    // value = 万分之一 * 1Eth
-    let min_value_inventory = token_exchange_rate.checked_div(U256::from(10000)).unwrap_or_default();
+    // value = 十分之一 * 1Eth
+    let min_value_inventory = token_exchange_rate.checked_div(U256::from(10)).unwrap_or_default();
     if token_inventory < min_value_inventory {
         info!("tx {:?} token_inventory {:?} is less than min_vale_inventory {:?}",
             ingredients.get_meats_ref()[0].hash, token_inventory, min_value_inventory
