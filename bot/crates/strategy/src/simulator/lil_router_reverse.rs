@@ -9,6 +9,7 @@ use foundry_evm::{
         EVM,
     },
 };
+use log::info;
 
 use crate::{
     constants::{
@@ -24,6 +25,37 @@ use crate::{
 use super::{setup_block_state, binary_search_weth_input,
     is_balance_diff_for_revenue, backrun_in_diff_for_revenue};
 
+async fn reset_token_inventory (
+    token_inventory: U256,
+    next_block: BlockInfo,
+    shared_backend: SharedBackend,
+    ingredients: &mut RawIngredients,
+) -> Result<U256> {
+
+    let weth_start_balance = U256::from(*ONE_ETHER_IN_WEI);
+    let other_start_balance = token_inventory.checked_mul(U256::from(2)).unwrap_or_default();
+
+    let (token_exchange_rate, _) = evaluate_token_exchange_rate(
+        token_inventory,
+        next_block,
+        shared_backend.clone(),
+        ingredients,
+        other_start_balance,
+        weth_start_balance
+    ).await?;
+
+    // value = 万分之一 * 1Eth
+    let min_value_inventory = token_exchange_rate.checked_div(U256::from(10000)).unwrap_or_default();
+    if token_inventory < min_value_inventory {
+        info!("tx {:?} token_inventory {:?} is less than min_vale_inventory {:?}",
+            ingredients.get_meats_ref()[0].hash, token_inventory, min_value_inventory
+        );
+        Ok(min_value_inventory)
+    } else {
+        Ok(token_inventory)
+    }
+}
+
 // Juiced implementation of https://research.ijcaonline.org/volume65/number14/pxc3886165.pdf
 // splits range in more intervals, search intervals concurrently, compare, repeat till termination
 pub async fn find_optimal_input_reverse(
@@ -37,6 +69,14 @@ pub async fn find_optimal_input_reverse(
     if !credit_helper_ref.token_can_swap(ingredients.get_start_end_token()) {
         return Err(anyhow!("[lilRouter: TOKEN_CANNOT_SWAP] token={:?}", ingredients.get_start_end_token()));
     }
+
+    let min_inventory = reset_token_inventory(
+        token_inventory.clone(),
+        target_block.clone(),
+        shared_backend.clone(),
+        &mut ingredients.clone(),
+    ).await?;
+    let token_inventory = min_inventory;
 
     //
     //            [EXAMPLE WITH 10 BOUND INTERVALS]
