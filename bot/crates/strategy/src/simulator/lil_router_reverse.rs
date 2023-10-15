@@ -12,8 +12,8 @@ use foundry_evm::{
 
 use crate::{
     constants::{
-        LIL_ROUTER_ADDRESS, LIL_ROUTER_CODE, LIL_ROUTER_CONTROLLER, WETH_ADDRESS, WETH_FUND_AMT,
-        LIL_ROUTER_WETH_AMT_BASE, LIL_ROUTER_OTHER_AMT_BASE, MIN_REVENUE_THRESHOLD
+        LIL_ROUTER_ADDRESS, LIL_ROUTER_CODE, LIL_ROUTER_CONTROLLER, WETH_ADDRESS,
+        WETH_FUND_AMT, MIN_REVENUE_THRESHOLD, ONE_ETHER_IN_WEI, MAX_DIFF_RATE_OF_ONE_ETHER
     },
     tx_utils::lil_router_interface::{
         build_swap_v2_data, build_swap_v3_data, decode_swap_v2_result, decode_swap_v3_result,
@@ -21,19 +21,17 @@ use crate::{
     types::{BlockInfo, RawIngredients}
 };
 
-use super::{eth_to_wei, setup_block_state,
-    binary_search_weth_input,
-    is_balance_diff_for_revenue,
-    backrun_in_diff_for_revenue};
+use super::{setup_block_state, binary_search_weth_input,
+    is_balance_diff_for_revenue, backrun_in_diff_for_revenue};
 
 // Juiced implementation of https://research.ijcaonline.org/volume65/number14/pxc3886165.pdf
 // splits range in more intervals, search intervals concurrently, compare, repeat till termination
 pub async fn find_optimal_input_reverse(
     ingredients: &RawIngredients,
     target_block: &BlockInfo,
-    weth_inventory: U256,
+    token_inventory: U256,
     shared_backend: SharedBackend,
-) -> Result<U256> {
+) -> Result<(U256, U256)> {
 
     let credit_helper_ref = ingredients.get_credit_helper_ref();
     if !credit_helper_ref.token_can_swap(ingredients.get_start_end_token()) {
@@ -61,7 +59,7 @@ pub async fn find_optimal_input_reverse(
     let tolerance = U256::from(1u64);
 
     let mut lower_bound = U256::zero();
-    let mut upper_bound = weth_inventory;
+    let mut upper_bound = token_inventory;
 
     let tolerance = (tolerance * ((upper_bound + lower_bound) / rU256::from(2))) / base;
 
@@ -89,7 +87,8 @@ pub async fn find_optimal_input_reverse(
         false
     };
     let mut highest_sando_input = U256::zero();
-    let number_of_intervals = 30;
+    let mut other_diff_max = U256::zero();
+    let number_of_intervals = 15;
     let mut counter = 0;
 
     // continue search until termination condition is met (no point seraching down to closest wei)
@@ -133,19 +132,21 @@ pub async fn find_optimal_input_reverse(
             .collect::<Vec<_>>();
 
         // find interval that produces highest revenue
-        let (highest_revenue_index, _highest_revenue) = revenues
+        let (highest_revenue_index, highest_revenue_tunple) = revenues
             .iter()
             .enumerate()
-            .max_by(|(_, a), (_, b)| a.cmp(&b))
+            .max_by(|(_, (a, _)), (_, (b, _))| a.cmp(b))
             .unwrap();
 
         highest_sando_input = intervals[highest_revenue_index];
+        let (highest_revenue, diff_max) = highest_revenue_tunple;
+        other_diff_max = *diff_max;
 
         // enhancement: find better way to increase finding opps incase of all rev=0
-        if revenues[highest_revenue_index] == U256::zero() {
+        if *highest_revenue == U256::zero() {
             // most likely there is no sandwich possibility
             if counter == 10 {
-                return Ok(U256::zero());
+                return Ok((U256::zero(), U256::zero()));
             }
             // no revenue found, most likely small optimal so decrease range
             upper_bound = intervals[intervals.len() / 3]
@@ -171,17 +172,20 @@ pub async fn find_optimal_input_reverse(
         upper_bound = r_interval_upper(highest_revenue_index, &intervals)?;
     }
 
-    Ok(highest_sando_input)
+    Ok((highest_sando_input, other_diff_max))
 }
 
-async fn pre_evalute_for_intermediary_balance(
+/// token_exchange: 1e18Weth -> ?token
+async fn evaluate_token_exchange_rate (
     frontrun_in: U256,
     next_block: BlockInfo,
     shared_backend: SharedBackend,
     ingredients: &mut RawIngredients,
-) -> Result<U256> {
+    other_start_balance: U256,
+    weth_start_balance: U256,
+) -> Result<(U256, U256)> {
     let mut fork_db = CacheDB::new(shared_backend);
-    inject_lil_router_code(&mut fork_db, ingredients);
+    inject_lil_router_code(&mut fork_db, ingredients, other_start_balance, weth_start_balance);
 
     let mut evm = EVM::new();
     evm.database(fork_db);
@@ -252,7 +256,7 @@ async fn pre_evalute_for_intermediary_balance(
             return Err(anyhow!("[lilRouter: HALT] frontrun: {:?}", reason))
         }
     };
-    let (_frontrun_out, intermediary_balance) = match ingredients.get_target_pool() {
+    let (_frontrun_out, weth_mid_balance) = match ingredients.get_target_pool() {
         UniswapV2(_) => match decode_swap_v2_result(output.into()) {
             Ok(output) => output,
             Err(e) => {
@@ -267,40 +271,53 @@ async fn pre_evalute_for_intermediary_balance(
             Err(e) => return Err(anyhow!("lilRouter: FailedToDecodeOutput: {:?}", e)),
         },
     };
-    // println!("10003:frontrun_in={:?}, frontrun_out={:?}, intermediary={:?}", frontrun_in, _frontrun_out, intermediary_balance);
-    Ok(intermediary_balance)
+
+    let weth_increase = weth_mid_balance.checked_sub(weth_start_balance).unwrap_or_default();
+    let token_exchange_rate = frontrun_in
+        .checked_mul(U256::from(1e18 as u128)).unwrap_or_default()
+        .checked_div(weth_increase).unwrap_or_default();
+    
+    Ok((token_exchange_rate, weth_mid_balance))
 }
 
+/// return: (revenue, other_diff_max)
 async fn evaluate_sandwich_revenue(
     frontrun_in: U256,
     next_block: BlockInfo,
     shared_backend: SharedBackend,
     ingredients: RawIngredients,
-) -> Result<U256> {
+) -> Result<(U256, U256)> {
 
     if frontrun_in.is_zero() {
         return Err(anyhow!("[lilRouter: ZeroOptimal]"));
     }
 
+    let weth_start_balance = U256::from(*ONE_ETHER_IN_WEI);
+    let other_start_balance = frontrun_in.checked_mul(U256::from(2)).unwrap_or_default();
+
     // evalute to get back_in firstly
     let ingredients_result = &mut ingredients.clone();
-    let intermediary_balance = pre_evalute_for_intermediary_balance(
+    let (token_exchange_rate, weth_mid_balance) = evaluate_token_exchange_rate(
         frontrun_in,
         next_block,
         shared_backend.clone(),
-        ingredients_result).await?;
-    if intermediary_balance.is_zero() {
-        return Err(anyhow!("[lilRouter: HALT] ZeroOptimal: {:?}", "intermediary_balance=0"));
+        ingredients_result,
+        other_start_balance,
+        weth_start_balance,
+    ).await?;
+    if weth_mid_balance.is_zero() {
+        return Err(anyhow!("[lilRouter: HALT] ZeroOptimal: {:?}", "weth_mid_balance=0"));
     }
 
-    let (startend_token, _intermediary_token) = (ingredients.get_start_end_token(), ingredients.get_intermediary_token());
-    let credit_helper_ref = ingredients.get_credit_helper_ref();
-    let other_start_balance = credit_helper_ref.base_to_amount(
-        startend_token, &(LIL_ROUTER_OTHER_AMT_BASE.to_string()));
+    // maximum diff between frontrun and backrun equals XXX eth's value
+    let other_diff_max = token_exchange_rate.checked_div(U256::from(MAX_DIFF_RATE_OF_ONE_ETHER)).unwrap_or_default();
+    // println!("========= weth start {:?} other start {:?} token_exchange_rate {:?} other_diff_max {:?}",
+    //     weth_start_balance, other_start_balance, token_exchange_rate, other_diff_max);
 
+    let (_startend_token, _intermediary_token) = (ingredients.get_start_end_token(), ingredients.get_intermediary_token());
+  
     // amount of weth increase
-    let weth_start_balance = U256::from(eth_to_wei(LIL_ROUTER_WETH_AMT_BASE));
-    let intermediary_increase = intermediary_balance.checked_sub(weth_start_balance).unwrap_or_default();
+    let intermediary_increase = weth_mid_balance.checked_sub(weth_start_balance).unwrap_or_default();
     let max_backrun_in = intermediary_increase.checked_sub(*MIN_REVENUE_THRESHOLD).unwrap_or_default();
     // min_backrun_in is 75%
     let min_backrun_in = intermediary_increase.checked_mul(U256::from(75)).unwrap().checked_div(U256::from(100)).unwrap();
@@ -335,7 +352,9 @@ async fn evaluate_sandwich_revenue(
 
         let mut fork_db = CacheDB::new(shared_backend.clone());
 
-        inject_lil_router_code(&mut fork_db, ingredients_result);
+        inject_lil_router_code(&mut fork_db, ingredients_result,
+            other_start_balance,
+            weth_start_balance);
 
         let mut evm = EVM::new();
         evm.database(fork_db);
@@ -507,7 +526,7 @@ async fn evaluate_sandwich_revenue(
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
         _low_high_diff = high_amount_in - low_amount_in;
-        if is_balance_diff_for_revenue(other_start_balance, post_other_balance)
+        if is_balance_diff_for_revenue(other_start_balance, post_other_balance, other_diff_max)
             /*&& _low_high_diff <= _backrun_in_diff_revenue*/ {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
             break;
@@ -523,21 +542,20 @@ async fn evaluate_sandwich_revenue(
         }
     }
 
-    #[cfg(feature = "debug")]
-    {
-        // println!("started_token={:?},intermediary_token={:?},frontrun_in={:?},intermediary_balance={:?},
-        //     min_mount_in={:?},max_other_balance={:?},low_high_diff={:?},round={:?},revenue={:?}",
-        //     startend_token, _intermediary_token, frontrun_in, intermediary_balance, min_amount_in,
-        //     max_other_balance, _low_high_diff, current_round, revenue);
-    }
+    // println!("started_token={:?},intermediary_token={:?},frontrun_in={:?},intermediary_balance={:?},
+    //     min_mount_in={:?},max_other_balance={:?},low_high_diff={:?},round={:?},revenue={:?}",
+    //     _startend_token, _intermediary_token, frontrun_in, intermediary_balance, min_amount_in,
+    //     max_other_balance, _low_high_diff, current_round, revenue);
 
-    Ok(revenue)
+    Ok((revenue, other_diff_max))
 }
 
 /// Inserts custom minimal router contract into evm instance for simulations
 fn inject_lil_router_code(
     db: &mut CacheDB<SharedBackend>, 
     ingredients: &mut RawIngredients,
+    other_start_balance: U256,
+    weth_start_balance: U256,
 ) {
     // insert lilRouter bytecode
     let lil_router_info = AccountInfo::new(
@@ -560,15 +578,15 @@ fn inject_lil_router_code(
     db.insert_account_storage(
         (*WETH_ADDRESS).into(),
         slot.into(),
-        eth_to_wei(LIL_ROUTER_WETH_AMT_BASE))
-        .unwrap();
+        rU256::from(weth_start_balance.as_u128()),
+    ).unwrap();
 
     // as start_end token is not WETH, credit xxxx tokens for use
     let credit_helper_ref = ingredients.get_credit_helper_ref();
-    credit_helper_ref.credit_token_from_base(
+    credit_helper_ref.credit_token_balance(
         ingredients.get_start_end_token().clone(),
         db,
         (*LIL_ROUTER_ADDRESS).into(),
-        &(LIL_ROUTER_OTHER_AMT_BASE.to_string()),
+        other_start_balance,
     );
 }

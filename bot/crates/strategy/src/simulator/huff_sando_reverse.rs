@@ -37,7 +37,7 @@ fn pre_get_start_mid_balance(
     next_block: &BlockInfo,
     optimal_in: U256,
     sando_start_bal: U256,
-    sando_start_web_bal: U256,
+    sando_start_weth_bal: U256,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
@@ -52,7 +52,7 @@ fn pre_get_start_mid_balance(
             &mut fork_db,
             sando_address.0.into(),
             searcher.0.into(),
-            sando_start_web_bal,
+            sando_start_weth_bal,
         );
 
         // as start_end token is not WETH, credit xxxx tokens for use
@@ -217,6 +217,7 @@ pub fn create_recipe_reverse(
     optimal_in: U256,
     sando_start_bal: U256,
     sando_start_weth_bal: U256,
+    other_diff_max: U256,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
@@ -241,7 +242,6 @@ pub fn create_recipe_reverse(
     }
 
     // amount of weth increase
-    // let weth_start_balance = U256::from(eth_to_wei(LIL_ROUTER_WETH_AMT_BASE));
     let intermediary_increase = weth_mid_balance.checked_sub(weth_start_balance).unwrap_or_default();
     let max_backrun_in = intermediary_increase.checked_sub(*MIN_REVENUE_THRESHOLD).unwrap_or_default();
     // min_backrun_in is 75%
@@ -581,7 +581,7 @@ pub fn create_recipe_reverse(
         last_amount_in = current_amount_in.clone();
         current_round = current_round + 1;
         _low_high_diff = high_amount_in - low_amount_in;
-        if is_balance_diff_for_revenue(other_start_balance, other_post_balance)
+        if is_balance_diff_for_revenue(other_start_balance, other_post_balance, other_diff_max)
             /*&& _low_high_diff <= _backrun_in_diff_revenue*/ {
             revenue = intermediary_increase.checked_sub(current_amount_in).unwrap_or_default();
         } else if other_post_balance > other_start_balance {

@@ -7,9 +7,10 @@ use foundry_evm::revm::primitives::{B160 as rAddress, U256 as rU256};
 pub static ONE_ETHER_IN_WEI: Lazy<rU256> = Lazy::new(|| rU256::from(1000000000000000000_u128));
 pub static WETH_FUND_AMT: Lazy<rU256> = Lazy::new(|| rU256::from(69) * *ONE_ETHER_IN_WEI);
 
+pub static SEARCHER_WETH_AMT: u128 = 10;
 pub static FUND_OTHER_AMT_BASE: u128 = 9999999;
-pub static LIL_ROUTER_WETH_AMT_BASE: u128 = 200;
-pub static LIL_ROUTER_OTHER_AMT_BASE: u128 = 30000000;
+
+pub static MAX_DIFF_RATE_OF_ONE_ETHER: u128 = 5_000_000;
 pub static MIN_REVENUE_THRESHOLD: Lazy<U256> = Lazy::new(|| U256::from(700000));
 
 // could generate random address to use at runtime

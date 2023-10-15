@@ -593,13 +593,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 )?;
             },
             SandwichSwapType::Reverse => {
-                optimal_input = find_optimal_input_reverse(
+                let (_optimal_input, other_diff_max) = find_optimal_input_reverse(
                     &ingredients,
                     &target_block,
                     token_inventory,
                     shared_backend.clone(),
                 )
                 .await?;
+                optimal_input = _optimal_input;
 
                 recipe = create_recipe_reverse(
                     &ingredients,
@@ -607,6 +608,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     optimal_input,
                     token_inventory,
                     U256::from(1e18 as u128),
+                    other_diff_max,
                     self.sando_state_manager.get_searcher_address(),
                     self.sando_state_manager.get_sando_address(),
                     shared_backend.clone(),

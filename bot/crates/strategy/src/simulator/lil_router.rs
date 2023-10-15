@@ -17,7 +17,6 @@ use foundry_evm::{
 use crate::{
     constants::{
         LIL_ROUTER_ADDRESS, LIL_ROUTER_CODE, LIL_ROUTER_CONTROLLER, WETH_ADDRESS, WETH_FUND_AMT,
-        LIL_ROUTER_WETH_AMT_BASE,
     },
     tx_utils::lil_router_interface::{
         build_swap_v2_data, build_swap_v3_data, decode_swap_v2_result, decode_swap_v3_result,
@@ -84,7 +83,7 @@ pub async fn find_optimal_input(
         false
     };
     let mut highest_sando_input = U256::zero();
-    let number_of_intervals = 30;
+    let number_of_intervals = 15;
     let mut counter = 0;
 
     // continue search until termination condition is met (no point seraching down to closest wei)
@@ -179,7 +178,8 @@ async fn evaluate_sandwich_revenue(
     ingredients: RawIngredients,
 ) -> Result<U256> {
     let mut fork_db = CacheDB::new(shared_backend);
-    inject_lil_router_code(&mut fork_db);
+    let weth_start_balance = frontrun_in.checked_mul(U256::from(2)).unwrap_or_default();
+    inject_lil_router_code(&mut fork_db, weth_start_balance);
 
     let mut evm = EVM::new();
     evm.database(fork_db);
@@ -338,7 +338,7 @@ async fn evaluate_sandwich_revenue(
     };
 
     let revenue = post_sandwich_balance
-        .checked_sub((*WETH_FUND_AMT).into())
+        .checked_sub(weth_start_balance)
         .unwrap_or_default();
 
     Ok(revenue)
@@ -347,6 +347,7 @@ async fn evaluate_sandwich_revenue(
 /// Inserts custom minimal router contract into evm instance for simulations
 fn inject_lil_router_code(
     db: &mut CacheDB<SharedBackend>,
+    weth_start_balance: U256,
 ) {
     // insert lilRouter bytecode
     let lil_router_info = AccountInfo::new(
@@ -369,7 +370,7 @@ fn inject_lil_router_code(
     db.insert_account_storage(
         (*WETH_ADDRESS).into(),
         slot.into(),
-        eth_to_wei(LIL_ROUTER_WETH_AMT_BASE))
+        rU256::from(weth_start_balance.as_u128()),)
         .unwrap();
 
 }

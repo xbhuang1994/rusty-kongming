@@ -32,14 +32,14 @@ pub fn eth_to_wei(amt: u128) -> rU256 {
 }
 
 /// balance difference that can calculate the revenue
-fn is_balance_diff_for_revenue(start_balance: U256, end_balance: U256) -> bool {
+fn is_balance_diff_for_revenue(start_balance: U256, end_balance: U256, max_diff: U256) -> bool {
     let mut diff = U256::zero();
     if end_balance >= start_balance {
         diff = end_balance.checked_sub(start_balance).unwrap_or_default();
     }
-    // 10_000
-    let min_diff = start_balance.checked_div(U256::from(50_000_000)).unwrap_or_default();
-    return diff > U256::zero() && diff <= min_diff;
+
+    // let max_diff = start_balance.checked_div(U256::from(50_000_000)).unwrap_or_default();
+    return diff > U256::zero() && diff <= max_diff;
 }
 
 /// backrun_in difference that can calculate the revenue

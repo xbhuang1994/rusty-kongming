@@ -3,7 +3,7 @@ use cfmms::pool::UniswapV2Pool;
 use ethers::abi::{self, parse_abi, Address, ParamType};
 use ethers::prelude::BaseContract;
 use ethers::types::{Bytes, U256};
-use crate::constants::{GET_RESERVES_SIG, SUGAR_DADDY, WETH_ADDRESS, LIL_ROUTER_WETH_AMT_BASE};
+use crate::constants::{GET_RESERVES_SIG, SUGAR_DADDY, WETH_ADDRESS, SEARCHER_WETH_AMT};
 use foundry_evm::executor::{
     fork::SharedBackend, ExecutionResult, Output, TransactTo,
 };
@@ -187,7 +187,7 @@ pub fn inject_huff_sando(
 
     // insert and fund lilRouter controller (so we can spoof)
     let searcher_info = foundry_evm::revm::primitives::AccountInfo::new(
-        crate::simulator::eth_to_wei(LIL_ROUTER_WETH_AMT_BASE),
+        crate::simulator::eth_to_wei(SEARCHER_WETH_AMT),
         0,
         foundry_evm::executor::Bytecode::default(),
     );
