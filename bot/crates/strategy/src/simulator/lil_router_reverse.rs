@@ -44,9 +44,8 @@ async fn reset_token_inventory (
         weth_start_balance
     ).await?;
 
-    // value = 十分之一 * 1Eth
     // let min_value_inventory = token_exchange_rate.checked_div(U256::from(10)).unwrap_or_default();
-    let min_value_inventory = token_exchange_rate.checked_mul(U256::from(10)).unwrap_or_default();
+    let min_value_inventory = token_exchange_rate.checked_mul(U256::from(1)).unwrap_or_default();
     // info!("{:?} token_inventory {:?} token_exchange_rate{:?} min_vale_inventory {:?}",
     //     ingredients.get_meats_ref()[0].hash, token_inventory, token_exchange_rate, min_value_inventory);
     if token_inventory < min_value_inventory {
@@ -64,7 +63,7 @@ async fn reset_token_inventory (
 pub async fn find_optimal_input_reverse(
     ingredients: &RawIngredients,
     target_block: &BlockInfo,
-    token_inventory: U256,
+    input_token_inventory: U256,
     shared_backend: SharedBackend,
 ) -> Result<(U256, U256)> {
 
@@ -73,13 +72,18 @@ pub async fn find_optimal_input_reverse(
         return Err(anyhow!("[lilRouter: TOKEN_CANNOT_SWAP] token={:?}", ingredients.get_start_end_token()));
     }
 
-    let min_inventory = reset_token_inventory(
-        token_inventory.clone(),
-        target_block.clone(),
-        shared_backend.clone(),
-        &mut ingredients.clone(),
-    ).await?;
-    let token_inventory = min_inventory;
+    let mut token_inventory = input_token_inventory;
+
+    #[cfg(feature = "debug")]
+    {
+        let min_inventory = reset_token_inventory(
+            input_token_inventory.clone(),
+            target_block.clone(),
+            shared_backend.clone(),
+            &mut ingredients.clone(),
+        ).await?;
+        token_inventory = min_inventory;
+    }
 
     //
     //            [EXAMPLE WITH 10 BOUND INTERVALS]
