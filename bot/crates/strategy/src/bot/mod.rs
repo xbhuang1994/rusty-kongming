@@ -28,7 +28,7 @@ use crate::{
         Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType,
         calculate_bribe_for_max_fee
     },
-    helpers::{calculate_inventory_for_debug, get_start_token_decimal, calculate_token_decimals}
+    helpers::{calculate_inventory_for_debug, get_start_token_info, calculate_token_decimals}
 };
 use uuid::Uuid;
 
@@ -551,22 +551,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
         );
 
         // enhancement: should set another inventory when reverse
-        let (token_inventory, token_decimals) = if cfg!(feature = "debug") {
+        let (token_symbol, token_decimals, token_inventory) = if cfg!(feature = "debug") {
             // spoof weth balance when the debug feature is active
             // (*crate::constants::WETH_FUND_AMT).into()
             calculate_inventory_for_debug(&ingredients)
         } else {
+            let (symbol, decimals) = get_start_token_info(&ingredients);
+            let inventory = 
             if swap_type == SandwichSwapType::Forward {
-                (self.sando_state_manager.get_weth_inventory(), 1e18 as u32)
+                self.sando_state_manager.get_weth_inventory()
             } else {
-                (
-                    self.sando_state_manager.get_token_inventory(
-                        ingredients.get_start_end_token(),
-                        self.provider.clone()
-                    ).await,
-                    get_start_token_decimal(&ingredients)
-                )
-            }
+                self.sando_state_manager.get_token_inventory(
+                    ingredients.get_start_end_token(),
+                    self.provider.clone()
+                ).await
+            };
+            (symbol, decimals, inventory)
         };
 
         let optimal_input;
@@ -620,6 +620,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             for_huge,
             ingredients.get_uuid(),
             swap_type,
+            token_symbol,
             ingredients.print_head_txs(),
             ingredients.print_meats(),
             optimal_input.as_u128() as f64 / calculate_token_decimals(token_decimals) as f64,

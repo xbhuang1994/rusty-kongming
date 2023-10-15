@@ -9,12 +9,13 @@ use std::{collections::HashMap, env, str::FromStr};
 use toml::Value;
 #[derive(Debug, Clone, Default)]
 struct SlotIndex {
+    symbol: String,
     decimals: u32,
     index: i64,
 }
 impl SlotIndex {
-    pub fn new(decimals: u32, index: i64) -> Self {
-        Self { decimals, index }
+    pub fn new(symbol: String, decimals: u32, index: i64) -> Self {
+        Self { symbol, decimals, index }
     }
 }
 #[derive(Debug, Clone)]
@@ -35,8 +36,9 @@ impl CreditHelper {
                 for (key, value) in parsed.as_table().unwrap() {
                     let index = value["index"].as_integer().unwrap();
                     let decimals = value["decimals"].as_integer().unwrap() as u32;
+                    let symbol = String::from(value["symbol"].as_str().unwrap());
 
-                    let slot_index = SlotIndex::new(decimals, index);
+                    let slot_index = SlotIndex::new(symbol, decimals, index);
                     let address = H160::from_str(key).expect("Invalid input token address");
                     slot_index_map.insert(address, slot_index);
                 }
@@ -117,11 +119,11 @@ impl CreditHelper {
         self.slot_index_map.contains_key(&input_token.clone())
     }
 
-    pub fn get_token_decimals(&self, input_token: Address) -> u32 {
+    pub fn get_token_info(&self, input_token: Address) -> (String, u32) {
         if self.slot_index_map.contains_key(&input_token) {
-            self.slot_index_map[&input_token].decimals
+            (self.slot_index_map[&input_token].symbol.clone(), self.slot_index_map[&input_token].decimals)
         } else {
-            1
+            (String::from("zUnknow"), 1)
         }
     }
 }

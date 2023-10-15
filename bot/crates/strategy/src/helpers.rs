@@ -67,22 +67,22 @@ pub fn access_list_to_revm(access_list: AccessList) -> Vec<(B160, Vec<rU256>)> {
 /// get inventory for token when debug
 pub fn calculate_inventory_for_debug(
         ingredients: &RawIngredients,
-    ) -> (U256, u32) {
+    ) -> (String, u32, U256) {
     if ingredients.get_start_end_token() == *WETH_ADDRESS {
-        ((*crate::constants::WETH_FUND_AMT).into(), 18)
+        (String::from("wETH"), 18, (*crate::constants::WETH_FUND_AMT).into())
     } else {
         if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
-            let decimals = ingredients.get_credit_helper_ref()
-                .get_token_decimals(
+            let (symbol, decimals) = ingredients.get_credit_helper_ref()
+                .get_token_info(
                     ingredients.get_start_end_token()
                 );
             if decimals > 0 {
                 let token_decimals = calculate_token_decimals(decimals);
                 let inventory = U256::from(token_decimals).checked_mul(U256::from(FUND_OTHER_AMT_BASE)).unwrap_or_default();
-                return (inventory, decimals);
+                return (symbol, decimals, inventory);
             }
         }
-        (U256::zero(), 1)
+        (String::from("zUnknown"), 1, U256::zero())
     }
 }
 
@@ -90,21 +90,20 @@ pub fn calculate_token_decimals(decimals: u32) -> u128 {
     U256::pow(U256::from(10), U256::from(decimals)).as_u128()
 }
 
-/// get token decimal
-pub fn get_start_token_decimal(
+/// get token symbol & decimal
+pub fn get_start_token_info(
         ingredients: &RawIngredients,
-    ) -> u32 {
+    ) -> (String, u32) {
     if ingredients.get_start_end_token() == *WETH_ADDRESS {
-        18
+        (String::from("wETH"), 18)
     } else {
         if ingredients.get_credit_helper_ref().token_can_swap(ingredients.get_start_end_token()) {
-            let decimals = ingredients.get_credit_helper_ref()
-                .get_token_decimals(
+            ingredients.get_credit_helper_ref()
+                .get_token_info(
                     ingredients.get_start_end_token()
-                );
-            decimals
+            )
         } else {
-            1
+            (String::from("zUnknown"), 1)
         }
     }
 }
@@ -191,7 +190,7 @@ macro_rules! log_bundle {
 
 #[macro_export]
 macro_rules! log_opportunity {
-    ($for_huge:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
+    ($for_huge:expr, $uuid:expr, $swap_type:expr, $token_symbol:expr, $head_txs:expr, $meats:expr, $optimal_input:expr, $revenue:expr,$frontrun_gas_used:expr,$backrun_gas_used:expr) => {{
         
         info!("{}", format!("[OPPORTUNITY DETECTED]"));
         info!(
@@ -216,8 +215,9 @@ macro_rules! log_opportunity {
         info!(
             "{}",
             format!(
-                "optimal_input: {} wETH/Other",
-                $optimal_input.to_string()
+                "optimal_input: {} {}",
+                $optimal_input.to_string(),
+                $token_symbol.to_string()
             )
         );
         info!(
