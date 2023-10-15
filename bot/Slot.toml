@@ -4499,3 +4499,14 @@ symbol = "RON"
 index = 6
 decimals = 18
 symbol = "BTB"
+
+
+[0x8a7b7b9b2f7d0c63f66171721339705a6188a7d5]
+index = 1
+decimals = 18
+symbol = "EDOGE"
+
+[0x321bd6fa7696e0e4ba082e454b6e87b6c8372b27]
+index = 0
+decimals = 18
+symbol = "SHIBA"
