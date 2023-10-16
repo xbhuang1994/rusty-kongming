@@ -93,18 +93,21 @@ impl CreditHelper {
         sando_address: Address,
         amount: U256,
     ) {
-        let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
-        // give sandwich contract some weth for swap
-        let slot: U256 = ethers::utils::keccak256(abi::encode(&[
-            abi::Token::Address(sando_address.0.into()),
-            abi::Token::Uint(U256::from(slot_item.index)),
-        ]))
-        .into();
-        // update changes
-        let credit_balance = amount;
-        fork_db
-            .insert_account_storage(input_token.0.into(), slot.into(), credit_balance.into())
-            .unwrap();
+        if &self.slot_index_map.contains_key(&input_token.clone()) {
+
+            let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
+            // give sandwich contract some weth for swap
+            let slot: U256 = ethers::utils::keccak256(abi::encode(&[
+                abi::Token::Address(sando_address.0.into()),
+                abi::Token::Uint(U256::from(slot_item.index)),
+            ]))
+            .into();
+            // update changes
+            let credit_balance = amount;
+            fork_db
+                .insert_account_storage(input_token.0.into(), slot.into(), credit_balance.into())
+                .unwrap();
+        }
     }
 
     pub fn base_to_amount(&self,
