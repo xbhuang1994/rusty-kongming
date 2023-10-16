@@ -799,7 +799,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                     }
                                 },
                                 Err(e) => {
-                                    error!("process huge sandwich error: {}", e);
+                                    error!("process huge mixed sandwich error: {}", e);
                                 }
                             }
                         },
