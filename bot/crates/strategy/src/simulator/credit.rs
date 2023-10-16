@@ -93,7 +93,7 @@ impl CreditHelper {
         sando_address: Address,
         amount: U256,
     ) {
-        if &self.slot_index_map.contains_key(&input_token.clone()) {
+        if self.slot_index_map.contains_key(&input_token.clone()) {
 
             let slot_item: &SlotIndex = &self.slot_index_map[&input_token.clone()];
             // give sandwich contract some weth for swap
