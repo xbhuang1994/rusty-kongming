@@ -413,22 +413,22 @@ pub fn create_recipe_reverse(
         let mut salmonella_inspector = SalmonellaInspectoooor::new();
         let frontrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
             Ok(result) => result,
-            Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] frontrun: {:?}", e)),
+            Err(e) => return Err(anyhow!("[huffsando_reverse: EVM ERROR] frontrun: {:?}", e)),
         };
         match frontrun_result {
             ExecutionResult::Success { .. } => { /* continue operation */ }
             ExecutionResult::Revert { output, .. } => {
-                return Err(anyhow!("[huffsando: REVERT] frontrun: {:?}", output));
+                return Err(anyhow!("[huffsando_reverse: REVERT] frontrun: {:?}", output));
             }
             ExecutionResult::Halt { reason, .. } => {
-                return Err(anyhow!("[huffsando: HALT] frontrun: {:?}", reason));
+                return Err(anyhow!("[huffsando_reverse: HALT] frontrun: {:?}", reason));
             }
         };
         match salmonella_inspector.is_sando_safu() {
             IsSandoSafu::Safu => { /* continue operation */ }
             IsSandoSafu::NotSafu(not_safu_opcodes) => {
                 return Err(anyhow!(
-                    "[huffsando: FrontrunNotSafu] {:?}",
+                    "[huffsando_reverse: FrontrunNotSafu] {:?}",
                     not_safu_opcodes
                 ))
             }
@@ -469,7 +469,7 @@ pub fn create_recipe_reverse(
             // remove reverted meats because mempool tx/s gas costs are accounted for by fb
             let res = match evm.transact_commit() {
                 Ok(result) => result,
-                Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] meat: {:?}", e)),
+                Err(e) => return Err(anyhow!("[huffsando_reverse: EVM ERROR] meat: {:?}", e)),
             };
             match res.is_success() {
                 true => is_meat_good.push(true),
@@ -534,7 +534,7 @@ pub fn create_recipe_reverse(
             get_precompiles_for(evm.env.cfg.spec_id),
         );
         evm.inspect_ref(&mut access_list_inspector)
-            .map_err(|e| anyhow!("[huffsando: EVM ERROR] frontrun: {:?}", e))
+            .map_err(|e| anyhow!("[huffsando_reverse: EVM ERROR] frontrun: {:?}", e))
             .unwrap();
         let backrun_access_list = access_list_inspector.access_list();
         backrun_tx_env.access_list = access_list_to_revm(backrun_access_list);
@@ -545,22 +545,22 @@ pub fn create_recipe_reverse(
         let mut salmonella_inspector = SalmonellaInspectoooor::new();
         let backrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
             Ok(result) => result,
-            Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] backrun: {:?}", e)),
+            Err(e) => return Err(anyhow!("[huffsando_reverse: EVM ERROR] backrun: {:?}", e)),
         };
         match backrun_result {
             ExecutionResult::Success { .. } => { /* continue */ }
             ExecutionResult::Revert { output, .. } => {
-                return Err(anyhow!("[huffsando: REVERT] backrun: {:?}", output));
+                return Err(anyhow!("[huffsando_reverse: REVERT] backrun: {:?}", output));
             }
             ExecutionResult::Halt { reason, .. } => {
-                return Err(anyhow!("[huffsando: HALT] backrun: {:?}", reason))
+                return Err(anyhow!("[huffsando_reverse: HALT] backrun: {:?}", reason))
             }
         };
         match salmonella_inspector.is_sando_safu() {
             IsSandoSafu::Safu => { /* continue operation */ }
             IsSandoSafu::NotSafu(not_safu_opcodes) => {
                 return Err(anyhow!(
-                    "[huffsando: BACKRUN_NOT_SAFU] bad_opcodes->{:?}",
+                    "[huffsando_reverse: BACKRUN_NOT_SAFU] bad_opcodes->{:?}",
                     not_safu_opcodes
                 ))
             }
@@ -628,5 +628,5 @@ pub fn create_recipe_reverse(
         }
     }
 
-    return Err(anyhow!("[huffsando: ZeroRevenue]"))
+    return Err(anyhow!("[huffsando_reverse: ZeroRevenue]"))
 }

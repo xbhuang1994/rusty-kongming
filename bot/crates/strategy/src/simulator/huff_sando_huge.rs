@@ -111,7 +111,6 @@ pub fn create_recipe_huge(
         transact_to: TransactTo::Call(sando_address.0.into()),
         value: frontrun_value.into(),
         data: limit_block_height(frontrun_data.into(), next_block.number).into(),
-        // data: frontrun_data.clone().into(),
         chain_id: None,
         nonce: None,
         access_list: Default::default(),
@@ -137,22 +136,22 @@ pub fn create_recipe_huge(
     let mut salmonella_inspector = SalmonellaInspectoooor::new();
     let frontrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
         Ok(result) => result,
-        Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] frontrun: {:?}", e)),
+        Err(e) => return Err(anyhow!("[huffsando_huge: EVM ERROR] frontrun: {:?}", e)),
     };
     match frontrun_result {
         ExecutionResult::Success { .. } => { /* continue operation */ }
         ExecutionResult::Revert { output, .. } => {
-            return Err(anyhow!("[huffsando: REVERT] frontrun: {:?}", output));
+            return Err(anyhow!("[huffsando_huge: REVERT] frontrun: {:?}", output));
         }
         ExecutionResult::Halt { reason, .. } => {
-            return Err(anyhow!("[huffsando: HALT] frontrun: {:?}", reason));
+            return Err(anyhow!("[huffsando_huge: HALT] frontrun: {:?}", reason));
         }
     };
     match salmonella_inspector.is_sando_safu() {
         IsSandoSafu::Safu => { /* continue operation */ }
         IsSandoSafu::NotSafu(not_safu_opcodes) => {
             return Err(anyhow!(
-                "[huffsando: FrontrunNotSafu] {:?}",
+                "[huffsando_huge: FrontrunNotSafu] {:?}",
                 not_safu_opcodes
             ))
         }
@@ -193,7 +192,7 @@ pub fn create_recipe_huge(
         // remove reverted meats because mempool tx/s gas costs are accounted for by fb
         let res = match evm.transact_commit() {
             Ok(result) => result,
-            Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] meat: {:?}", e)),
+            Err(e) => return Err(anyhow!("[huffsando_huge: EVM ERROR] meat: {:?}", e)),
         };
         match res.is_success() {
             true => is_meat_good.push(true),
@@ -228,7 +227,7 @@ pub fn create_recipe_huge(
         get_precompiles_for(evm.env.cfg.spec_id),
     );
     evm.inspect_ref(&mut access_list_inspector)
-        .map_err(|e| anyhow!("[huffsando: EVM ERROR] frontrun: {:?}", e))
+        .map_err(|e| anyhow!("[huffsando_huge: EVM ERROR] frontrun: {:?}", e))
         .unwrap();
     let backrun_access_list = access_list_inspector.access_list();
     backrun_tx_env.access_list = access_list_to_revm(backrun_access_list);
@@ -239,22 +238,22 @@ pub fn create_recipe_huge(
     let mut salmonella_inspector = SalmonellaInspectoooor::new();
     let backrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
         Ok(result) => result,
-        Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] backrun: {:?}", e)),
+        Err(e) => return Err(anyhow!("[huffsando_huge: EVM ERROR] backrun: {:?}", e)),
     };
     match backrun_result {
         ExecutionResult::Success { .. } => { /* continue */ }
-        ExecutionResult::Revert { output, .. } => {
-            return Err(anyhow!("[huffsando: REVERT] backrun: {:?}", output));
+        ExecutionResult::Revert { gas_used, output, .. } => {
+            return Err(anyhow!("[huffsando_huge: REVERT] backrun: {:?}, gas_used: {:?}", output, gas_used));
         }
         ExecutionResult::Halt { reason, .. } => {
-            return Err(anyhow!("[huffsando: HALT] backrun: {:?}", reason));
+            return Err(anyhow!("[huffsando_huge: HALT] backrun: {:?}", reason));
         }
     };
     match salmonella_inspector.is_sando_safu() {
         IsSandoSafu::Safu => { /* continue operation */ }
         IsSandoSafu::NotSafu(not_safu_opcodes) => {
             return Err(anyhow!(
-                "[huffsando: BACKRUN_NOT_SAFU] bad_opcodes->{:?}",
+                "[huffsando_huge: BACKRUN_NOT_SAFU] bad_opcodes->{:?}",
                 not_safu_opcodes
             ))
         }

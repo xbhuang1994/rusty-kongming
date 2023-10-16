@@ -452,6 +452,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 // set sando token balance for recipe creation
                                 if recipe.get_start_end_token() == *WETH_ADDRESS {
                                     sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+                                    
+                                    #[cfg(feature = "debug")]
+                                    {
+                                        // add some buffer, test if REVERT occur in backrun
+                                        let balance = U256::from(100).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
+                                        sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
+
+                                    }
                                 } else {
                                     let mut balance = recipe.get_frontrun_optimal_in();
                                     if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {

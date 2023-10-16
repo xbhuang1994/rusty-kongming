@@ -39,7 +39,7 @@ pub fn create_recipe(
 ) -> Result<SandoRecipe> {
 
     if optimal_in.is_zero() {
-        return Err(anyhow!("[huffsando: ZeroOtimal]"))
+        return Err(anyhow!("[huffsando_forward: ZeroOtimal]"))
     }
 
     #[warn(unused_mut)]
@@ -157,22 +157,22 @@ pub fn create_recipe(
     let mut salmonella_inspector = SalmonellaInspectoooor::new();
     let frontrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
         Ok(result) => result,
-        Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] frontrun: {:?}", e)),
+        Err(e) => return Err(anyhow!("[huffsando_forward: EVM ERROR] frontrun: {:?}", e)),
     };
     match frontrun_result {
         ExecutionResult::Success { .. } => { /* continue operation */ }
         ExecutionResult::Revert { output, .. } => {
-            return Err(anyhow!("[huffsando: REVERT] frontrun: {:?}", output));
+            return Err(anyhow!("[huffsando_forward: REVERT] frontrun: {:?}", output));
         }
         ExecutionResult::Halt { reason, .. } => {
-            return Err(anyhow!("[huffsando: HALT] frontrun: {:?}", reason));
+            return Err(anyhow!("[huffsando_forward: HALT] frontrun: {:?}", reason));
         }
     };
     match salmonella_inspector.is_sando_safu() {
         IsSandoSafu::Safu => { /* continue operation */ }
         IsSandoSafu::NotSafu(not_safu_opcodes) => {
             return Err(anyhow!(
-                "[huffsando: FrontrunNotSafu] {:?}",
+                "[huffsando_forward: FrontrunNotSafu] {:?}",
                 not_safu_opcodes
             ))
         }
@@ -213,7 +213,7 @@ pub fn create_recipe(
         // remove reverted meats because mempool tx/s gas costs are accounted for by fb
         let res = match evm.transact_commit() {
             Ok(result) => result,
-            Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] meat: {:?}", e)),
+            Err(e) => return Err(anyhow!("[huffsando_forward: EVM ERROR] meat: {:?}", e)),
         };
         match res.is_success() {
             true => is_meat_good.push(true),
@@ -283,7 +283,7 @@ pub fn create_recipe(
         get_precompiles_for(evm.env.cfg.spec_id),
     );
     evm.inspect_ref(&mut access_list_inspector)
-        .map_err(|e| anyhow!("[huffsando: EVM ERROR] frontrun: {:?}", e))
+        .map_err(|e| anyhow!("[huffsando_forward: EVM ERROR] frontrun: {:?}", e))
         .unwrap();
     let backrun_access_list = access_list_inspector.access_list();
     backrun_tx_env.access_list = access_list_to_revm(backrun_access_list);
@@ -294,22 +294,22 @@ pub fn create_recipe(
     let mut salmonella_inspector = SalmonellaInspectoooor::new();
     let backrun_result = match evm.inspect_commit(&mut salmonella_inspector) {
         Ok(result) => result,
-        Err(e) => return Err(anyhow!("[huffsando: EVM ERROR] backrun: {:?}", e)),
+        Err(e) => return Err(anyhow!("[huffsando_forward: EVM ERROR] backrun: {:?}", e)),
     };
     match backrun_result {
         ExecutionResult::Success { .. } => { /* continue */ }
         ExecutionResult::Revert { output, .. } => {
-            return Err(anyhow!("[huffsando: REVERT] backrun: {:?}", output));
+            return Err(anyhow!("[huffsando_forward: REVERT] backrun: {:?}", output));
         }
         ExecutionResult::Halt { reason, .. } => {
-            return Err(anyhow!("[huffsando: HALT] backrun: {:?}", reason))
+            return Err(anyhow!("[huffsando_forward: HALT] backrun: {:?}", reason))
         }
     };
     match salmonella_inspector.is_sando_safu() {
         IsSandoSafu::Safu => { /* continue operation */ }
         IsSandoSafu::NotSafu(not_safu_opcodes) => {
             return Err(anyhow!(
-                "[huffsando: BACKRUN_NOT_SAFU] bad_opcodes->{:?}",
+                "[huffsando_forward: BACKRUN_NOT_SAFU] bad_opcodes->{:?}",
                 not_safu_opcodes
             ))
         }
