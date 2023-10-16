@@ -456,8 +456,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                     #[cfg(feature = "debug")]
                                     {
                                         // add some buffer, test if REVERT occur in backrun
-                                        let balance = U256::from(100000000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
-                                        info!("reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+                                        let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
+                                        info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
                                         sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
 
                                     }

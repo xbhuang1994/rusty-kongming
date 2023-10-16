@@ -32,7 +32,7 @@ pub fn create_recipe(
     ingredients: &RawIngredients,
     next_block: &BlockInfo,
     optimal_in: U256,
-    sando_start_bal: U256,
+    _sando_start_bal: U256,
     searcher: Address,
     sando_address: Address,
     shared_backend: SharedBackend,
@@ -51,7 +51,7 @@ pub fn create_recipe(
             &mut fork_db,
             sando_address.0.into(),
             searcher.0.into(),
-            sando_start_bal,
+            _sando_start_bal,
         );
     }
 
@@ -59,7 +59,8 @@ pub fn create_recipe(
     evm.database(fork_db);
     setup_block_state(&mut evm, &next_block);
 
-    let sando_start_bal = get_erc20_balance(ingredients.get_start_end_token(), sando_address, next_block, &mut evm)?;
+    let weth_start_balance = get_erc20_balance(ingredients.get_start_end_token(), sando_address, next_block, &mut evm)?;
+    let other_start_balance = get_erc20_balance(ingredients.get_intermediary_token(), sando_address, next_block, &mut evm)?;
 
     /*´:°•.°+.*•´.*:˚.°*.˚•´.°:°•.°•.*•´.*:˚.°*.˚•´.°:°•.°+.*•´.*:*/
     /*                     HEAD TRANSACTION/s                     */
@@ -227,8 +228,9 @@ pub fn create_recipe(
     let backrun_token_in = ingredients.get_intermediary_token();
     let backrun_token_out = ingredients.get_start_end_token();
 
+    let other_mid_balance = get_erc20_balance(ingredients.get_intermediary_token(), sando_address, next_block, &mut evm)?;
     // keep some dust
-    let backrun_in = get_erc20_balance(backrun_token_in, sando_address, next_block, &mut evm)?;
+    let backrun_in = other_mid_balance.checked_sub(other_start_balance).unwrap_or_default();
     let backrun_in = match ingredients.get_target_pool() {
         UniswapV2(_) => {
             let mut backrun_in_encoded = FiveByteMetaData::encode(backrun_in, 1);
@@ -321,10 +323,10 @@ pub fn create_recipe(
     // *                      GENERATE REPORTS                      */
     // *.•°:°.´+˚.*°.˚:*.´•*.+°.•°:´*.´•*.•°.•°:°.´:•˚°.*°.˚:*.´+°.•*/
     // caluclate revenue from balance change
-    let post_sando_bal = get_erc20_balance(backrun_token_out, sando_address, next_block, &mut evm)?;
+    let weth_post_balance = get_erc20_balance(backrun_token_out, sando_address, next_block, &mut evm)?;
     
-    let revenue = post_sando_bal
-        .checked_sub(sando_start_bal)
+    let revenue = weth_post_balance
+        .checked_sub(weth_start_balance)
         .unwrap_or_default();
 
     // filter only passing meat txs
