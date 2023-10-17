@@ -434,6 +434,7 @@ impl SandoRecipe {
         provider: Arc<M>,
         is_huge: bool,
         is_mixed_strategy: bool,
+        is_overlay_strategy: bool,
     ) -> Result<(IngredientsBundleResult, Option<BundleRequest>, U256)> {
         
         let tx_nonce = provider
@@ -562,6 +563,7 @@ impl SandoRecipe {
         log_bundle!(
             is_huge,
             is_mixed_strategy,
+            is_overlay_strategy,
             self.uuid,
             self.swap_type,
             head_hashs.join(","),
@@ -574,8 +576,8 @@ impl SandoRecipe {
             profit_max
         );
 
-        info!("build bundle: huge={:?} mixed={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
-            is_huge, is_mixed_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
+        info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
+            is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
             revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
         );
 

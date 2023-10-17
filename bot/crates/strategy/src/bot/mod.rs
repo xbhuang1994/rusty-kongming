@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use artemis_core::{collectors::block_collector::NewBlock, types::Strategy};
 use async_trait::async_trait;
 use cfmms::pool::Pool;
@@ -11,6 +11,7 @@ use ethers::{
 use foundry_evm::executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend};
 use foundry_evm::revm::new;
 use log::{error, info};
+use tokio::task::JoinError;
 use std::{collections::{BTreeSet, LinkedList, HashMap}, sync::{Arc,Mutex}, time, thread};
 use tokio::{runtime, sync::broadcast::Sender};
 
@@ -138,68 +139,62 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         result
     }
-    
-    /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
-    /// mixed all swap types
-    async fn is_sandwichable_huge_mixed(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
-        
-        let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
+
+    async fn find_same_swaptype_sandwichable_parallel(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo)
+        -> Vec<SandoRecipe> {
+
         let mut handlers = vec![];
-        for swap_type in swap_types.iter() {
-            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
-            
-            for (target_pool, recipes) in filtered_recipes_map.iter_mut() {
-                if recipes.is_empty() {
-                    continue;
-                }
-                recipes.sort_by_key(|r| r.get_revenue());
-                recipes.reverse();
-    
-                let start_end_token = recipes[0].get_start_end_token();
-                let intermediary_token = recipes[0].get_intermediary_token();
-                let swap_type = recipes[0].get_swap_type();
-    
-                let mut meats: Vec<Transaction> = recipes.iter()
-                    .flat_map(|recipe| recipe.get_meats().clone())
-                    .collect();
-    
-                if meats.len() > 1 {
-                    // delete duplicate tx with same hash
-                    meats.sort_by_key(|meat| meat.hash);
-                    meats.dedup_by_key(|meat| meat.hash);
-                }
-                if meats.len() > 1 {
-                    // sort by nonce and group by 'from'
-                    meats = self.sort_tx_by_none_group_from(&meats);
-                }
-    
-                let mut head_txs: Vec<Transaction> = recipes.iter()
-                    .flat_map(|recipe| recipe.get_head_txs().clone())
-                    .collect();
-    
-                if head_txs.len() > 1 {
-                    // delete duplicate tx with same hash
-                    head_txs.sort_by_key(|recipe| recipe.hash);
-                    head_txs.dedup_by_key(|recipe| recipe.hash);
-                }
-                if head_txs.len() > 1 {
-                    // sort by nonce and group by 'from'
-                    head_txs = self.sort_tx_by_none_group_from(&head_txs);
-                }
-    
-                let ingredients = RawIngredients::new(
-                    head_txs,
-                    meats,
-                    start_end_token,
-                    intermediary_token,
-                    *target_pool,
-                );
-    
-                let handler = tokio::spawn(self.is_sandwichable(
-                    ingredients, target_block.clone(), swap_type, true
-                ));
-                handlers.push(handler);
+        for (target_pool, recipes) in recipes_map.iter_mut() {
+            if recipes.is_empty() {
+                continue;
             }
+            recipes.sort_by_key(|r| r.get_revenue());
+            recipes.reverse();
+
+            let start_end_token = recipes[0].get_start_end_token();
+            let intermediary_token = recipes[0].get_intermediary_token();
+            let swap_type = recipes[0].get_swap_type();
+
+            let mut meats: Vec<Transaction> = recipes.iter()
+                .flat_map(|recipe| recipe.get_meats().clone())
+                .collect();
+
+            if meats.len() > 1 {
+                // delete duplicate tx with same hash
+                meats.sort_by_key(|meat| meat.hash);
+                meats.dedup_by_key(|meat| meat.hash);
+            }
+            if meats.len() > 1 {
+                // sort by nonce and group by 'from'
+                meats = self.sort_tx_by_none_group_from(&meats);
+            }
+
+            let mut head_txs: Vec<Transaction> = recipes.iter()
+                .flat_map(|recipe| recipe.get_head_txs().clone())
+                .collect();
+
+            if head_txs.len() > 1 {
+                // delete duplicate tx with same hash
+                head_txs.sort_by_key(|recipe| recipe.hash);
+                head_txs.dedup_by_key(|recipe| recipe.hash);
+            }
+            if head_txs.len() > 1 {
+                // sort by nonce and group by 'from'
+                head_txs = self.sort_tx_by_none_group_from(&head_txs);
+            }
+
+            let ingredients = RawIngredients::new(
+                head_txs,
+                meats,
+                start_end_token,
+                intermediary_token,
+                *target_pool,
+            );
+
+            let handler = tokio::spawn(self.is_sandwichable(
+                ingredients, target_block.clone(), swap_type, true
+            ));
+            handlers.push(handler);
         }
         let handler_results = futures::future::try_join_all(handlers).await;
         let optimal_recipes = match handler_results {
@@ -220,6 +215,235 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 vec![]
             }
         };
+        optimal_recipes
+    }
+
+    async fn make_huge_recpie(&'static self, final_recipes: &Vec<SandoRecipe>, target_block: BlockInfo) -> Result<SandoRecipe> {
+
+        let mut head_txs: Vec<Transaction> = Vec::new();
+        let mut frontrun_data = Vec::new();
+        let mut backrun_data = Vec::new();
+        let mut meats: Vec<Transaction> = Vec::new();
+        let mut sando_weth_balance = U256::zero();
+        let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
+        for recipe in final_recipes {
+            let max_fee_result = calculate_bribe_for_max_fee(
+                recipe.get_revenue(),
+                recipe.get_frontrun_gas_used(),
+                recipe.get_backrun_gas_used(),
+                target_block.base_fee_per_gas,
+                false
+            );
+            match max_fee_result {
+                Ok((result, _)) => {
+                    match result {
+                        CalculateMaxFeeResult::RevenueOverBaseFee => {
+                            match recipe.get_frontrun_data() {
+                                Some(data) => {
+                                    head_txs.extend(recipe.get_head_txs().clone());
+                                    frontrun_data.extend(data.clone());
+                                    backrun_data.extend(recipe.get_backrun().data.clone());
+                                    meats.extend(recipe.get_meats().clone());
+        
+                                    // set sando token balance for recipe creation
+                                    if recipe.get_start_end_token() == *WETH_ADDRESS {
+                                        sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+
+                                        #[cfg(feature = "debug")]
+                                        {
+                                            // add some buffer, test if REVERT occur in backrun
+                                            let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
+                                            info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+                                            sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
+    
+                                        }
+
+                                    } else {
+                                        let mut balance = recipe.get_frontrun_optimal_in();
+                                        if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+                                            balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+                                        }
+                                        sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                                    }
+                                },
+                                None => {}
+                            }
+                        },
+                        _ => {}
+                    }
+                },
+                Err(e) => {
+                    error!("calculating {:?} max fee error {}", recipe.get_uuid(), e);
+                }
+            }
+        }
+        if meats.is_empty() {
+            return Err(anyhow!("no matched meat for making huge recipe"));
+        }
+
+        if meats.len() > 1 {
+            // delete duplicate tx with same hash
+            meats.sort_by_key(|meat| meat.hash);
+            meats.dedup_by_key(|meat| meat.hash);
+        }
+        if meats.len() > 1 {
+            // sort by nonce and group by 'from'
+            meats = self.sort_tx_by_none_group_from(&meats);
+        }
+        
+        if head_txs.len() > 1 {
+            // delete duplicate tx with same hash
+            head_txs.sort_by_key(|recipe| recipe.hash);
+            head_txs.dedup_by_key(|recipe| recipe.hash);
+        }
+        if head_txs.len() > 1 {
+            // sort by nonce group by 'from'
+            head_txs = self.sort_tx_by_none_group_from(&head_txs);
+        }
+
+        let shared_backend = SharedBackend::spawn_backend_thread(
+            self.provider.clone(),
+            BlockchainDb::new(
+                BlockchainDbMeta {
+                    cfg_env: Default::default(),
+                    block_env: Default::default(),
+                    hosts: BTreeSet::from(["".to_string()]),
+                },
+                None,
+            ), /* default because not accounting for this atm */
+            Some((target_block.number - 1).into()),
+        );
+
+        return create_recipe_huge(
+            &target_block,
+            frontrun_data.into(),
+            backrun_data.into(),
+            head_txs,
+            meats,
+            sando_weth_balance,
+            sando_tokens_balance,
+            self.sando_state_manager.get_searcher_address(),
+            self.sando_state_manager.get_sando_address(),
+            shared_backend.clone(),
+            SandwichSwapType::Forward.clone(),
+            format!("{}", Uuid::new_v4())
+        );
+    }
+
+    /// mixed all swap types and low revenue recipes
+    async fn is_sandwichable_huge_overlay(&'static self,
+        recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>,
+        low_revenue_recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>,
+        target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+        let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
+        let mut optimal_recipes = vec![];
+        for swap_type in swap_types.iter() {
+            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
+
+            optimal_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_recipes_map, target_block).await);
+        }
+        
+        if optimal_recipes.len() == 0 {
+            return Ok(vec![]);
+        }
+        info!("[sandwich_huge_overlay] optimal recipes size {:?}", optimal_recipes.len());
+
+        let mut low_revenue_recipes = vec![];
+        for swap_type in swap_types.iter() {
+            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&low_revenue_recipes_map, swap_type);
+
+            low_revenue_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_recipes_map, target_block).await);
+        }
+        
+        if low_revenue_recipes.len() == 0 {
+            return Ok(vec![]);
+        }
+        info!("[sandwich_huge_overlay] low revenue recipes size {:?}", low_revenue_recipes.len());
+
+        let mut optimal_forward_pools = vec![];
+        let mut optimal_final_recipes = vec![];
+        optimal_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Forward)
+            .for_each(|r| {
+                optimal_forward_pools.push(r.get_target_pool().unwrap().clone());
+                optimal_final_recipes.push(r.clone());
+            }
+        );
+
+        let mut low_forward_pools = vec![];
+        let mut low_final_recipes = vec![];
+        low_revenue_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Forward)
+            .for_each(|r| {
+                low_forward_pools.push(r.get_target_pool().unwrap().clone());
+                low_final_recipes.push(r.clone());
+            }
+        );
+        let low_reverse_recipes: Vec<SandoRecipe> = low_revenue_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse).cloned().collect();
+        for r in low_reverse_recipes.iter() {
+            if !optimal_forward_pools.contains(&r.get_target_pool().unwrap())
+                && !low_forward_pools.contains(&r.get_target_pool().unwrap()){
+                low_final_recipes.push(r.clone());
+            }
+        }
+        if low_final_recipes.len() == 0 {
+            info!("[sandwich_huge_overlay] low revenue final recipes is empty");
+            return Ok(vec![])
+        }
+
+        let mut huge_recipes = vec![];
+        // check many low revenue recipes are sandwichable
+        if low_final_recipes.len() > 1 {
+            let huge_recipe_result = self.make_huge_recpie(&low_final_recipes, target_block.clone()).await;
+            match huge_recipe_result {
+                Ok(recipe) => {
+                    huge_recipes.push(recipe);
+                },
+                Err(e) => {
+                    info!("[sandwich_huge_overlay] make huge recipe all low revenue error: {:?}", e);
+                }
+            }
+        }
+    
+        let optimal_reverse_recipes: Vec<SandoRecipe> = optimal_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse).cloned().collect();
+        for r in optimal_reverse_recipes.iter() {
+            if !optimal_forward_pools.contains(&r.get_target_pool().unwrap())
+                && !low_forward_pools.contains(&r.get_target_pool().unwrap()) {
+                optimal_final_recipes.push(r.clone());
+            }
+        }
+        info!("[sandwich_huge_overlay] fianl optimal recipes size {:?}, final low revenue recipes size {:?}",
+            optimal_final_recipes.len(), low_final_recipes.len());
+        
+        if optimal_final_recipes.len() > 0 {
+            let mut total_final_recipes = vec![];
+            total_final_recipes.extend(optimal_final_recipes);
+            total_final_recipes.extend(low_final_recipes);
+
+            let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone()).await;
+            match huge_recipe_result {
+                Ok(recipe) => {
+                    huge_recipes.push(recipe);
+                },
+                Err(e) => {
+                    info!("[sandwich_huge_overlay] make huge recipe contain low revenue error: {:?}", e);
+                }
+            }
+        }
+
+        Ok(huge_recipes)
+    }
+    
+    /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
+    /// mixed all swap types
+    async fn is_sandwichable_huge_mixed(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+        
+        let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
+        let mut optimal_recipes = vec![];
+        for swap_type in swap_types.iter() {
+            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
+
+            optimal_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_recipes_map, target_block).await);
+        }
+        
         if optimal_recipes.len() == 0 {
             return Ok(vec![]);
         }
@@ -248,6 +472,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
             return Ok(vec![]);
         }
 
+        let huge_recipe = self.make_huge_recpie(&optimal_final_recipes, target_block.clone()).await?;
+
+        /*
         let mut head_txs: Vec<Transaction> = Vec::new();
         let mut frontrun_data = Vec::new();
         let mut backrun_data = Vec::new();
@@ -347,6 +574,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             SandwichSwapType::Forward.clone(),
             format!("{}", Uuid::new_v4())
         )?;
+        */
 
         Ok(vec![huge_recipe])
     }
@@ -361,190 +589,120 @@ impl<M: Middleware + 'static> SandoBot<M> {
         for swap_type in swap_types.iter() {
 
             let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&recipes_map, swap_type);
-            let mut handlers = vec![];
-            for (target_pool, recipes) in filtered_recipes_map.iter_mut() {
-                if recipes.is_empty() {
-                    continue;
-                }
-                recipes.sort_by_key(|r| r.get_revenue());
-                recipes.reverse();
-
-                let start_end_token = recipes[0].get_start_end_token();
-                let intermediary_token = recipes[0].get_intermediary_token();
-                let swap_type = recipes[0].get_swap_type();
-
-                let mut meats: Vec<Transaction> = recipes.iter()
-                    .flat_map(|recipe| recipe.get_meats().clone())
-                    .collect();
-
-                if meats.len() > 1 {
-                    // delete duplicate tx with same hash
-                    meats.sort_by_key(|meat| meat.hash);
-                    meats.dedup_by_key(|meat| meat.hash);
-                }
-                if meats.len() > 1 {
-                    // sort by nonce and group by 'from'
-                    meats = self.sort_tx_by_none_group_from(&meats);
-                }
-
-                let mut head_txs: Vec<Transaction> = recipes.iter()
-                    .flat_map(|recipe| recipe.get_head_txs().clone())
-                    .collect();
-
-                if head_txs.len() > 1 {
-                    // delete duplicate tx with same hash
-                    head_txs.sort_by_key(|recipe| recipe.hash);
-                    head_txs.dedup_by_key(|recipe| recipe.hash);
-                }
-                if head_txs.len() > 1 {
-                    // sort by nonce and group by 'from'
-                    head_txs = self.sort_tx_by_none_group_from(&head_txs);
-                }
-
-                let ingredients = RawIngredients::new(
-                    head_txs,
-                    meats,
-                    start_end_token,
-                    intermediary_token,
-                    *target_pool,
-                );
-
-                let handler = tokio::spawn(self.is_sandwichable(
-                    ingredients, target_block.clone(), swap_type, true
-                ));
-                handlers.push(handler);
-            }
-            let handler_results = futures::future::try_join_all(handlers).await;
-            let optimal_recipes = match handler_results {
-                Ok(recipe_results) => {
-                    let mut recipes: Vec<SandoRecipe> = vec![];
-                    for result in recipe_results {
-                        match result {
-                            Ok(recipe) => {
-                                recipes.push(recipe.clone());
-                            },
-                            Err(_) => {}
-                        }
-                    }
-                    recipes
-                },
-                Err(e) => {
-                    error!("One of the tasks panicked: {}", e);
-                    vec![]
-                }
-            };
+            let optimal_recipes = self.find_same_swaptype_sandwichable_parallel(&mut filtered_recipes_map, target_block.clone()).await;
             if optimal_recipes.len() == 0 {
                 continue;
             }
             info!("[sandwich_huge] optimal recipes size {:?} swap type {:?}", optimal_recipes.len(), swap_type);
+            let huge_recipe = self.make_huge_recpie(&optimal_recipes, target_block.clone()).await?;
 
-            let mut head_txs: Vec<Transaction> = Vec::new();
-            let mut frontrun_data = Vec::new();
-            let mut backrun_data = Vec::new();
-            let mut meats: Vec<Transaction> = Vec::new();
-            let mut sando_weth_balance = U256::zero();
-            let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
-            for recipe in optimal_recipes {
-                let max_fee_result = calculate_bribe_for_max_fee(
-                    recipe.get_revenue(),
-                    recipe.get_frontrun_gas_used(),
-                    recipe.get_backrun_gas_used(),
-                    target_block.base_fee_per_gas,
-                    false
-                );
-                match max_fee_result {
-                    Ok((result, _)) => {
-                        match result {
-                            CalculateMaxFeeResult::RevenueOverBaseFee => {
-                                match recipe.get_frontrun_data() {
-                                    Some(data) => {
-                                        head_txs.extend(recipe.get_head_txs().clone());
-                                        frontrun_data.extend(data.clone());
-                                        backrun_data.extend(recipe.get_backrun().data.clone());
-                                        meats.extend(recipe.get_meats().clone());
+            // let mut head_txs: Vec<Transaction> = Vec::new();
+            // let mut frontrun_data = Vec::new();
+            // let mut backrun_data = Vec::new();
+            // let mut meats: Vec<Transaction> = Vec::new();
+            // let mut sando_weth_balance = U256::zero();
+            // let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
+            // for recipe in optimal_recipes {
+            //     let max_fee_result = calculate_bribe_for_max_fee(
+            //         recipe.get_revenue(),
+            //         recipe.get_frontrun_gas_used(),
+            //         recipe.get_backrun_gas_used(),
+            //         target_block.base_fee_per_gas,
+            //         false
+            //     );
+            //     match max_fee_result {
+            //         Ok((result, _)) => {
+            //             match result {
+            //                 CalculateMaxFeeResult::RevenueOverBaseFee => {
+            //                     match recipe.get_frontrun_data() {
+            //                         Some(data) => {
+            //                             head_txs.extend(recipe.get_head_txs().clone());
+            //                             frontrun_data.extend(data.clone());
+            //                             backrun_data.extend(recipe.get_backrun().data.clone());
+            //                             meats.extend(recipe.get_meats().clone());
         
-                                        // set sando token balance for recipe creation
-                                        if recipe.get_start_end_token() == *WETH_ADDRESS {
-                                            sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+            //                             // set sando token balance for recipe creation
+            //                             if recipe.get_start_end_token() == *WETH_ADDRESS {
+            //                                 sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
                                             
-                                            #[cfg(feature = "debug")]
-                                            {
-                                                // add some buffer, test if REVERT occur in backrun
-                                                let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
-                                                info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
-                                                sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
+            //                                 #[cfg(feature = "debug")]
+            //                                 {
+            //                                     // add some buffer, test if REVERT occur in backrun
+            //                                     let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
+            //                                     info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+            //                                     sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
         
-                                            }
-                                        } else {
-                                            let mut balance = recipe.get_frontrun_optimal_in();
-                                            if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
-                                                balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
-                                            }
-                                            sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
-                                        }
-                                    },
-                                    None => {}
-                                }
-                            },
-                            _ => {}
-                        }
-                    },
-                    Err(e) => {
-                        error!("calculating {:?} max fee error {}", recipe.get_uuid(), e);
-                    }
-                }
-            }
-            if meats.is_empty() {
-                continue;
-            }
+            //                                 }
+            //                             } else {
+            //                                 let mut balance = recipe.get_frontrun_optimal_in();
+            //                                 if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+            //                                     balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+            //                                 }
+            //                                 sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+            //                             }
+            //                         },
+            //                         None => {}
+            //                     }
+            //                 },
+            //                 _ => {}
+            //             }
+            //         },
+            //         Err(e) => {
+            //             error!("calculating {:?} max fee error {}", recipe.get_uuid(), e);
+            //         }
+            //     }
+            // }
+            // if meats.is_empty() {
+            //     continue;
+            // }
 
-            if meats.len() > 1 {
-                // delete duplicate tx with same hash
-                meats.sort_by_key(|meat| meat.hash);
-                meats.dedup_by_key(|meat| meat.hash);
-            }
-            if meats.len() > 1 {
-                // sort by nonce and group by 'from'
-                meats = self.sort_tx_by_none_group_from(&meats);
-            }
+            // if meats.len() > 1 {
+            //     // delete duplicate tx with same hash
+            //     meats.sort_by_key(|meat| meat.hash);
+            //     meats.dedup_by_key(|meat| meat.hash);
+            // }
+            // if meats.len() > 1 {
+            //     // sort by nonce and group by 'from'
+            //     meats = self.sort_tx_by_none_group_from(&meats);
+            // }
             
-            if head_txs.len() > 1 {
-                // delete duplicate tx with same hash
-                head_txs.sort_by_key(|recipe| recipe.hash);
-                head_txs.dedup_by_key(|recipe| recipe.hash);
-            }
-            if head_txs.len() > 1 {
-                // sort by nonce group by 'from'
-                head_txs = self.sort_tx_by_none_group_from(&head_txs);
-            }
+            // if head_txs.len() > 1 {
+            //     // delete duplicate tx with same hash
+            //     head_txs.sort_by_key(|recipe| recipe.hash);
+            //     head_txs.dedup_by_key(|recipe| recipe.hash);
+            // }
+            // if head_txs.len() > 1 {
+            //     // sort by nonce group by 'from'
+            //     head_txs = self.sort_tx_by_none_group_from(&head_txs);
+            // }
 
-            let shared_backend = SharedBackend::spawn_backend_thread(
-                self.provider.clone(),
-                BlockchainDb::new(
-                    BlockchainDbMeta {
-                        cfg_env: Default::default(),
-                        block_env: Default::default(),
-                        hosts: BTreeSet::from(["".to_string()]),
-                    },
-                    None,
-                ), /* default because not accounting for this atm */
-                Some((target_block.number - 1).into()),
-            );
+            // let shared_backend = SharedBackend::spawn_backend_thread(
+            //     self.provider.clone(),
+            //     BlockchainDb::new(
+            //         BlockchainDbMeta {
+            //             cfg_env: Default::default(),
+            //             block_env: Default::default(),
+            //             hosts: BTreeSet::from(["".to_string()]),
+            //         },
+            //         None,
+            //     ), /* default because not accounting for this atm */
+            //     Some((target_block.number - 1).into()),
+            // );
 
-            let huge_recipe = create_recipe_huge(
-                &target_block,
-                frontrun_data.into(),
-                backrun_data.into(),
-                head_txs,
-                meats,
-                sando_weth_balance,
-                sando_tokens_balance,
-                self.sando_state_manager.get_searcher_address(),
-                self.sando_state_manager.get_sando_address(),
-                shared_backend.clone(),
-                swap_type.clone(),
-                format!("{}", Uuid::new_v4())
-            )?;
+            // let huge_recipe = create_recipe_huge(
+            //     &target_block,
+            //     frontrun_data.into(),
+            //     backrun_data.into(),
+            //     head_txs,
+            //     meats,
+            //     sando_weth_balance,
+            //     sando_tokens_balance,
+            //     self.sando_state_manager.get_searcher_address(),
+            //     self.sando_state_manager.get_sando_address(),
+            //     shared_backend.clone(),
+            //     swap_type.clone(),
+            //     format!("{}", Uuid::new_v4())
+            // )?;
 
             info!("[sandwich_huge] make sandwich huge {:?}", huge_recipe.get_uuid());
             huge_recipes.push(huge_recipe);
@@ -756,6 +914,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             self.provider.clone(),
                                             true,
                                             false,
+                                            false,
                                         ).await {
                                             Ok((_, bundle_option, _profit_max)) => {
                                                 match bundle_option {
@@ -816,6 +975,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             self.provider.clone(),
                                             true,
                                             true,
+                                            false,
                                         ).await {
                                             Ok((_, bundle_option, _profit_max)) => {
                                                 match bundle_option {
@@ -852,7 +1012,55 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 loop {
                     match self.pop_huge_overlay_task().await {
                         Some((pendding_recipes_map, low_revenue_recipes_map, new_block)) => {
-                            info!("overlay task run: pendding_recipes_map {:?}, low_revenue_recipes_map {:?}", pendding_recipes_map.len(), low_revenue_recipes_map.len());
+                            if low_revenue_recipes_map.len() == 0 {
+                                info!("overlay low revenue recipes is empty");
+                                tokio::time::sleep(time::Duration::from_millis(50)).await;
+                                continue;
+                            }
+                            let new_block_info = BlockInfo{
+                                number: new_block.number,
+                                base_fee_per_gas: new_block.base_fee_per_gas,
+                                timestamp: new_block.timestamp,
+                                gas_used: Some(new_block.gas_used),
+                                gas_limit: Some(new_block.gas_limit),
+                            };
+                            let target_block = new_block_info.get_next_block();
+                            match self.is_sandwichable_huge_overlay(&mut pendding_recipes_map.clone(), &mut low_revenue_recipes_map.clone(), target_block).await {
+
+                                Ok(huge_recipes) => {
+
+                                    let mut bundles = vec![];
+                                    for huge in huge_recipes {
+                                        match huge.to_fb_bundle(
+                                            self.sando_state_manager.get_sando_address(),
+                                            self.sando_state_manager.get_searcher_signer(),
+                                            false,
+                                            self.provider.clone(),
+                                            true,
+                                            true,
+                                            true,
+                                        ).await {
+                                            Ok((_, bundle_option, _profit_max)) => {
+                                                match bundle_option {
+                                                    Some(bundle) => {
+                                                        bundles.push(bundle);
+                                                    },
+                                                    None => {}
+                                                }
+                                            },
+                                            Err(e) => {
+                                                error!("fail make huge overlay sandwich error:{}", e)
+                                            }
+                                        }
+                                    }
+                                    if bundles.len() > 0 {
+                                        self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+                                    }
+                                },
+                                Err(e) => {
+                                    error!("process huge overlay sandwich error: {}", e);
+                                }
+                            }
                         },
                         None => {
                             tokio::time::sleep(time::Duration::from_millis(50)).await;
@@ -1234,6 +1442,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 self.provider.clone(),
                                 false,
                                 false,
+                                false,
                             )
                             .await
                         {
@@ -1313,6 +1522,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
                                 self.provider.clone(),
+                                false,
                                 false,
                                 false,
                             )
