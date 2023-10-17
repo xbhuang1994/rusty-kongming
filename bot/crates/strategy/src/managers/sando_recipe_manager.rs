@@ -82,8 +82,8 @@ impl SandoRecipeManager {
         let mut result: HashMap<Pool, Vec<SandoRecipe>> = HashMap::new();
         for (k, v) in map.iter() {
             let reader = v.read().unwrap();
-            let vec = (*reader).clone();
-            if !vec.is_empty() {
+            if !reader.is_empty() {
+                let vec = (*reader).clone();
                 result.insert(k.clone(), vec);
             }
         }
@@ -157,8 +157,8 @@ impl SandoRecipeManager {
         let mut result: HashMap<Pool, Vec<SandoRecipe>> = HashMap::new();
         for (k, v) in map.iter() {
             let reader = v.read().unwrap();
-            let vec = (*reader).clone();
-            if !vec.is_empty() {
+            if !reader.is_empty() {
+                let vec = (*reader).clone();
                 result.insert(k.clone(), vec);
             }
         }
