@@ -226,6 +226,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
         let mut meats: Vec<Transaction> = Vec::new();
         let mut sando_weth_balance = U256::zero();
         let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
+        let uuid = format!("{}", Uuid::new_v4());
+        let mut log_swap_pair: Vec<String> = vec![];
         for recipe in final_recipes {
             let max_fee_result = calculate_bribe_for_max_fee(
                 recipe.get_revenue(),
@@ -244,6 +246,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                     frontrun_data.extend(data.clone());
                                     backrun_data.extend(recipe.get_backrun().data.clone());
                                     meats.extend(recipe.get_meats().clone());
+
+                                    log_swap_pair.push(
+                                        format!("{:?}->{:?}", recipe.get_start_end_token(), recipe.get_intermediary_token())
+                                    );
         
                                     // set sando token balance for recipe creation
                                     if recipe.get_start_end_token() == *WETH_ADDRESS {
@@ -253,7 +259,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                         {
                                             // add some buffer, test if REVERT occur in backrun
                                             let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
-                                            info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+                                            info!("[make_huge_recpie] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
                                             sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
     
                                         }
@@ -314,6 +320,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
             Some((target_block.number - 1).into()),
         );
 
+        info!("[make_huge_recpie] before create recipe uuid={:?} swap_pairs={:?}",
+            uuid, log_swap_pair.join("|")
+        );
+
         return create_recipe_huge(
             &target_block,
             frontrun_data.into(),
@@ -326,7 +336,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             self.sando_state_manager.get_sando_address(),
             shared_backend.clone(),
             SandwichSwapType::Forward.clone(),
-            format!("{}", Uuid::new_v4())
+            uuid
         );
     }
 
