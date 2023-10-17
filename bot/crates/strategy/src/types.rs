@@ -491,7 +491,7 @@ impl SandoRecipe {
         //     "[FAILED TO CREATE BUNDLE] profit max is not positive"
         // );
         if profit_max.is_zero() {
-            info!("[FAILED TO CREATE BUNDLE] profit max is negative", );
+            info!("[FAILED TO CREATE BUNDLE] profit max is negative");
             bundle_result = IngredientsBundleResult::ExpectedProfitIsNegtive;
             return Ok((bundle_result, None, U256::zero()));   
         }

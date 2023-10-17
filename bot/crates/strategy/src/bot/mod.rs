@@ -360,9 +360,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         let mut low_revenue_recipes = vec![];
         for swap_type in swap_types.iter() {
-            let mut filtered_recipes_map = self.fliter_recipes_by_swap_type(&low_revenue_recipes_map, swap_type);
+            let mut filtered_low_recipes_map = self.fliter_recipes_by_swap_type(&low_revenue_recipes_map, swap_type);
 
-            low_revenue_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_recipes_map, target_block).await);
+            low_revenue_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_low_recipes_map, target_block).await);
         }
         
         if low_revenue_recipes.len() == 0 {
@@ -396,12 +396,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
         }
         if low_final_recipes.len() == 0 {
             info!("[sandwich_huge_overlay] low revenue final recipes is empty");
-            return Ok(vec![])
+            return Ok(vec![]);
         }
 
         let mut huge_recipes = vec![];
         // check many low revenue recipes are sandwichable
         if low_final_recipes.len() > 1 {
+            info!("[sandwich_huge_overlay] make huge recipe with all {:?} low revenues", low_final_recipes.len());
             let huge_recipe_result = self.make_huge_recpie(&low_final_recipes, target_block.clone()).await;
             match huge_recipe_result {
                 Ok(recipe) => {
