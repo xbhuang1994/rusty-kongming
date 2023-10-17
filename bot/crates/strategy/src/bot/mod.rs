@@ -1037,7 +1037,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             false,
                                             self.provider.clone(),
                                             true,
-                                            true,
+                                            false,
                                             true,
                                         ).await {
                                             Ok((_, bundle_option, _profit_max)) => {
