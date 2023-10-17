@@ -57,6 +57,19 @@ impl fmt::Display for SandwichSwapType {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub enum IngredientsBundleResult {
+    RevenueBelowBaseFee,
+    ExpectedProfitIsNegtive,
+    ExpectedProfitIsPositive,
+}
+
+pub enum CalculateMaxFeeResult {
+    RevenueBelowFrontrunBaseFee,
+    RevenueBelowBackrunBaseFee,
+    RevenueOverBaseFee,
+}
+
 /// Configuration for variables needed for sandwiches
 #[derive(Debug, Clone)]
 pub struct StratConfig {
@@ -245,14 +258,20 @@ pub fn calculate_bribe_for_max_fee(revenue: U256,
     frontrun_gas_used: u64,
     backrun_gas_used: u64,
     base_fee_per_gas: U256,
-    has_dust: bool) -> Result<U256> {
+    has_dust: bool
+) -> Result<(CalculateMaxFeeResult, U256)> {
 
     // calc bribe (bribes paid in backrun)
+    // let revenue_minus_frontrun_tx_fee = revenue
+    //     .checked_sub(U256::from(frontrun_gas_used) * base_fee_per_gas)
+    //     .ok_or_else(|| {
+    //     anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
+    // })?;
     let revenue_minus_frontrun_tx_fee = revenue
-        .checked_sub(U256::from(frontrun_gas_used) * base_fee_per_gas)
-        .ok_or_else(|| {
-        anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
-        })?;
+        .checked_sub(U256::from(frontrun_gas_used) * base_fee_per_gas).unwrap_or_default();
+    if revenue_minus_frontrun_tx_fee.is_zero() {
+        return Ok((CalculateMaxFeeResult::RevenueBelowFrontrunBaseFee, U256::from(0)));
+    }
 
     // eat a loss (overpay) to get dust onto the sando contract (more: https://twitter.com/libevm/status/1474870661373779969)
     let bribe_amount = if !has_dust {
@@ -264,19 +283,22 @@ pub fn calculate_bribe_for_max_fee(revenue: U256,
 
     let max_fee = bribe_amount / backrun_gas_used;
 
-    ensure!(
-        max_fee >= base_fee_per_gas,
-        format!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee {:?}", max_fee, base_fee_per_gas)
-    );
+    // ensure!(
+    //     max_fee >= base_fee_per_gas,
+    //     format!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee {:?}", max_fee, base_fee_per_gas)
+    // );
+    if max_fee < base_fee_per_gas {
+        return Ok((CalculateMaxFeeResult::RevenueBelowBackrunBaseFee, max_fee));
+    }
 
-    let effective_miner_tip = max_fee.checked_sub(base_fee_per_gas);
+    // let effective_miner_tip = max_fee.checked_sub(base_fee_per_gas);
 
-    ensure!(
-        !effective_miner_tip.is_none(),
-        "[FAILED TO CREATE BUNDLE] negative miner tip"
-    );
+    // ensure!(
+    //     !effective_miner_tip.is_none(),
+    //     "[FAILED TO CREATE BUNDLE] negative miner tip"
+    // );
 
-    Ok(max_fee)
+    Ok((CalculateMaxFeeResult::RevenueOverBaseFee, max_fee))
 }
 
 /// All details for capturing a sando opp
@@ -412,11 +434,66 @@ impl SandoRecipe {
         provider: Arc<M>,
         is_huge: bool,
         is_mixed_strategy: bool,
-    ) -> Result<(BundleRequest, U256)> {
+    ) -> Result<(IngredientsBundleResult, Option<BundleRequest>, U256)> {
+        
         let tx_nonce = provider
             .get_transaction_count(searcher.address(), None)
             .await
-            .map_err(|e| anyhow!("FAILED TO CREATE BUNDLE: Failed to get nonce {:?}", e))?;
+            .map_err(|e| anyhow!("[FAILED TO CREATE BUNDLE] failed to get nonce {:?}", e))?;
+
+        let max_fee_result = calculate_bribe_for_max_fee(
+            self.revenue,
+            self.frontrun_gas_used,
+            self.backrun_gas_used,
+            self.target_block.base_fee_per_gas,
+            has_dust
+        );
+        ensure!(
+            max_fee_result.is_ok(),
+            max_fee_result.err().unwrap()
+        );
+
+        let (result, max_fee) = max_fee_result.unwrap();
+        let mut bundle_result = IngredientsBundleResult::ExpectedProfitIsPositive;
+        match result {
+            CalculateMaxFeeResult::RevenueBelowFrontrunBaseFee => {
+                info!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee");
+                bundle_result = IngredientsBundleResult::RevenueBelowBaseFee;
+                return Ok((bundle_result, None, U256::zero()));
+            },
+            CalculateMaxFeeResult::RevenueBelowBackrunBaseFee => {
+                info!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee", max_fee);
+                bundle_result = IngredientsBundleResult::RevenueBelowBaseFee;
+                return Ok((bundle_result, None, U256::zero()));
+            }
+            _ => {}
+        }
+
+        let profit_min = self
+            .revenue
+            .checked_sub(
+                (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
+                    + (U256::from(self.backrun_gas_used) * max_fee),
+            )
+            .unwrap_or_default();
+
+        let profit_max = self
+            .revenue
+            .checked_sub(
+                (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
+                    + (U256::from(self.backrun_gas_used) * self.target_block.base_fee_per_gas),
+            )
+            .unwrap_or_default();
+
+        // ensure!(
+        //     !profit_max.is_zero(),
+        //     "[FAILED TO CREATE BUNDLE] profit max is not positive"
+        // );
+        if profit_max.is_zero() {
+            info!("[FAILED TO CREATE BUNDLE] profit max is negative", );
+            bundle_result = IngredientsBundleResult::ExpectedProfitIsNegtive;
+            return Ok((bundle_result, None, U256::zero()));   
+        }
 
         // info!("bundle nonce start from {:?}", tx_nonce);
         let mut head_hashs: Vec<String> = vec![];
@@ -448,19 +525,6 @@ impl SandoRecipe {
             }
         );
         // let signed_meat_txs: Vec<Bytes> = self.meats.into_iter().map(|meat| meat.rlp()).collect();
-
-        let max_fee_result = calculate_bribe_for_max_fee(
-            self.revenue,
-            self.frontrun_gas_used,
-            self.backrun_gas_used,
-            self.target_block.base_fee_per_gas,
-            has_dust
-        );
-        ensure!(
-            max_fee_result.is_ok(),
-            max_fee_result.err().unwrap()
-        );
-        let max_fee = max_fee_result.unwrap();
 
         let backrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
@@ -494,27 +558,6 @@ impl SandoRecipe {
             .set_simulation_block(self.target_block.number - 1)
             .set_simulation_timestamp(self.target_block.timestamp.as_u64());
 
-        let profit_min = self
-            .revenue
-            .checked_sub(
-                (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
-                    + (U256::from(self.backrun_gas_used) * max_fee),
-            )
-            .unwrap_or_default();
-
-        let profit_max = self
-            .revenue
-            .checked_sub(
-                (U256::from(self.frontrun_gas_used) * self.target_block.base_fee_per_gas)
-                    + (U256::from(self.backrun_gas_used) * self.target_block.base_fee_per_gas),
-            )
-            .unwrap_or_default();
-
-        ensure!(
-            !profit_max.is_zero(),
-            "[FAILED TO CREATE BUNDLE] profit max is not positive"
-        );
-
         let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;
         log_bundle!(
             is_huge,
@@ -536,6 +579,6 @@ impl SandoRecipe {
             revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
         );
 
-        Ok((bundle_request, profit_max))
+        Ok((bundle_result, Some(bundle_request), profit_max))
     }
 }

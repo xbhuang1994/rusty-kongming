@@ -14,6 +14,7 @@ use log::{error, info};
 use std::{collections::{BTreeSet, LinkedList, HashMap}, sync::{Arc,Mutex}, time, thread};
 use tokio::{runtime, sync::broadcast::Sender};
 
+use crate::types::{CalculateMaxFeeResult, IngredientsBundleResult};
 use crate::{
     constants::WETH_ADDRESS,
     log_error, log_info_cyan, log_new_block_info, log_not_sandwichable, log_opportunity,
@@ -65,6 +66,9 @@ pub struct SandoBot<M> {
     huge_mixed_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
     huge_mixed_task_runtime: tokio::runtime::Runtime,
 
+    huge_overlay_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
+    huge_overlay_task_runtime: tokio::runtime::Runtime,
+
     processed_tx_map: Mutex<HashMap<H256, i64>>,
 }
 
@@ -90,10 +94,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
             action_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
             action_sender: Arc::new(Mutex::new(None)),
             processed_tx_map: Mutex::new(HashMap::new()),
+            
             huge_task_list: Arc::new(Mutex::new(LinkedList::new())),
             huge_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
             huge_mixed_task_list: Arc::new(Mutex::new(LinkedList::new())),
             huge_mixed_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            huge_overlay_task_list: Arc::new(Mutex::new(LinkedList::new())),
+            huge_overlay_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
         }
     }
 
@@ -247,35 +254,40 @@ impl<M: Middleware + 'static> SandoBot<M> {
         let mut meats: Vec<Transaction> = Vec::new();
         let mut sando_weth_balance = U256::zero();
         let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
-        for recipe in optimal_recipes {
-            let max_fee = calculate_bribe_for_max_fee(
+        for recipe in optimal_final_recipes {
+            let max_fee_result = calculate_bribe_for_max_fee(
                 recipe.get_revenue(),
                 recipe.get_frontrun_gas_used(),
                 recipe.get_backrun_gas_used(),
                 target_block.base_fee_per_gas,
                 false
             );
-            match max_fee {
-                Ok(_) => {
-                    match recipe.get_frontrun_data() {
-                        Some(data) => {
-                            head_txs.extend(recipe.get_head_txs().clone());
-                            frontrun_data.extend(data.clone());
-                            backrun_data.extend(recipe.get_backrun().data.clone());
-                            meats.extend(recipe.get_meats().clone());
-
-                            // set sando token balance for recipe creation
-                            if recipe.get_start_end_token() == *WETH_ADDRESS {
-                                sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
-                            } else {
-                                let mut balance = recipe.get_frontrun_optimal_in();
-                                if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
-                                    balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
-                                }
-                                sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+            match max_fee_result {
+                Ok((result, _)) => {
+                    match result {
+                        CalculateMaxFeeResult::RevenueOverBaseFee => {
+                            match recipe.get_frontrun_data() {
+                                Some(data) => {
+                                    head_txs.extend(recipe.get_head_txs().clone());
+                                    frontrun_data.extend(data.clone());
+                                    backrun_data.extend(recipe.get_backrun().data.clone());
+                                    meats.extend(recipe.get_meats().clone());
+        
+                                    // set sando token balance for recipe creation
+                                    if recipe.get_start_end_token() == *WETH_ADDRESS {
+                                        sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+                                    } else {
+                                        let mut balance = recipe.get_frontrun_optimal_in();
+                                        if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+                                            balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+                                        }
+                                        sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                                    }
+                                },
+                                None => {}
                             }
                         },
-                        None => {}
+                        _ => {}
                     }
                 },
                 Err(e) => {
@@ -433,43 +445,48 @@ impl<M: Middleware + 'static> SandoBot<M> {
             let mut sando_weth_balance = U256::zero();
             let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
             for recipe in optimal_recipes {
-                let max_fee = calculate_bribe_for_max_fee(
+                let max_fee_result = calculate_bribe_for_max_fee(
                     recipe.get_revenue(),
                     recipe.get_frontrun_gas_used(),
                     recipe.get_backrun_gas_used(),
                     target_block.base_fee_per_gas,
                     false
                 );
-                match max_fee {
-                    Ok(_) => {
-                        match recipe.get_frontrun_data() {
-                            Some(data) => {
-                                head_txs.extend(recipe.get_head_txs().clone());
-                                frontrun_data.extend(data.clone());
-                                backrun_data.extend(recipe.get_backrun().data.clone());
-                                meats.extend(recipe.get_meats().clone());
-
-                                // set sando token balance for recipe creation
-                                if recipe.get_start_end_token() == *WETH_ADDRESS {
-                                    sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
-                                    
-                                    #[cfg(feature = "debug")]
-                                    {
-                                        // add some buffer, test if REVERT occur in backrun
-                                        let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
-                                        info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
-                                        sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
-
-                                    }
-                                } else {
-                                    let mut balance = recipe.get_frontrun_optimal_in();
-                                    if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
-                                        balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
-                                    }
-                                    sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                match max_fee_result {
+                    Ok((result, _)) => {
+                        match result {
+                            CalculateMaxFeeResult::RevenueOverBaseFee => {
+                                match recipe.get_frontrun_data() {
+                                    Some(data) => {
+                                        head_txs.extend(recipe.get_head_txs().clone());
+                                        frontrun_data.extend(data.clone());
+                                        backrun_data.extend(recipe.get_backrun().data.clone());
+                                        meats.extend(recipe.get_meats().clone());
+        
+                                        // set sando token balance for recipe creation
+                                        if recipe.get_start_end_token() == *WETH_ADDRESS {
+                                            sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+                                            
+                                            #[cfg(feature = "debug")]
+                                            {
+                                                // add some buffer, test if REVERT occur in backrun
+                                                let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
+                                                info!("[sandwich_huge] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+                                                sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
+        
+                                            }
+                                        } else {
+                                            let mut balance = recipe.get_frontrun_optimal_in();
+                                            if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+                                                balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+                                            }
+                                            sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                                        }
+                                    },
+                                    None => {}
                                 }
                             },
-                            None => {}
+                            _ => {}
                         }
                     },
                     Err(e) => {
@@ -740,8 +757,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             true,
                                             false,
                                         ).await {
-                                            Ok((bundle, _profit_max)) => {
-                                                bundles.push(bundle);
+                                            Ok((_, bundle_option, _profit_max)) => {
+                                                match bundle_option {
+                                                    Some(bundle) => {
+                                                        bundles.push(bundle);
+                                                    },
+                                                    None => {}
+                                                }
                                             },
                                             Err(e) => {
                                                 error!("fail make huge sandwich error:{}", e)
@@ -795,8 +817,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                             true,
                                             true,
                                         ).await {
-                                            Ok((bundle, _profit_max)) => {
-                                                bundles.push(bundle);
+                                            Ok((_, bundle_option, _profit_max)) => {
+                                                match bundle_option {
+                                                    Some(bundle) => {
+                                                        bundles.push(bundle);
+                                                    },
+                                                    None => {}
+                                                }
                                             },
                                             Err(e) => {
                                                 error!("fail make huge mixed sandwich error:{}", e)
@@ -813,13 +840,28 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             }
                         },
                         None => {
-                            tokio::time::sleep(time::Duration::from_millis(50)).await;
                         }
                     }
                 }
             });
         }
         info!("start {:?} huge mixed auto processors", huge_process_num);
+
+        for _index in 0..huge_process_num {
+            self.huge_overlay_task_runtime.spawn(async move {
+                loop {
+                    match self.pop_huge_overlay_task().await {
+                        Some((pendding_recipes_map, low_revenue_recipes_map, new_block)) => {
+                            info!("overlay task run: pendding_recipes_map {:?}, low_revenue_recipes_map {:?}", pendding_recipes_map.len(), low_revenue_recipes_map.len());
+                        },
+                        None => {
+                            tokio::time::sleep(time::Duration::from_millis(50)).await;
+                        }
+                    }
+                }
+            });
+        }
+        info!("start {:?} huge overlay auto processors", huge_process_num);
 
         Ok(())
     }
@@ -915,10 +957,36 @@ impl<M: Middleware + 'static> SandoBot<M> {
         info!("start process pendding recipes {:?} groups by pool with simple strategy", pendding_recipes_group.len());
         self.push_huge_task(pendding_recipes_group, event.clone()).await.unwrap();
         
-        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes(true);
+        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes(false);
         info!("start process pendding recipes {:?} groups by pool with mixed strategy", pendding_recipes_group.len());
         self.push_huge_mixed_task(pendding_recipes_group, event.clone()).await.unwrap();
         
+        let pendding_recipes_group = self.sando_recipe_manager.get_all_pendding_recipes(false);
+        let low_revenue_recipes_group = self.sando_recipe_manager.get_all_low_revenue_recipes(false);
+        info!("start process pendding recipes {:?} groups and low revenue recipes {:?} groups by pool with overlay strategy",
+            pendding_recipes_group.len(), low_revenue_recipes_group.len());
+        self.push_huge_overlay_task(pendding_recipes_group, low_revenue_recipes_group, event.clone()).await.unwrap();
+        
+        Ok(())
+    }
+
+    async fn pop_huge_overlay_task(&self) ->
+        Option<(HashMap<Pool, Vec<SandoRecipe>>, HashMap<Pool, Vec<SandoRecipe>>, NewBlock)> {
+        let mut task_list = self.huge_overlay_task_list.lock().unwrap();
+        if task_list.len() > 0 {
+            task_list.pop_front()
+        } else {
+            None
+        }
+    }
+
+    async fn push_huge_overlay_task(&self,
+        recipes_maps: HashMap<Pool, Vec<SandoRecipe>>,
+        low_revenue_recipes_maps: HashMap<Pool, Vec<SandoRecipe>>,
+        new_block: NewBlock
+    ) -> Result<()> {
+        let mut task_list = self.huge_overlay_task_list.lock().unwrap();
+        task_list.push_back((recipes_maps, low_revenue_recipes_maps, new_block));
         Ok(())
     }
 
@@ -1019,6 +1087,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 self.pool_manager.update_block_info(&block_txs);
                 self.sando_state_manager.update_block_info(&block_txs);
                 self.sando_recipe_manager.update_pendding_recipe(&block_txs);
+                self.sando_recipe_manager.update_low_revenue_recipe(&block_txs);
             },
             None =>{
                 log_error!("Block not found");
@@ -1158,8 +1227,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
-                        let (bundle, profit_max) = match s
-                            .to_fb_bundle(
+                        match s.to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
@@ -1169,17 +1237,29 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             )
                             .await
                         {
-                            Ok(b) => b,
+                            Ok((result, bundle_option, profit_max)) => {
+                                match result {
+                                    IngredientsBundleResult::ExpectedProfitIsPositive => {
+                                        match bundle_option {
+                                            Some(bundle) => {
+                                                cloned_recipe.set_profit_max(profit_max);
+                                                sando_bundles.push(bundle);
+                                                self.sando_recipe_manager.push_pendding_recipe(cloned_recipe);
+                                            },
+                                            None => {}
+                                        };
+                                    },
+                                    IngredientsBundleResult::RevenueBelowBaseFee | IngredientsBundleResult::ExpectedProfitIsNegtive => {
+                                        self.sando_recipe_manager.push_low_revenue_recipe(cloned_recipe);
+                                    },
+                                }
+                            },
                             Err(e) => {
                                 log_not_sandwichable!("{:?}", e);
                                 continue;
                             }
                         };
-
-                        cloned_recipe.set_profit_max(profit_max);
-                        sando_bundles.push(bundle);
-                        self.sando_recipe_manager.push_pendding_recipe(cloned_recipe);
-                    }
+                    },
                     Err(e) => {
                         log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
                     }
@@ -1228,8 +1308,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
-                        let (bundle, profit_max) = match s
-                            .to_fb_bundle(
+                        match s.to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
                                 false,
@@ -1239,16 +1318,28 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             )
                             .await
                         {
-                            Ok(b) => b,
+                            Ok((result, bundle_option, profit_max)) => {
+                                match result {
+                                    IngredientsBundleResult::ExpectedProfitIsPositive => {
+                                        match bundle_option {
+                                            Some(bundle) => {
+                                                cloned_recipe.set_profit_max(profit_max);
+                                                sando_bundles.push(bundle);
+                                                self.sando_recipe_manager.push_pendding_recipe(cloned_recipe);
+                                            },
+                                            None => {}
+                                        };
+                                    },
+                                    IngredientsBundleResult::RevenueBelowBaseFee | IngredientsBundleResult::ExpectedProfitIsNegtive => {
+                                        self.sando_recipe_manager.push_low_revenue_recipe(cloned_recipe);
+                                    },
+                                }
+                            },
                             Err(e) => {
                                 log_not_sandwichable!("{:?}", e);
                                 continue;
                             }
                         };
-
-                        cloned_recipe.set_profit_max(profit_max);
-                        sando_bundles.push(bundle);
-                        self.sando_recipe_manager.push_pendding_recipe(cloned_recipe);
                     }
                     Err(e) => {
                         log_not_sandwichable!("{:?} {:?}", victim_tx.hash, e)
