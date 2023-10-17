@@ -83,7 +83,9 @@ impl SandoRecipeManager {
         for (k, v) in map.iter() {
             let reader = v.read().unwrap();
             let vec = (*reader).clone();
-            result.insert(k.clone(), vec);
+            if !vec.is_empty() {
+                result.insert(k.clone(), vec);
+            }
         }
         if clear_map {
             map.clear();
@@ -156,7 +158,9 @@ impl SandoRecipeManager {
         for (k, v) in map.iter() {
             let reader = v.read().unwrap();
             let vec = (*reader).clone();
-            result.insert(k.clone(), vec);
+            if !vec.is_empty() {
+                result.insert(k.clone(), vec);
+            }
         }
         if clear_map {
             map.clear();
