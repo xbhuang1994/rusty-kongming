@@ -352,10 +352,6 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
             optimal_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_recipes_map, target_block).await);
         }
-        
-        if optimal_recipes.len() == 0 {
-            return Ok(vec![]);
-        }
         info!("[sandwich_huge_overlay] optimal recipes size {:?}", optimal_recipes.len());
 
         let mut low_revenue_recipes = vec![];
@@ -365,10 +361,10 @@ impl<M: Middleware + 'static> SandoBot<M> {
             low_revenue_recipes.extend(self.find_same_swaptype_sandwichable_parallel(&mut filtered_low_recipes_map, target_block).await);
         }
         
+        info!("[sandwich_huge_overlay] low revenue recipes size {:?}", low_revenue_recipes.len());
         if low_revenue_recipes.len() == 0 {
             return Ok(vec![]);
         }
-        info!("[sandwich_huge_overlay] low revenue recipes size {:?}", low_revenue_recipes.len());
 
         let mut optimal_forward_pools = vec![];
         let mut optimal_final_recipes = vec![];
@@ -387,13 +383,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 low_final_recipes.push(r.clone());
             }
         );
-        let low_reverse_recipes: Vec<SandoRecipe> = low_revenue_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse).cloned().collect();
-        for r in low_reverse_recipes.iter() {
-            if !optimal_forward_pools.contains(&r.get_target_pool().unwrap())
-                && !low_forward_pools.contains(&r.get_target_pool().unwrap()){
-                low_final_recipes.push(r.clone());
+        low_revenue_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse)
+            .for_each(|r| {
+                if !optimal_forward_pools.contains(&r.get_target_pool().unwrap())
+                    && !low_forward_pools.contains(&r.get_target_pool().unwrap()){
+                    low_final_recipes.push(r.clone());
+                }
             }
-        }
+        );
         if low_final_recipes.len() == 0 {
             info!("[sandwich_huge_overlay] low revenue final recipes is empty");
             return Ok(vec![]);
@@ -414,13 +411,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
             }
         }
     
-        let optimal_reverse_recipes: Vec<SandoRecipe> = optimal_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse).cloned().collect();
-        for r in optimal_reverse_recipes.iter() {
-            if !optimal_forward_pools.contains(&r.get_target_pool().unwrap())
-                && !low_forward_pools.contains(&r.get_target_pool().unwrap()) {
-                optimal_final_recipes.push(r.clone());
+        optimal_recipes.iter().filter(|r| r.get_swap_type() == SandwichSwapType::Reverse)
+            .for_each(|r| {
+                if !optimal_forward_pools.contains(&r.get_target_pool().unwrap())
+                    && !low_forward_pools.contains(&r.get_target_pool().unwrap()) {
+                    optimal_final_recipes.push(r.clone());
+                }
             }
-        }
+        );
         info!("[sandwich_huge_overlay] fianl optimal recipes size {:?}, final low revenue recipes size {:?}",
             optimal_final_recipes.len(), low_final_recipes.len());
         
