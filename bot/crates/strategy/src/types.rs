@@ -64,6 +64,7 @@ pub enum IngredientsBundleResult {
     ExpectedProfitIsPositive,
 }
 
+#[derive(Debug, Clone, PartialEq)]
 pub enum CalculateMaxFeeResult {
     RevenueBelowFrontrunBaseFee,
     RevenueBelowBackrunBaseFee,
