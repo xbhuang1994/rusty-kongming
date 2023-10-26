@@ -41,7 +41,7 @@ async fn setup_bot(provider: Arc<Provider<Ws>>) -> SandoBot<Provider<Ws>> {
             .unwrap(),
     };
 
-    SandoBot::new(provider, &strat_config)
+    SandoBot::new(provider, &strat_config, false)
 }
 
 async fn block_num_to_info(block_num: u64, provider: Arc<Provider<Ws>>) -> BlockInfo {

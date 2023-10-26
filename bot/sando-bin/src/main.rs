@@ -79,7 +79,7 @@ async fn main() -> Result<()> {
     // static STRATEGY: Lazy<SandoBot<Provider<Ws>>> = Lazy::new(|| SandoBot::new(provider.clone(), configs));
     // STRATEGY.start_auto_process(8, 1);
     static STRATEGY: OnceCell<SandoBot<Provider<Ws>>> = OnceCell::new();
-    let strategy = SandoBot::new(PROVIDER.get().unwrap().clone(), CONFIGS.get().unwrap());
+    let strategy = SandoBot::new(PROVIDER.get().unwrap().clone(), CONFIGS.get().unwrap(), true);
     let _ = STRATEGY.set(strategy);
     // let tt: &dyn Strategy<Event, Action> = STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>;
     // engine.add_strategy(Box::new((STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>)));

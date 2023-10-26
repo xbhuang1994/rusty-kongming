@@ -227,6 +227,11 @@ pub fn create_recipe_reverse(
         return Err(anyhow!("[huffsando: BEGIN] ZeroOtimal"))
     }
 
+    let mut sando_start_bal = sando_start_bal;
+    if sando_start_bal < optimal_in {
+        sando_start_bal = optimal_in;
+    }
+
     let (other_start_balance, weth_start_balance, weth_mid_balance) = pre_get_start_mid_balance(
         ingredients,
         &next_block.clone(),

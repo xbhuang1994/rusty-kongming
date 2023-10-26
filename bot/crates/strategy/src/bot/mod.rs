@@ -47,35 +47,35 @@ pub struct SandoBot<M> {
     sando_recipe_manager: SandoRecipeManager,
     
     /// Auto process txs
-    event_tx_runtime: tokio::runtime::Runtime,
+    event_tx_runtime: Option<tokio::runtime::Runtime>,
     event_tx_list: Arc<Mutex<LinkedList<Transaction>>>,
     event_tx_sender: Arc<Mutex<Option<Sender<Event>>>>,
 
     /// Auto process newblock
-    event_block_runtime: tokio::runtime::Runtime,
+    event_block_runtime: Option<tokio::runtime::Runtime>,
     event_block_list: Arc<Mutex<LinkedList<NewBlock>>>,
 
     /// Auto process action
     action_list: Arc<Mutex<LinkedList<Action>>>,
-    action_runtime: tokio::runtime::Runtime,
+    action_runtime: Option<tokio::runtime::Runtime>,
     action_sender: Arc<Mutex<Option<Sender<Action>>>>,
 
     /// Auto process huge sandwich
     huge_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
-    huge_task_runtime: tokio::runtime::Runtime,
+    huge_task_runtime: Option<tokio::runtime::Runtime>,
 
     huge_mixed_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
-    huge_mixed_task_runtime: tokio::runtime::Runtime,
+    huge_mixed_task_runtime: Option<tokio::runtime::Runtime>,
 
     huge_overlay_task_list: Arc<Mutex<LinkedList<(HashMap<Pool, Vec<SandoRecipe>>, HashMap<Pool, Vec<SandoRecipe>>, NewBlock)>>>,
-    huge_overlay_task_runtime: tokio::runtime::Runtime,
+    huge_overlay_task_runtime: Option<tokio::runtime::Runtime>,
 
     processed_tx_map: Mutex<HashMap<H256, i64>>,
 }
 
 impl<M: Middleware + 'static> SandoBot<M> {
     /// Create a new instance
-    pub fn new(client: Arc<M>, config: &StratConfig) -> Self {
+    pub fn new(client: Arc<M>, config: &StratConfig, need_runtime: bool) -> Self {
         Self {
             pool_manager: PoolManager::new(client.clone()),
             provider: client,
@@ -86,22 +86,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.sando_inception_block,
             ),
             sando_recipe_manager: SandoRecipeManager::new(),
-            event_tx_runtime: runtime::Builder::new_multi_thread().worker_threads(32).enable_all().enable_time().build().unwrap(),
+            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(32).enable_all().enable_time().build().unwrap())} else {None},
             event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
             event_tx_sender: Arc::new(Mutex::new(None)),
-            event_block_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            event_block_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
             event_block_list: Arc::new(Mutex::new(LinkedList::new())),
             action_list: Arc::new(Mutex::new(LinkedList::new())),
-            action_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            action_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
             action_sender: Arc::new(Mutex::new(None)),
             processed_tx_map: Mutex::new(HashMap::new()),
             
             huge_task_list: Arc::new(Mutex::new(LinkedList::new())),
-            huge_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            huge_task_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
             huge_mixed_task_list: Arc::new(Mutex::new(LinkedList::new())),
-            huge_mixed_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            huge_mixed_task_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
             huge_overlay_task_list: Arc::new(Mutex::new(LinkedList::new())),
-            huge_overlay_task_runtime: runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap(),
+            huge_overlay_task_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
         }
     }
 
@@ -828,257 +828,304 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     pub async fn start_auto_process(&'static self, tx_processor_num: i32, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
 
-        for _index in 0..tx_processor_num {
-            self.event_tx_runtime.spawn(async move {
-                let mut _count = 0;
-                loop {
-                    match self.pop_event_tx().await {
-                        Some(event) => {
-                            // #[cfg(feature = "debug")]
-                            // {
-                            //     info!("bot running: event tx processor {_index} process_event");
-                            // }
-                            match self.process_event_tx(event).await {
-                                Ok(_) => {},
-                                Err(e) => error!("bot running event tx processor {_index} error {}", e)
-                            }
-                        },
-                        None => {
-                            tokio::time::sleep(time::Duration::from_millis(10)).await;
-                        },
-                    }
-                }
-            });
-        }
-        info!("start {:?} event tx auto processors", tx_processor_num);
-
-        for _index in 0..block_process_num {
-            self.event_block_runtime.spawn(async move {
-                loop {
-                    match self.pop_event_block().await {
-                        Some(event) => {
-                            let _ = self.process_event_block(event).await;
-                        },
-                        None => {
-                            tokio::time::sleep(time::Duration::from_millis(100)).await;
-                        }
-                    }
-                }
-            });
-        }
-        info!("start {:?} event block auto processors", block_process_num);
-
-        for _index in 0..action_process_num {
-            self.action_runtime.spawn(async move {
-                loop {
-                    let action_sender = self.get_action_sender().await;
-                    match action_sender {
-                        Some(_) => {},
-                        None => {
-                            tokio::time::sleep(time::Duration::from_millis(10)).await;
-                            continue;
-                        }
-                    }
-                    match self.pop_action().await {
-                        Some(action) => {
-                            match action_sender.unwrap().send(action) {
-                                Ok(_) => {},
-                                Err(e) => error!("error sending action: {}", e),
-                            }
-                        },
-                        None => {
-                            thread::sleep(time::Duration::from_millis(10));
-                        }
-                    }
-                }
-            });
-        }
-        info!("start {:?} action auto processors", action_process_num);
-
-        for _index in 0..huge_process_num {
-            self.huge_task_runtime.spawn(async move {
-                loop {
-                    match self.pop_huge_task().await {
-                        Some((recipes_map, new_block)) => {
-
-                            let new_block_info = BlockInfo{
-                                number: new_block.number,
-                                base_fee_per_gas: new_block.base_fee_per_gas,
-                                timestamp: new_block.timestamp,
-                                gas_used: Some(new_block.gas_used),
-                                gas_limit: Some(new_block.gas_limit),
-                            };
-                            let target_block = new_block_info.get_next_block();
-
-                            match self.is_sandwichable_huge(&mut recipes_map.clone(), target_block).await {
-
-                                Ok(huge_recipes) => {
-
-                                    let mut bundles = vec![];
-                                    for huge in huge_recipes {
-                                        match huge.to_fb_bundle(
-                                            self.sando_state_manager.get_sando_address(),
-                                            self.sando_state_manager.get_searcher_signer(),
-                                            false,
-                                            self.provider.clone(),
-                                            true,
-                                            false,
-                                            false,
-                                        ).await {
-                                            Ok((_, bundle_option, _profit_max)) => {
-                                                match bundle_option {
-                                                    Some(bundle) => {
-                                                        bundles.push(bundle);
-                                                    },
-                                                    None => {}
-                                                }
-                                            },
-                                            Err(e) => {
-                                                error!("fail make huge sandwich error:{}", e)
-                                            }
-                                        }
-                                    }
-                                    if bundles.len() > 0 {
-                                        self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+        match &self.event_tx_runtime {
+            Some(rt) => {
+                for _index in 0..tx_processor_num {
+                    rt.spawn(async move {
+                        let mut _count = 0;
+                        loop {
+                            match self.pop_event_tx().await {
+                                Some(event) => {
+                                    // #[cfg(feature = "debug")]
+                                    // {
+                                    //     info!("bot running: event tx processor {_index} process_event");
+                                    // }
+                                    match self.process_event_tx(event).await {
+                                        Ok(_) => {},
+                                        Err(e) => error!("bot running event tx processor {_index} error {}", e)
                                     }
                                 },
-                                Err(e) => {
-                                    error!("process huge sandwich error: {}", e);
+                                None => {
+                                    tokio::time::sleep(time::Duration::from_millis(10)).await;
+                                },
+                            }
+                        }
+                    });
+                }
+                info!("start {:?} event tx auto processors", tx_processor_num);
+            },
+            None => {
+                return Err(anyhow!("event tx runtime is none"));
+            }
+        }
+
+
+        match &self.event_block_runtime {
+            Some(rt) => {
+                for _index in 0..block_process_num {
+                    rt.spawn(async move {
+                        loop {
+                            match self.pop_event_block().await {
+                                Some(event) => {
+                                    let _ = self.process_event_block(event).await;
+                                },
+                                None => {
+                                    tokio::time::sleep(time::Duration::from_millis(100)).await;
                                 }
                             }
-                        },
-                        None => {
-                            tokio::time::sleep(time::Duration::from_millis(50)).await;
                         }
-                    }
+                    });
                 }
-            });
+                info!("start {:?} event block auto processors", block_process_num);
+            },
+            None => {
+                return Err(anyhow!("event block runtime is none"));
+            }
         }
-        info!("start {:?} huge auto processors", huge_process_num);
 
-        for _index in 0..huge_process_num {
-            self.huge_mixed_task_runtime.spawn(async move {
-                loop {
-                    match self.pop_huge_mixed_task().await {
-                        Some((recipes_map, new_block)) => {
 
-                            let new_block_info = BlockInfo{
-                                number: new_block.number,
-                                base_fee_per_gas: new_block.base_fee_per_gas,
-                                timestamp: new_block.timestamp,
-                                gas_used: Some(new_block.gas_used),
-                                gas_limit: Some(new_block.gas_limit),
-                            };
-                            let target_block = new_block_info.get_next_block();
-
-                            match self.is_sandwichable_huge_mixed(&mut recipes_map.clone(), target_block).await {
-
-                                Ok(huge_recipes) => {
-
-                                    let mut bundles = vec![];
-                                    for huge in huge_recipes {
-                                        match huge.to_fb_bundle(
-                                            self.sando_state_manager.get_sando_address(),
-                                            self.sando_state_manager.get_searcher_signer(),
-                                            false,
-                                            self.provider.clone(),
-                                            true,
-                                            true,
-                                            false,
-                                        ).await {
-                                            Ok((_, bundle_option, _profit_max)) => {
-                                                match bundle_option {
-                                                    Some(bundle) => {
-                                                        bundles.push(bundle);
-                                                    },
-                                                    None => {}
-                                                }
-                                            },
-                                            Err(e) => {
-                                                error!("fail make huge mixed sandwich error:{}", e)
-                                            }
-                                        }
-                                    }
-                                    if bundles.len() > 0 {
-                                        self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+        match &self.action_runtime {
+            Some(rt) => {
+                for _index in 0..action_process_num {
+                    rt.spawn(async move {
+                        loop {
+                            let action_sender = self.get_action_sender().await;
+                            match action_sender {
+                                Some(_) => {},
+                                None => {
+                                    tokio::time::sleep(time::Duration::from_millis(10)).await;
+                                    continue;
+                                }
+                            }
+                            match self.pop_action().await {
+                                Some(action) => {
+                                    match action_sender.unwrap().send(action) {
+                                        Ok(_) => {},
+                                        Err(e) => error!("error sending action: {}", e),
                                     }
                                 },
-                                Err(e) => {
-                                    error!("process huge mixed sandwich error: {}", e);
+                                None => {
+                                    thread::sleep(time::Duration::from_millis(10));
                                 }
                             }
-                        },
-                        None => {
                         }
-                    }
+                    });
                 }
-            });
+                info!("start {:?} action auto processors", action_process_num);
+            },
+            None => {
+                return Err(anyhow!("action runtime is none"));
+            }
         }
-        info!("start {:?} huge mixed auto processors", huge_process_num);
+        
 
-        for _index in 0..huge_process_num {
-            self.huge_overlay_task_runtime.spawn(async move {
-                loop {
-                    match self.pop_huge_overlay_task().await {
-                        Some((pendding_recipes_map, low_revenue_recipes_map, new_block)) => {
-                            if low_revenue_recipes_map.len() == 0 {
-                                info!("overlay low revenue recipes is empty");
-                                tokio::time::sleep(time::Duration::from_millis(50)).await;
-                                continue;
-                            }
-                            let new_block_info = BlockInfo{
-                                number: new_block.number,
-                                base_fee_per_gas: new_block.base_fee_per_gas,
-                                timestamp: new_block.timestamp,
-                                gas_used: Some(new_block.gas_used),
-                                gas_limit: Some(new_block.gas_limit),
-                            };
-                            let target_block = new_block_info.get_next_block();
-                            match self.is_sandwichable_huge_overlay(&mut pendding_recipes_map.clone(), &mut low_revenue_recipes_map.clone(), target_block).await {
-
-                                Ok(huge_recipes) => {
-
-                                    let mut bundles = vec![];
-                                    for huge in huge_recipes {
-                                        match huge.to_fb_bundle(
-                                            self.sando_state_manager.get_sando_address(),
-                                            self.sando_state_manager.get_searcher_signer(),
-                                            false,
-                                            self.provider.clone(),
-                                            true,
-                                            false,
-                                            true,
-                                        ).await {
-                                            Ok((_, bundle_option, _profit_max)) => {
-                                                match bundle_option {
-                                                    Some(bundle) => {
-                                                        bundles.push(bundle);
+        match &self.huge_task_runtime {
+            Some(rt) => {
+                for _index in 0..huge_process_num {
+                    rt.spawn(async move {
+                        loop {
+                            match self.pop_huge_task().await {
+                                Some((recipes_map, new_block)) => {
+        
+                                    let new_block_info = BlockInfo{
+                                        number: new_block.number,
+                                        base_fee_per_gas: new_block.base_fee_per_gas,
+                                        timestamp: new_block.timestamp,
+                                        gas_used: Some(new_block.gas_used),
+                                        gas_limit: Some(new_block.gas_limit),
+                                    };
+                                    let target_block = new_block_info.get_next_block();
+        
+                                    match self.is_sandwichable_huge(&mut recipes_map.clone(), target_block).await {
+        
+                                        Ok(huge_recipes) => {
+        
+                                            let mut bundles = vec![];
+                                            for huge in huge_recipes {
+                                                match huge.to_fb_bundle(
+                                                    self.sando_state_manager.get_sando_address(),
+                                                    self.sando_state_manager.get_searcher_signer(),
+                                                    false,
+                                                    self.provider.clone(),
+                                                    true,
+                                                    false,
+                                                    false,
+                                                ).await {
+                                                    Ok((_, bundle_option, _profit_max)) => {
+                                                        match bundle_option {
+                                                            Some(bundle) => {
+                                                                bundles.push(bundle);
+                                                            },
+                                                            None => {}
+                                                        }
                                                     },
-                                                    None => {}
+                                                    Err(e) => {
+                                                        error!("fail make huge sandwich error:{}", e)
+                                                    }
                                                 }
-                                            },
-                                            Err(e) => {
-                                                error!("fail make huge overlay sandwich error:{}", e)
                                             }
+                                            if bundles.len() > 0 {
+                                                self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+                                            }
+                                        },
+                                        Err(e) => {
+                                            error!("process huge sandwich error: {}", e);
                                         }
                                     }
-                                    if bundles.len() > 0 {
-                                        self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
-                                    }
                                 },
-                                Err(e) => {
-                                    error!("process huge overlay sandwich error: {}", e);
+                                None => {
+                                    tokio::time::sleep(time::Duration::from_millis(50)).await;
                                 }
                             }
-                        },
-                        None => {
-                            tokio::time::sleep(time::Duration::from_millis(50)).await;
                         }
-                    }
+                    });
                 }
-            });
+                info!("start {:?} huge auto processors", huge_process_num);
+            },
+            None => {
+                return Err(anyhow!("huge task runtime is none"));
+            }
         }
-        info!("start {:?} huge overlay auto processors", huge_process_num);
+        
+
+        match &self.huge_mixed_task_runtime {
+            Some(rt) => {
+                for _index in 0..huge_process_num {
+                    rt.spawn(async move {
+                        loop {
+                            match self.pop_huge_mixed_task().await {
+                                Some((recipes_map, new_block)) => {
+        
+                                    let new_block_info = BlockInfo{
+                                        number: new_block.number,
+                                        base_fee_per_gas: new_block.base_fee_per_gas,
+                                        timestamp: new_block.timestamp,
+                                        gas_used: Some(new_block.gas_used),
+                                        gas_limit: Some(new_block.gas_limit),
+                                    };
+                                    let target_block = new_block_info.get_next_block();
+        
+                                    match self.is_sandwichable_huge_mixed(&mut recipes_map.clone(), target_block).await {
+        
+                                        Ok(huge_recipes) => {
+        
+                                            let mut bundles = vec![];
+                                            for huge in huge_recipes {
+                                                match huge.to_fb_bundle(
+                                                    self.sando_state_manager.get_sando_address(),
+                                                    self.sando_state_manager.get_searcher_signer(),
+                                                    false,
+                                                    self.provider.clone(),
+                                                    true,
+                                                    true,
+                                                    false,
+                                                ).await {
+                                                    Ok((_, bundle_option, _profit_max)) => {
+                                                        match bundle_option {
+                                                            Some(bundle) => {
+                                                                bundles.push(bundle);
+                                                            },
+                                                            None => {}
+                                                        }
+                                                    },
+                                                    Err(e) => {
+                                                        error!("fail make huge mixed sandwich error:{}", e)
+                                                    }
+                                                }
+                                            }
+                                            if bundles.len() > 0 {
+                                                self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+                                            }
+                                        },
+                                        Err(e) => {
+                                            error!("process huge mixed sandwich error: {}", e);
+                                        }
+                                    }
+                                },
+                                None => {
+                                }
+                            }
+                        }
+                    });
+                }
+                info!("start {:?} huge mixed auto processors", huge_process_num);
+            },
+            None => {
+                return Err(anyhow!("huge mixed task runtime is none"));
+            }
+        }
+        
+
+        match &self.huge_overlay_task_runtime {
+            Some(rt) => {
+                for _index in 0..huge_process_num {
+                    rt.spawn(async move {
+                        loop {
+                            match self.pop_huge_overlay_task().await {
+                                Some((pendding_recipes_map, low_revenue_recipes_map, new_block)) => {
+                                    if low_revenue_recipes_map.len() == 0 {
+                                        info!("overlay low revenue recipes is empty");
+                                        tokio::time::sleep(time::Duration::from_millis(50)).await;
+                                        continue;
+                                    }
+                                    let new_block_info = BlockInfo{
+                                        number: new_block.number,
+                                        base_fee_per_gas: new_block.base_fee_per_gas,
+                                        timestamp: new_block.timestamp,
+                                        gas_used: Some(new_block.gas_used),
+                                        gas_limit: Some(new_block.gas_limit),
+                                    };
+                                    let target_block = new_block_info.get_next_block();
+                                    match self.is_sandwichable_huge_overlay(&mut pendding_recipes_map.clone(), &mut low_revenue_recipes_map.clone(), target_block).await {
+        
+                                        Ok(huge_recipes) => {
+        
+                                            let mut bundles = vec![];
+                                            for huge in huge_recipes {
+                                                match huge.to_fb_bundle(
+                                                    self.sando_state_manager.get_sando_address(),
+                                                    self.sando_state_manager.get_searcher_signer(),
+                                                    false,
+                                                    self.provider.clone(),
+                                                    true,
+                                                    false,
+                                                    true,
+                                                ).await {
+                                                    Ok((_, bundle_option, _profit_max)) => {
+                                                        match bundle_option {
+                                                            Some(bundle) => {
+                                                                bundles.push(bundle);
+                                                            },
+                                                            None => {}
+                                                        }
+                                                    },
+                                                    Err(e) => {
+                                                        error!("fail make huge overlay sandwich error:{}", e)
+                                                    }
+                                                }
+                                            }
+                                            if bundles.len() > 0 {
+                                                self.push_action(Action::SubmitToFlashbots(bundles)).await.unwrap();
+                                            }
+                                        },
+                                        Err(e) => {
+                                            error!("process huge overlay sandwich error: {}", e);
+                                        }
+                                    }
+                                },
+                                None => {
+                                    tokio::time::sleep(time::Duration::from_millis(50)).await;
+                                }
+                            }
+                        }
+                    });
+                }
+                info!("start {:?} huge overlay auto processors", huge_process_num);
+            },
+            None => {
+                return Err(anyhow!("huge overlay task runtime is none"));
+            }
+        }
 
         Ok(())
     }
