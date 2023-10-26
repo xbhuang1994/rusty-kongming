@@ -1,9 +1,9 @@
 use anyhow::{anyhow, Result};
 use cfmms::{
-    checkpoint::sync_pools_from_checkpoint,
+    /* checkpoint::sync_pools_from_checkpoint, */
     dex::{Dex, DexVariant},
     pool::Pool,
-    sync::sync_pairs,
+    /* sync::sync_pairs, */
 };
 use colored::Colorize;
 use dashmap::DashMap;
@@ -63,7 +63,7 @@ impl<M: Middleware + 'static> PoolManager<M> {
 
         let pools = if checkpoint_exists {
             let (_, pools) =
-                sync_pools_from_checkpoint(checkpoint_path, 100000, self.provider.clone()).await?;
+                sync_pools_from_checkpoint_with_throttle(checkpoint_path, 1, 0, self.provider.clone()).await?;
             pools
         } else {
             sync_pairs(
@@ -240,4 +240,234 @@ impl<M: Middleware + 'static> PoolManager<M> {
             .iter_mut()
             .for_each(|mut r| r.remove_transaction(&tx));
     }
+}
+
+
+/** Below functions copy from cfmms::sync.rs and cfmms::checkpoint.rs */
+//Get all pairs from last synced block and sync reserve values for each Dex in the `dexes` vec.
+async fn sync_pools_from_checkpoint_with_throttle<M: 'static + Middleware>(
+    path_to_checkpoint: &str,
+    step: usize,
+    requests_per_second_limit: usize,
+    middleware: Arc<M>,
+) -> Result<(Vec<Dex>, Vec<Pool>), cfmms::errors::CFMMError<M>> {
+    let current_block = middleware
+        .get_block_number()
+        .await
+        .map_err(cfmms::errors::CFMMError::MiddlewareError)?;
+
+    let request_throttle = Arc::new(std::sync::Mutex::new(cfmms::throttle::RequestThrottle::new(requests_per_second_limit)));
+    //Initialize multi progress bar
+    let multi_progress_bar = indicatif::MultiProgress::new();
+
+    //Read in checkpoint
+    let (dexes, pools, checkpoint_block_number) = cfmms::checkpoint::deconstruct_checkpoint(path_to_checkpoint);
+
+    //Sort all of the pools from the checkpoint into uniswapv2 and uniswapv3 pools so we can sync them concurrently
+    let (uinswap_v2_pools, uniswap_v3_pools) = cfmms::checkpoint::sort_pool_variants(pools);
+
+    let mut aggregated_pools = vec![];
+    let mut handles = vec![];
+
+    //Sync all uniswap v2 pools from checkpoint
+    if !uinswap_v2_pools.is_empty() {
+        handles.push(
+            cfmms::checkpoint::batch_sync_pools_from_checkpoint(
+                uinswap_v2_pools,
+                DexVariant::UniswapV2,
+                multi_progress_bar.add(indicatif::ProgressBar::new(0)),
+                request_throttle.clone(),
+                middleware.clone(),
+            )
+            .await,
+        );
+    }
+
+    //Sync all uniswap v3 pools from checkpoint
+    if !uniswap_v3_pools.is_empty() {
+        handles.push(
+            cfmms::checkpoint::batch_sync_pools_from_checkpoint(
+                uniswap_v3_pools,
+                DexVariant::UniswapV3,
+                multi_progress_bar.add(indicatif::ProgressBar::new(0)),
+                request_throttle.clone(),
+                middleware.clone(),
+            )
+            .await,
+        );
+    }
+
+    //Sync all pools from the since synced block
+    handles.extend(
+        cfmms::checkpoint::get_new_pools_from_range(
+            dexes.clone(),
+            checkpoint_block_number,
+            current_block.into(),
+            step,
+            request_throttle,
+            multi_progress_bar,
+            middleware.clone(),
+        )
+        .await,
+    );
+
+    for handle in handles {
+        match handle.await {
+            Ok(sync_result) => {
+                match sync_result {
+                    Ok(pools) => {
+                        aggregated_pools.extend(pools);
+                    },
+                    Err(e) => {
+                        info!("sync pool error: {:?}", e);
+                    },
+                }
+            },
+            Err(err) => {
+                {
+                    if err.is_panic() {
+                        // Resume the panic on the main task
+                        std::panic::resume_unwind(err.into_panic());
+                    }
+                }
+            }
+        }
+    }
+
+    //update the sync checkpoint
+    cfmms::checkpoint::construct_checkpoint(
+        dexes.clone(),
+        &aggregated_pools,
+        current_block.as_u64(),
+        path_to_checkpoint,
+    );
+
+    Ok((dexes, aggregated_pools))
+}
+
+//Get all pairs and sync reserve values for each Dex in the `dexes` vec.
+async fn sync_pairs<M: 'static + Middleware>(
+    dexes: Vec<Dex>,
+    middleware: Arc<M>,
+    checkpoint_path: Option<&str>,
+) -> Result<Vec<Pool>, cfmms::errors::CFMMError<M>> {
+    //Sync pairs with throttle but set the requests per second limit to 0, disabling the throttle.
+    sync_pairs_with_throttle(dexes, 1, middleware, 0, checkpoint_path).await
+}
+
+//Get all pairs and sync reserve values for each Dex in the `dexes` vec.
+async fn sync_pairs_with_throttle<M: 'static + Middleware>(
+    dexes: Vec<Dex>,
+    step: usize, //TODO: Add docs on step. Step is the block range used to get all pools from a dex if syncing from event logs
+    middleware: Arc<M>,
+    requests_per_second_limit: usize,
+    checkpoint_path: Option<&str>,
+) -> Result<Vec<Pool>, cfmms::errors::CFMMError<M>> {
+    let current_block = middleware
+        .get_block_number()
+        .await
+        .map_err(cfmms::errors::CFMMError::MiddlewareError)?;
+
+    //Initialize a new request throttle
+    let request_throttle = Arc::new(std::sync::Mutex::new(cfmms::throttle::RequestThrottle::new(requests_per_second_limit)));
+
+    //Aggregate the populated pools from each thread
+    let mut aggregated_pools: Vec<Pool> = vec![];
+    let mut handles = vec![];
+
+    //Initialize multi progress bar
+    let multi_progress_bar = indicatif::MultiProgress::new();
+
+    //For each dex supplied, get all pair created events and get reserve values
+    for dex in dexes.clone() {
+        let middleware = middleware.clone();
+        let request_throttle = request_throttle.clone();
+        let progress_bar = multi_progress_bar.add(indicatif::ProgressBar::new(0));
+
+        //Spawn a new thread to get all pools and sync data for each dex
+        handles.push(tokio::spawn(async move {
+            progress_bar.set_style(
+                indicatif::ProgressStyle::with_template("{msg} {bar:40.cyan/blue} {pos:>7}/{len:7}")
+                    .expect("Error when setting progress bar style")
+                    .progress_chars("##-"),
+            );
+
+            //Get all of the pools from the dex
+            progress_bar.set_message(format!("Getting all pools from: {}", dex.factory_address()));
+
+            let mut pools = dex
+                .get_all_pools(
+                    request_throttle.clone(),
+                    step,
+                    progress_bar.clone(),
+                    middleware.clone(),
+                )
+                .await?;
+
+            progress_bar.reset();
+            progress_bar.set_style(
+                indicatif::ProgressStyle::with_template("{msg} {bar:40.cyan/blue} {pos:>7}/{len:7}")
+                    .expect("Error when setting progress bar style")
+                    .progress_chars("##-"),
+            );
+
+            //Get all of the pool data and sync the pool
+            progress_bar.set_message(format!(
+                "Getting all pool data for: {}",
+                dex.factory_address()
+            ));
+            progress_bar.set_length(pools.len() as u64);
+
+            dex.get_all_pool_data(
+                &mut pools,
+                request_throttle.clone(),
+                progress_bar.clone(),
+                middleware.clone(),
+            )
+            .await?;
+
+            //Clean empty pools
+            pools = cfmms::sync::remove_empty_pools(pools);
+
+            Ok::<_, cfmms::errors::CFMMError<M>>(pools)
+        }));
+    }
+
+    for handle in handles {
+        match handle.await {
+            Ok(sync_result) => {
+                match sync_result {
+                    Ok(pools) => {
+                        aggregated_pools.extend(pools);
+                    },
+                    Err(e) => {
+                        info!("sync pool error: {:?}", e);
+                    },
+                }
+            },
+            Err(err) => {
+                {
+                    if err.is_panic() {
+                        // Resume the panic on the main task
+                        std::panic::resume_unwind(err.into_panic());
+                    }
+                }
+            }
+        }
+    }
+
+    //Save a checkpoint if a path is provided
+    if checkpoint_path.is_some() {
+        let checkpoint_path = checkpoint_path.unwrap();
+
+        cfmms::checkpoint::construct_checkpoint(
+            dexes,
+            &aggregated_pools,
+            current_block.as_u64(),
+            checkpoint_path,
+        )
+    }
+
+    //Return the populated aggregated pools vec
+    Ok(aggregated_pools)
 }
