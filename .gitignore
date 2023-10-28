@@ -7,3 +7,4 @@ output.log
 __TEMP__*
 run-*.json
 *.cfmms-checkpoint.json
+_log_archived
