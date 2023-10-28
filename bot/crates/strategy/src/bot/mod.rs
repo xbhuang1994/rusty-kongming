@@ -218,7 +218,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
         optimal_recipes
     }
 
-    async fn make_huge_recpie(&'static self, final_recipes: &Vec<SandoRecipe>, target_block: BlockInfo) -> Result<SandoRecipe> {
+    pub async fn make_huge_recpie(
+        &self,
+        final_recipes: &Vec<SandoRecipe>,
+        target_block: BlockInfo,
+        need_recheck_revenue: bool,
+    ) -> Result<SandoRecipe> {
 
         let mut head_txs: Vec<Transaction> = Vec::new();
         let mut frontrun_data = Vec::new();
@@ -236,46 +241,44 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 target_block.base_fee_per_gas,
                 false
             );
+
             match max_fee_result {
                 Ok((result, _)) => {
-                    match result {
-                        CalculateMaxFeeResult::RevenueOverBaseFee => {
-                            match recipe.get_frontrun_data() {
-                                Some(data) => {
-                                    head_txs.extend(recipe.get_head_txs().clone());
-                                    frontrun_data.extend(data.clone());
-                                    backrun_data.extend(recipe.get_backrun().data.clone());
-                                    meats.extend(recipe.get_meats().clone());
-
-                                    log_swap_pair.push(
-                                        format!("{:?}->{:?}", recipe.get_start_end_token(), recipe.get_intermediary_token())
-                                    );
+                    if !need_recheck_revenue || CalculateMaxFeeResult::RevenueOverBaseFee == result {
+                        match recipe.get_frontrun_data() {
+                            Some(data) => {
+                                head_txs.extend(recipe.get_head_txs().clone());
+                                frontrun_data.extend(data.clone());
+                                backrun_data.extend(recipe.get_backrun().data.clone());
+                                meats.extend(recipe.get_meats().clone());
         
-                                    // set sando token balance for recipe creation
-                                    if recipe.get_start_end_token() == *WETH_ADDRESS {
-                                        sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
-
-                                        #[cfg(feature = "debug")]
-                                        {
-                                            // add some buffer, test if REVERT occur in backrun
-                                            let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
-                                            info!("[make_huge_recpie] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
-                                            sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
-    
-                                        }
-
-                                    } else {
-                                        let mut balance = recipe.get_frontrun_optimal_in();
-                                        if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
-                                            balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
-                                        }
-                                        sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                                log_swap_pair.push(
+                                    format!("{:?}->{:?}", recipe.get_start_end_token(), recipe.get_intermediary_token())
+                                );
+        
+                                // set sando token balance for recipe creation
+                                if recipe.get_start_end_token() == *WETH_ADDRESS {
+                                    sando_weth_balance += recipe.get_frontrun_optimal_in() * 2;
+        
+                                    #[cfg(feature = "debug")]
+                                    {
+                                        // add some buffer, test if REVERT occur in backrun
+                                        let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
+                                        info!("[make_huge_recpie] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+                                        sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
+        
                                     }
-                                },
-                                None => {}
-                            }
-                        },
-                        _ => {}
+        
+                                } else {
+                                    let mut balance = recipe.get_frontrun_optimal_in();
+                                    if sando_tokens_balance.contains_key(&recipe.get_start_end_token()) {
+                                        balance += *sando_tokens_balance.get(&recipe.get_start_end_token()).unwrap();
+                                    }
+                                    sando_tokens_balance.insert(recipe.get_start_end_token().clone(), balance);
+                                }
+                            },
+                            None => {}
+                        }
                     }
                 },
                 Err(e) => {
@@ -400,7 +403,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // check many low revenue recipes are sandwichable
         if low_final_recipes.len() > 1 {
             info!("[sandwich_huge_overlay] make huge recipe with all {:?} low revenues", low_final_recipes.len());
-            let huge_recipe_result = self.make_huge_recpie(&low_final_recipes, target_block.clone()).await;
+            let huge_recipe_result = self.make_huge_recpie(&low_final_recipes, target_block.clone(), false).await;
             match huge_recipe_result {
                 Ok(recipe) => {
                     huge_recipes.push(recipe);
@@ -427,7 +430,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             total_final_recipes.extend(optimal_final_recipes);
             total_final_recipes.extend(low_final_recipes);
 
-            let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone()).await;
+            let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone(), false).await;
             match huge_recipe_result {
                 Ok(recipe) => {
                     huge_recipes.push(recipe);
@@ -481,7 +484,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             return Ok(vec![]);
         }
 
-        let huge_recipe = self.make_huge_recpie(&optimal_final_recipes, target_block.clone()).await?;
+        let huge_recipe = self.make_huge_recpie(&optimal_final_recipes, target_block.clone(), true).await?;
 
         /*
         let mut head_txs: Vec<Transaction> = Vec::new();
@@ -603,7 +606,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 continue;
             }
             info!("[sandwich_huge] optimal recipes size {:?} swap type {:?}", optimal_recipes.len(), swap_type);
-            let huge_recipe = self.make_huge_recpie(&optimal_recipes, target_block.clone()).await?;
+            let huge_recipe = self.make_huge_recpie(&optimal_recipes, target_block.clone(), true).await?;
 
             // let mut head_txs: Vec<Transaction> = Vec::new();
             // let mut frontrun_data = Vec::new();

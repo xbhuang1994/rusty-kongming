@@ -19,6 +19,17 @@ pub static WETH_ADDRESS: Lazy<Address> = Lazy::new(|| {
         .unwrap()
 });
 
+pub static SANDO_ADDRESS: Lazy<Address> = Lazy::new(|| {
+    "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
+        .parse()
+        .unwrap()
+});
+pub static SEARCHER_SIGNER: Lazy<ethers::signers::LocalWallet> = Lazy::new(|| {
+    "0000000000000000000000000000000000000000000000000000000000000001"
+        .parse::<ethers::signers::LocalWallet>()
+        .unwrap()
+});
+
 // -- utils --
 fn setup_logger() {
     let _ = fern::Dispatch::new()
@@ -32,13 +43,9 @@ async fn setup_bot(provider: Arc<Provider<Ws>>) -> SandoBot<Provider<Ws>> {
     setup_logger();
 
     let strat_config = StratConfig {
-        sando_address: "0xaAaAaAaaAaAaAaaAaAAAAAAAAaaaAaAaAaaAaaAa"
-            .parse()
-            .unwrap(),
+        sando_address: SANDO_ADDRESS.clone(),
         sando_inception_block: U64::from(17700000),
-        searcher_signer: "0x0000000000000000000000000000000000000000000000000000000000000001"
-            .parse()
-            .unwrap(),
+        searcher_signer: SEARCHER_SIGNER.clone(),
     };
 
     SandoBot::new(provider, &strat_config, false)
@@ -250,4 +257,86 @@ async fn can_another_reverse_sandwich_uni_v2() {
         .is_sandwichable(ingredients, target_block, SandwichSwapType::Reverse, false)
         .await
         .unwrap();
+}
+
+// https://etherscan.io/txs?block=18447072&p=4
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn can_make_huge_overlay_recpie_sandwich() {
+
+    let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
+    let bot = setup_bot(client.clone()).await;
+    let target_block = block_num_to_info(18447072, client.clone()).await;
+
+    let ingredients_01 = RawIngredients::new(
+        vec![],
+        vec![
+            victim_tx_hash(
+                "0xce068dd289912c6d8499439b8a35c690131c540d602bf158559a34792bc28623",
+                client.clone(),
+            )
+            .await,
+        ],
+        *WETH_ADDRESS,
+        hex_to_address("0x8c7ac134ed985367eadc6f727d79e8295e11435c"),
+        hex_to_univ2_pool("0xc6e40537215c1e041616478d8cfe312b1847b997", client.clone()).await,
+    );
+
+    let ingredients_02 = RawIngredients::new(
+        vec![],
+        vec![
+            victim_tx_hash(
+                "0xc56b83384f26fd2542a3c4d8ad756b8ed62f7a92a3c290d547d1ab8f3ef5e529",
+                client.clone(),
+            )
+            .await,
+        ],
+        *WETH_ADDRESS,
+        hex_to_address("0xde47a2460e4b6c36b26919ef9255b4f3f86de0a0"),
+        hex_to_univ2_pool("0x0a8e3f1dcf7b28896f5b4fd44430c9b66731647c", client.clone()).await,
+    );
+
+    let ingredients_03 = RawIngredients::new(
+        vec![],
+        vec![
+            victim_tx_hash(
+                "0x313a527071b227562e15b1a6d669ed82a1976ece007bbb492dd474ec870ad4b1",
+                client.clone(),
+            )
+            .await,
+        ],
+        *WETH_ADDRESS,
+        hex_to_address("0x1dea4f94ed4307f240d027958072c2876543bb74"),
+        hex_to_univ2_pool("0x6e45b2cfe2bbb53b34b8db02fb075ed576530206", client.clone()).await,
+    );
+
+    let recipe_01 = bot
+        .is_sandwichable(ingredients_01, target_block.clone(), SandwichSwapType::Forward, false)
+        .await
+        .unwrap();
+
+    let recipe_02 = bot
+        .is_sandwichable(ingredients_02, target_block.clone(), SandwichSwapType::Forward, false)
+        .await
+        .unwrap();
+
+    let recipe_03 = bot
+        .is_sandwichable(ingredients_03, target_block.clone(), SandwichSwapType::Forward, false)
+        .await
+        .unwrap();
+
+    // let meets = [
+    // "0xce068dd289912c6d8499439b8a35c690131c540d602bf158559a34792bc28623",
+    // "0xc56b83384f26fd2542a3c4d8ad756b8ed62f7a92a3c290d547d1ab8f3ef5e529",
+    // "0x313a527071b227562e15b1a6d669ed82a1976ece007bbb492dd474ec870ad4b1"];
+    // let target_block = block_num_to_info(18447072, client.clone()).await;
+
+    let final_recipes = vec![
+        recipe_01.clone(),
+        recipe_02.clone(),
+        recipe_03.clone(),
+    ];
+
+    let provider = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
+    let final_recipe = bot.make_huge_recpie(&final_recipes, target_block.clone(), false).await.unwrap();
+    let _ = final_recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, false, provider, true, false, true).await;
 }
