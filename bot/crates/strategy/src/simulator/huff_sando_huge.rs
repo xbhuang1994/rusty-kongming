@@ -126,8 +126,8 @@ pub fn create_recipe_huge(
     );
     evm.inspect_ref(&mut access_list_inspector)
         .map_err(|e| anyhow!("[EVM ERROR] frontrun: {:?}", (e)))?;
+    
     let frontrun_access_list = access_list_inspector.access_list();
-
     frontrun_tx_env.access_list = access_list_to_revm(frontrun_access_list);
     evm.env.tx = frontrun_tx_env.clone();
 
@@ -171,6 +171,7 @@ pub fn create_recipe_huge(
         evm.env.tx.value = meat.value.into();
         evm.env.tx.chain_id = meat.chain_id.map(|id| id.as_u64());
         //evm.env.tx.nonce = Some(meat.nonce.as_u64());
+        evm.env.tx.access_list = Default::default();
         evm.env.tx.gas_limit = meat.gas.as_u64();
         match meat.transaction_type {
             Some(ethers::types::U64([0])) => {
