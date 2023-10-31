@@ -324,12 +324,6 @@ async fn can_make_huge_overlay_recpie_sandwich() {
         .await
         .unwrap();
 
-    // let meets = [
-    // "0xce068dd289912c6d8499439b8a35c690131c540d602bf158559a34792bc28623",
-    // "0xc56b83384f26fd2542a3c4d8ad756b8ed62f7a92a3c290d547d1ab8f3ef5e529",
-    // "0x313a527071b227562e15b1a6d669ed82a1976ece007bbb492dd474ec870ad4b1"];
-    // let target_block = block_num_to_info(18447072, client.clone()).await;
-
     let final_recipes = vec![
         recipe_01.clone(),
         recipe_02.clone(),
