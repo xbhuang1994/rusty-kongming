@@ -20,6 +20,8 @@ use crate::types::{BlockInfo, SandoRecipe, SandwichSwapType};
 use crate::constants::WETH_ADDRESS;
 
 use super::salmonella_inspector::{IsSandoSafu, SalmonellaInspectoooor};
+use ethers::types::H256;
+use foundry_evm::revm::primitives::{B160, U256 as rU256};
 
 use super::huff_helper::{get_erc20_balance, inject_huff_sando};
 use crate::simulator::credit::CreditHelper;
@@ -31,6 +33,7 @@ pub fn create_recipe_huge(
     backrun_data: Vec<u8>,
     head_txs: Vec<Transaction>,
     meats: Vec<Transaction>,
+    meats_access_list: &HashMap<H256, Vec<(B160, Vec<rU256>)>>,
     start_sando_weth_balance: U256,
     start_sando_tokens_balance: HashMap<Address, U256>,
     searcher: Address,
@@ -171,7 +174,11 @@ pub fn create_recipe_huge(
         evm.env.tx.value = meat.value.into();
         evm.env.tx.chain_id = meat.chain_id.map(|id| id.as_u64());
         //evm.env.tx.nonce = Some(meat.nonce.as_u64());
-        evm.env.tx.access_list = Default::default();
+        if meats_access_list.contains_key(&meat.hash) {
+            evm.env.tx.access_list = meats_access_list.get(&meat.hash).unwrap().clone();
+        } else {
+            evm.env.tx.access_list = Default::default();
+        }
         evm.env.tx.gas_limit = meat.gas.as_u64();
         match meat.transaction_type {
             Some(ethers::types::U64([0])) => {

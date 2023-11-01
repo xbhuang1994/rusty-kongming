@@ -9,6 +9,7 @@ use ethers::{
     types::{Transaction, Address, U256, H256}
 };
 use foundry_evm::executor::fork::{BlockchainDb, BlockchainDbMeta, SharedBackend};
+use foundry_evm::revm::primitives::{B160, U256 as rU256};
 use foundry_evm::revm::new;
 use log::{error, info};
 use tokio::task::JoinError;
@@ -229,6 +230,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         let mut frontrun_data = Vec::new();
         let mut backrun_data = Vec::new();
         let mut meats: Vec<Transaction> = Vec::new();
+        let mut meats_access_list: HashMap<H256, Vec<(B160, Vec<rU256>)>> = HashMap::new();
         let mut sando_weth_balance = U256::zero();
         let mut sando_tokens_balance: HashMap<Address, U256> = HashMap::new();
         let uuid = format!("{}", Uuid::new_v4());
@@ -251,6 +253,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 frontrun_data.extend(data.clone());
                                 backrun_data.extend(recipe.get_backrun().data.clone());
                                 meats.extend(recipe.get_meats().clone());
+                                for meat in recipe.get_meats() {
+                                    meats_access_list.insert(meat.hash, recipe.get_frontrun().access_list.clone());
+                                }
         
                                 log_swap_pair.push(
                                     format!("{:?}->{:?}", recipe.get_start_end_token(), recipe.get_intermediary_token())
@@ -333,6 +338,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             backrun_data.into(),
             head_txs,
             meats,
+            &meats_access_list,
             sando_weth_balance,
             sando_tokens_balance,
             self.sando_state_manager.get_searcher_address(),
