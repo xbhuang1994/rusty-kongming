@@ -133,8 +133,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
             }
         }
         let mut result = vec![];
-        for (_, v) in group_from.iter_mut() {
+        for (from, v) in group_from.iter_mut() {
+            let before_len = v.len();
             v.sort_by_key(|t| t.nonce);
+            v.dedup_by_key(|t| t.nonce);
+            let after_len = v.len();
+            if after_len != before_len {
+                info!("delete duplicate tx nonce from {:?}", from);
+            }
             v.iter().for_each(|t| result.push(t.clone()));
         }
 
@@ -193,7 +199,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             );
 
             let handler = tokio::spawn(self.is_sandwichable(
-                ingredients, target_block.clone(), swap_type, true
+                ingredients, target_block.clone(), swap_type, true, false
             ));
             handlers.push(handler);
         }
@@ -737,7 +743,17 @@ impl<M: Middleware + 'static> SandoBot<M> {
         target_block: BlockInfo,
         swap_type: SandwichSwapType,
         for_huge: bool,
+        check_nonce_valid: bool,
     ) -> Result<SandoRecipe> {
+        // check if meat nonce is valid
+        if check_nonce_valid {
+            for meat in ingredients.get_meats_ref() {
+                let tx_nonce = self.provider.get_transaction_count(meat.from, None).await?;
+                if tx_nonce != meat.nonce {
+                    return Err(anyhow!("meat nonce {:?} not match tx nonce {:?} from {:?}", tx_nonce, meat.nonce, meat.from));
+                }
+            }
+        }
         // setup shared backend
         let shared_backend = SharedBackend::spawn_backend_thread(
             self.provider.clone(),
@@ -1462,7 +1478,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools.is_empty() {
             for pool in touched_pools {
                 let (head_hashs, head_txs) = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Forward);
-                log_info_cyan!("process sandwich {:?} from {:?} noce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
+                log_info_cyan!("process sandwich {:?} from {:?} nonce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
                 
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -1496,7 +1512,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         ingredients,
                         next_block.clone(),
                         SandwichSwapType::Forward,
-                        false
+                        false,
+                        true
                     ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
@@ -1544,7 +1561,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools_reverse.is_empty() {
             for pool in touched_pools_reverse {
                 let (head_hashs, head_txs) = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Reverse);
-                log_info_cyan!("process reverse sandwich {:?} from {:?} noce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
+                log_info_cyan!("process reverse sandwich {:?} from {:?} nonce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
                 
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -1578,7 +1595,8 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         ingredients,
                         next_block.clone(),
                         SandwichSwapType::Reverse,
-                        false
+                        false,
+                        true
                     ).await {
                     Ok(s) => {
                         let mut cloned_recipe = s.clone();
