@@ -438,22 +438,103 @@ impl<M: Middleware + 'static> SandoBot<M> {
             optimal_final_recipes.len(), low_final_recipes.len());
         
         if optimal_final_recipes.len() > 0 {
-            let mut total_final_recipes = vec![];
-            total_final_recipes.extend(optimal_final_recipes);
-            total_final_recipes.extend(low_final_recipes);
 
-            let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone(), false).await;
+            let huge_recipe_result = self.make_huge_recpie_with_highest_profit(
+                &optimal_final_recipes,
+                &low_final_recipes,
+                target_block.clone()).await;
+            
             match huge_recipe_result {
-                Ok(recipe) => {
+                Some(recipe) => {
                     huge_recipes.push(recipe);
                 },
-                Err(e) => {
-                    info!("[sandwich_huge_overlay] make huge recipe contain low revenue error: {:?}", e);
+                None => {
+                    info!("[sandwich_huge_overlay] make huge overlay recipe contain low revenue fail");
                 }
             }
         }
 
         Ok(huge_recipes)
+    }
+
+    pub async fn make_huge_recpie_with_highest_profit(
+        &self,
+        profitable_recipes: &Vec<SandoRecipe>,
+        unprofitable_recipes: &Vec<SandoRecipe>,
+        target_block: BlockInfo,
+    ) -> Option<SandoRecipe> {
+
+        let mut profix_max = U256::zero();
+        let mut highest_profit_recipe: Option<SandoRecipe> = None;
+        let mut total_final_recipes = profitable_recipes.clone();
+        let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone(), false).await;
+        match huge_recipe_result {
+            Ok(current_huge_recipe) => {
+                match current_huge_recipe.clone().to_fb_bundle(
+                    self.sando_state_manager.get_sando_address(),
+                    self.sando_state_manager.get_searcher_signer(),
+                    false,
+                    self.provider.clone(),
+                    true,
+                    false,
+                    false,
+                    false,
+                ).await {
+                    Ok((_, _, current_profit_max)) => {
+                        profix_max = current_profit_max;
+                        highest_profit_recipe = Some(current_huge_recipe);
+                    },
+                    Err(e) => {
+                        info!("[make_huge_recpie_with_highest_profit] cannot to fb bundle with optimal recipes {:?}", e);
+                        return None;
+                    }
+                }
+            },
+            Err(e) => {
+                info!("[make_huge_recpie_with_highest_profit] make huge recipe error with optimal recipes {:?}", e);
+                return None;
+            }
+        }
+
+        for recipe in unprofitable_recipes {
+            let uuid = recipe.get_uuid();
+            total_final_recipes.push(recipe.clone());
+            let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone(), false).await;
+            match huge_recipe_result {
+                Ok(current_huge_recipe) => {
+                    match current_huge_recipe.clone().to_fb_bundle(
+                        self.sando_state_manager.get_sando_address(),
+                        self.sando_state_manager.get_searcher_signer(),
+                        false,
+                        self.provider.clone(),
+                        true,
+                        false,
+                        false,
+                        false,
+                    ).await {
+                        Ok((_, _, current_profit_max)) => {
+                            if current_profit_max > profix_max {
+                                highest_profit_recipe = Some(current_huge_recipe);
+                            } else {
+                                total_final_recipes.retain(|r| r.get_uuid() != uuid);
+                            }
+                        },
+                        Err(e) => {
+                        }
+                    }
+                },
+                Err(e) => {
+                    info!("[make_huge_recpie_with_highest_profit] make huge recipe contain low revenue error: {:?}", e);
+                }
+            }
+        }
+
+        if total_final_recipes.len() > profitable_recipes.len() {
+            return highest_profit_recipe;
+        } else {
+            info!("[make_huge_recpie_with_highest_profit] no low recipe can be bundle");
+            return None;
+        }
     }
     
     /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
@@ -975,6 +1056,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                                     true,
                                                     false,
                                                     false,
+                                                    true,
                                                 ).await {
                                                     Ok((_, bundle_option, _profit_max)) => {
                                                         match bundle_option {
@@ -1044,6 +1126,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                                     true,
                                                     true,
                                                     false,
+                                                    true,
                                                 ).await {
                                                     Ok((_, bundle_option, _profit_max)) => {
                                                         match bundle_option {
@@ -1114,6 +1197,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                                     self.provider.clone(),
                                                     true,
                                                     false,
+                                                    true,
                                                     true,
                                                 ).await {
                                                     Ok((_, bundle_option, _profit_max)) => {
@@ -1525,6 +1609,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 false,
                                 false,
                                 false,
+                                true,
                             )
                             .await
                         {
@@ -1608,6 +1693,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                 false,
                                 false,
                                 false,
+                                true,
                             )
                             .await
                         {

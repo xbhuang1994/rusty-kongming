@@ -436,6 +436,7 @@ impl SandoRecipe {
         is_huge: bool,
         is_mixed_strategy: bool,
         is_overlay_strategy: bool,
+        need_write_log: bool,
     ) -> Result<(IngredientsBundleResult, Option<BundleRequest>, U256)> {
         
         let tx_nonce = provider
@@ -560,27 +561,29 @@ impl SandoRecipe {
             .set_simulation_block(self.target_block.number - 1)
             .set_simulation_timestamp(self.target_block.timestamp.as_u64());
 
-        let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;
-        log_bundle!(
-            is_huge,
-            is_mixed_strategy,
-            is_overlay_strategy,
-            self.uuid,
-            self.swap_type,
-            head_hashs.join(","),
-            meat_hashs.join(","),
-            self.target_block.number,
-            revenue_log,
-            self.frontrun_gas_used,
-            self.backrun_gas_used,
-            profit_min,
-            profit_max
-        );
+        if need_write_log {
+            let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;
+            log_bundle!(
+                is_huge,
+                is_mixed_strategy,
+                is_overlay_strategy,
+                self.uuid,
+                self.swap_type,
+                head_hashs.join(","),
+                meat_hashs.join(","),
+                self.target_block.number,
+                revenue_log,
+                self.frontrun_gas_used,
+                self.backrun_gas_used,
+                profit_min,
+                profit_max
+            );
 
-        info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
-            is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
-            revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
-        );
+            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
+                is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
+                revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
+            );
+        }
 
         Ok((bundle_result, Some(bundle_request), profit_max))
     }
