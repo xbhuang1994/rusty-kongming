@@ -520,11 +520,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             }
                         },
                         Err(e) => {
+                            return None;
                         }
                     }
                 },
                 Err(e) => {
                     info!("[make_huge_recpie_with_highest_profit] make huge recipe contain low revenue error: {:?}", e);
+                    return None;
                 }
             }
         }
