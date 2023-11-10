@@ -2,6 +2,7 @@
 members = [
     "crates/artemis-core",
     "crates/strategy",
+    "crates/runtime",
     "op-sidecar",
     "sando-bin"
 ]

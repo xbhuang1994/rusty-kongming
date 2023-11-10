@@ -1,9 +1,9 @@
-use anyhow::Result;
 use serde::Deserialize;
 use docopt::Docopt;
 use std::str;
 use op_sidecar::echo::tcp_server;
 use op_sidecar::echo::tcp_client;
+use runtime::dynamic_config;
 
 const USAGE: &'static str = "
 Welcome to use OP-Sidecar
@@ -68,6 +68,7 @@ async fn main() {
     match command {
         Command::Server => {
             tcp_server::start_sidecar_server_at_address(address).await.unwrap();
+            dynamic_config::init_config();
             loop {}
         },
         Command::Console => {

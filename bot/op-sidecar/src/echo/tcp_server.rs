@@ -6,6 +6,7 @@ use log::{info, error};
 use serde_json;
 use serde::{Deserialize, Serialize};
 use super::make_data_package;
+use runtime::dynamic_config;
 
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -15,13 +16,68 @@ struct Resp {
     data: Option<String>,
 }
 
-async fn process_receive_command(command: String) -> Resp {
+async fn handle_config_command(args: &Vec<String>) -> Resp {
 
-    // todo!("do process");
-    Resp {
-        code: 0i32,
-        msg: Some("success".to_string()),
-        data: Some(command.clone()),
+    if args.len() < 2 {
+        return Resp {
+            code: 1i32,
+            msg: Some("Invalid Arguments".to_string()),
+            data: None,
+        };
+    }
+    
+    let arg_main = args[1].clone();
+    let mut data = String::from("");
+    let mut code = 0i32;
+    let mut msg = String::from("success");
+    if "list" == arg_main {
+        let config = dynamic_config::get_all_config();
+        data = serde_json::to_string(&config).unwrap();
+    } else if "get" == arg_main {
+        if args.len() < 3 {
+            code = 1i32;
+            msg = String::from("Not Config Key Given");
+        } else {
+            data = dynamic_config::get_config(args[2].clone());
+        }
+    } else if "set" == arg_main {
+        if args.len() < 4 {
+            code = 1i32;
+            msg = String::from("Require Config Key And Value");
+        } else {
+            let result = dynamic_config::set_config(args[2].clone(), args[3].clone());
+            match result {
+                Ok(_) => {},
+                Err(e) => {
+                    code = 1i32;
+                    msg = String::from("Failed Set Config");
+                }
+            }
+        }
+    }
+
+    return Resp {
+        code: code,
+        msg: Some(msg),
+        data: Some(data),
+    };
+}
+
+async fn process_receive_command(command_line: String) -> Resp {
+
+    let parts = command_line.split(" ");
+    let parts: Vec<&str> = parts.collect();
+    let mut args: Vec<String> = vec![];
+    parts.iter().for_each(|s| args.push(String::from(*s)));
+
+    if "config" == parts[0] {
+        return handle_config_command(&args).await;
+    } else {
+        return Resp {
+            code: 1i32,
+            msg: Some("Invalid Command".to_string()),
+            data: None,
+        };
     }
 }
 

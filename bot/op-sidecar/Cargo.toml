@@ -16,3 +16,5 @@ docopt = "1.1.1"
 colored = "2.0.0"
 log = "0.4.17"
 indicatif = "0.17.5"
+
+runtime = { path = "../crates/runtime" }
