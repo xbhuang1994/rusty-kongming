@@ -22,6 +22,7 @@ use strategy::{
     types::{Action, Event, StratConfig},
 };
 use num_cpus;
+use op_sidecar::echo::tcp_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -100,6 +101,9 @@ async fn main() -> Result<()> {
         Action::SubmitToFlashbots(bundle) => Some(bundle),
     });
     engine.add_executor(Box::new(executor));
+
+    // Start sidecar server
+    tcp_server::start_sidecar_server().await?;
 
     // Start engine
     if let Ok(mut set) = engine.run().await {
