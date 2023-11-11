@@ -4,66 +4,82 @@ use anyhow::Result;
 use tokio::{net::{TcpListener, TcpStream}, io::{AsyncReadExt, AsyncWriteExt}};
 use log::{info, error};
 use serde_json;
-use serde::{Deserialize, Serialize};
 use super::make_data_package;
 use runtime::dynamic_config;
+// use serde::{Deserialize, Serialize};
 
 
-#[derive(Debug, Deserialize, Serialize)]
-struct Resp {
-    code: i32,
-    msg: Option<String>,
-    data: Option<String>,
+// #[derive(Debug, Deserialize, Serialize)]
+// struct Resp {
+//     code: i32,
+//     msg: Option<String>,
+//     data: Option<String>,
+// }
+
+
+async fn handle_test_command(args: &Vec<String>) -> String {
+
+    if args.len() < 3 {
+        return "Invalid Arguments".to_string();
+    }
+
+    let arg_main = args[1].clone();
+    let mut data = String::from("");
+    if "bribe" == arg_main {
+        let value = args[2].clone();
+        let revenue = u128::from_str_radix(&value, 10).unwrap();
+        let result = dynamic_config::calculate_runtime_bribe_amount_u128(revenue);
+        match result {
+            Ok(revenue) => {
+                data = format!("{}", revenue);
+            },
+            Err(e) => {
+                data = format!("Failed Test Bribe: {}", e);
+            }
+        }
+    }
+
+    return data;
 }
 
-async fn handle_config_command(args: &Vec<String>) -> Resp {
+
+async fn handle_config_command(args: &Vec<String>) -> String {
 
     if args.len() < 2 {
-        return Resp {
-            code: 1i32,
-            msg: Some("Invalid Arguments".to_string()),
-            data: None,
-        };
+        return "Invalid Arguments".to_string();
     }
     
     let arg_main = args[1].clone();
     let mut data = String::from("");
-    let mut code = 0i32;
-    let mut msg = String::from("success");
     if "list" == arg_main {
         let config = dynamic_config::get_all_config();
-        data = serde_json::to_string(&config).unwrap();
+        data = serde_json::to_string_pretty(&config).unwrap();
     } else if "get" == arg_main {
         if args.len() < 3 {
-            code = 1i32;
-            msg = String::from("Not Config Key Given");
+            data = String::from("Not Config Key Given");
         } else {
             data = dynamic_config::get_config(args[2].clone());
         }
     } else if "set" == arg_main {
         if args.len() < 4 {
-            code = 1i32;
-            msg = String::from("Require Config Key And Value");
+            data = String::from("Require Config Key And Value");
         } else {
             let result = dynamic_config::set_config(args[2].clone(), args[3].clone());
             match result {
-                Ok(_) => {},
+                Ok(_) => {
+                    data = String::from("Set Config Success");
+                },
                 Err(e) => {
-                    code = 1i32;
-                    msg = String::from("Failed Set Config");
+                    data = String::from("Failed Set Config");
                 }
             }
         }
     }
 
-    return Resp {
-        code: code,
-        msg: Some(msg),
-        data: Some(data),
-    };
+    return data;
 }
 
-async fn process_receive_command(command_line: String) -> Resp {
+async fn process_receive_command(command_line: String) -> String {
 
     let parts = command_line.split(" ");
     let parts: Vec<&str> = parts.collect();
@@ -72,12 +88,10 @@ async fn process_receive_command(command_line: String) -> Resp {
 
     if "config" == parts[0] {
         return handle_config_command(&args).await;
+    } else if  "test" == parts[0] {
+        return handle_test_command(&args).await;
     } else {
-        return Resp {
-            code: 1i32,
-            msg: Some("Invalid Command".to_string()),
-            data: None,
-        };
+        return "Invalid Command".to_string();
     }
 }
 
@@ -117,12 +131,8 @@ async fn handle_stream(mut stream: TcpStream, pair_addr: SocketAddr) -> Result<(
         }
 
         // Write
-        // todo
         let resp = process_receive_command(receive_command).await;
-        let echo = serde_json::to_string_pretty(&resp).unwrap();
-        
-        // let echo = echo.replace("\"", "'");
-        let data = make_data_package(echo).await;
+        let data = make_data_package(resp).await;
 
         stream.write(&data).await?;
         stream.flush().await?;

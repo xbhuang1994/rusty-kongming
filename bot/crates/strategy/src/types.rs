@@ -25,6 +25,7 @@ use crate::log_bundle;
 use log::info;
 use colored::Colorize;
 use uuid::Uuid;
+use runtime::dynamic_config;
 
 /// Core Event enum for current strategy
 #[derive(Debug, Clone)]
@@ -275,12 +276,14 @@ pub fn calculate_bribe_for_max_fee(revenue: U256,
     }
 
     // eat a loss (overpay) to get dust onto the sando contract (more: https://twitter.com/libevm/status/1474870661373779969)
+    /*
     let bribe_amount = if !has_dust {
         revenue_minus_frontrun_tx_fee + *DUST_OVERPAY
     } else {
-        // bribe away 99.9999999% of revenue lmeow
         revenue_minus_frontrun_tx_fee * 999999999 / 1000000000
     };
+    */
+    let bribe_amount = dynamic_config::calculate_runtime_bribe_amount(revenue_minus_frontrun_tx_fee)?;
 
     let max_fee = bribe_amount / backrun_gas_used;
 

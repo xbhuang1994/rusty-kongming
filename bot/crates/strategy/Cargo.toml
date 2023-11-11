@@ -38,6 +38,9 @@ chrono = "0.4.23"
 # Artemis
 artemis-core = { path = "../artemis-core" }
 
+# Runtime
+runtime = { path = "../runtime" }
+
 [dev-dependencies]
 fern = {version = "0.6.2", features = ["colored"]}
 

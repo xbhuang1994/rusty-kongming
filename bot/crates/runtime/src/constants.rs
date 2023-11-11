@@ -1,2 +1,5 @@
-pub static DUST_OVERPAY_AMOUNT: &str = "0.0003861";
-pub static DUST_OVERPAY_PB: i32 = 100;
+pub static BRIBE_OVERPAY_AMOUNT: f32 = 0.0003861f32;
+pub static BEIBE_RATIO_BP: i64 = 999_900_000i64;
+
+pub static OVERPAY_FLOAT_AMOUNT: f32 = 0.000005f32;
+pub static RATIO_FLOAT_BP: i64 = 100_000i64;
