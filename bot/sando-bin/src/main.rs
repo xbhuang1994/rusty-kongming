@@ -22,6 +22,8 @@ use strategy::{
     types::{Action, Event, StratConfig},
 };
 use num_cpus;
+use runtime::dynamic_config;
+use op_sidecar::echo::tcp_server;
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -29,6 +31,14 @@ async fn main() -> Result<()> {
     // Setup
     setup_logger()?;
     print_banner();
+
+    // Init dynamic config
+    dynamic_config::init_config();
+    info!("Init Dynamic config");
+
+    // Start sidecar server
+    let addr = tcp_server::start_sidecar_server().await?;
+    info!("Start Sidecar Server, Listen At {}", addr);
 
     // Make config
     // lazy_static! {
