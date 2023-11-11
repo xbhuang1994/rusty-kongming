@@ -47,13 +47,13 @@ cargo test -p strategy --release --features debug
 Test bot's sandwich finding functionality without a deployed or funded Sando contract (no bundles will be sent)
 
 ```
-cargo run --release --features debug
+cargo run --release --bin rusty-sando --features debug
 ```
 
 7. Running the bot
 
 ```console
-cargo run --release
+cargo run --release --bin rusty-sando
 ```
 > **Warning**
 >

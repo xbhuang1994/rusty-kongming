@@ -39,7 +39,8 @@ enum Command {
     Other,
 }
 
-
+// cargo run --release --bin op-sidecar -- server
+// cargo run --release --bin op-sidecar -- console 127.0.0.1:12321
 #[tokio::main]
 async fn main() {
 

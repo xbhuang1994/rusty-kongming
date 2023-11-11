@@ -1,6 +1,6 @@
 use std::net::SocketAddr;
 
-use anyhow::Result;
+use anyhow::{Result, anyhow};
 use tokio::{net::{TcpListener, TcpStream}, io::{AsyncReadExt, AsyncWriteExt}};
 use log::{info, error};
 use serde_json;
@@ -142,10 +142,18 @@ async fn handle_stream(mut stream: TcpStream, pair_addr: SocketAddr) -> Result<(
 }
 
 /// startup sidecar tcp service
-pub async fn start_sidecar_server() -> Result<()> {
+pub async fn start_sidecar_server() -> Result<String> {
 
     let addr = String::from("127.0.0.1:12321");
-    return start_sidecar_server_at_address(addr).await;
+    let result = start_sidecar_server_at_address(addr.clone()).await;
+    match result {
+        Ok(_) => {
+            return Ok(addr.clone());
+        },
+        Err(e) => {
+            return Err(anyhow!("Failed To Start Sidecar: {:?}", e));
+        }
+    }
 }
 
 /// startup sidecar tcp service
