@@ -24,17 +24,34 @@ async fn handle_test_command(args: &Vec<String>) -> String {
     }
 
     let arg_main = args[1].clone();
-    let mut data = String::from("");
+    let mut data = String::from("Empty Response");
     if "bribe" == arg_main {
+        if args.len() < 4 {
+            return "Invalid Arguments".to_string();
+        }
         let value = args[2].clone();
-        let revenue = u128::from_str_radix(&value, 10).unwrap();
-        let result = dynamic_config::calculate_runtime_bribe_amount_u128(revenue);
+        let num = args[3].clone();
+        let mut revenue = 0u128;
+        match u128::from_str_radix(&value, 10) {
+            Ok(r) => {revenue = r},
+            Err(_) => {
+                return String::from("Failed To Convert Revenue Value");
+            }
+        }
+        let mut with_dust_num = 0u64;
+        match u64::from_str_radix(&num, 10) {
+            Ok(n) => {with_dust_num = n},
+            Err(_) => {
+                return String::from("Failed To Convert Dust Number");
+            }
+        }
+        let result = dynamic_config::calculate_runtime_bribe_amount_u128(revenue, with_dust_num);
         match result {
             Ok(revenue) => {
                 data = format!("{}", revenue);
             },
-            Err(e) => {
-                data = format!("Failed Test Bribe: {}", e);
+            Err(_) => {
+                data = format!("Failed Test Bribe");
             }
         }
     }
@@ -50,7 +67,7 @@ async fn handle_config_command(args: &Vec<String>) -> String {
     }
     
     let arg_main = args[1].clone();
-    let mut data = String::from("");
+    let mut data = String::from("Empty Response");
     if "list" == arg_main {
         let config = dynamic_config::get_all_config();
         data = serde_json::to_string_pretty(&config).unwrap();

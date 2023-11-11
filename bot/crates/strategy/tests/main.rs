@@ -4,12 +4,13 @@ use cfmms::pool::{Pool, UniswapV2Pool, UniswapV3Pool};
 use ethers::{
     prelude::Lazy,
     providers::{Middleware, Provider, Ws},
-    types::{Address, Transaction, TxHash, U64},
+    types::{Address, Transaction, TxHash, U64, H160},
 };
 use strategy::{
     bot::SandoBot,
     types::{BlockInfo, RawIngredients, StratConfig, SandwichSwapType},
 };
+use runtime::dynamic_config;
 
 // -- consts --
 static WSS_RPC: &str = "ws://65.21.224.37:8545";
@@ -263,6 +264,7 @@ async fn can_another_reverse_sandwich_uni_v2() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn can_make_huge_overlay_recpie_sandwich() {
 
+    dynamic_config::init_config();
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
     let bot = setup_bot(client.clone()).await;
     let target_block = block_num_to_info(18447072, client.clone()).await;
@@ -331,14 +333,15 @@ async fn can_make_huge_overlay_recpie_sandwich() {
     ];
 
     let provider = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
-    let final_recipe = bot.make_huge_recpie(&final_recipes, target_block.clone(), false).await.unwrap();
-    let _ = final_recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, false, provider, true, false, true, true).await;
+    let (final_recipe, without_dust_tokens) = bot.make_huge_recipe(&final_recipes, target_block.clone(), false).await.unwrap();
+    let _ = final_recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, without_dust_tokens, provider, true, false, true, true).await;
 }
 
 // https://etherscan.io/txs?block=18505093&p=3
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn cannot_make_huge_recpie_with_highest_profit() {
 
+    dynamic_config::init_config();
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
     let bot = setup_bot(client.clone()).await;
     let target_block = block_num_to_info(18505093, client.clone()).await;
@@ -409,10 +412,11 @@ async fn cannot_make_huge_recpie_with_highest_profit() {
     ];
 
     let provider = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
-    let final_recipe = bot.make_huge_recpie_with_highest_profit(&optimal_recipes, &low_recipes, target_block.clone()).await;
+    let final_recipe = bot.make_huge_recipe_with_highest_profit(&optimal_recipes, &low_recipes, target_block.clone()).await;
     match final_recipe {
-        Some(recipe) => {
-            let _ = recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, false, provider, true, false, true, true).await;
+        Some((recipe, without_dust_tokens)) => {
+            println!(">>>>>>>> {:?}", without_dust_tokens.len());
+            let _ = recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, without_dust_tokens, provider, true, false, true, true).await;
         },
         None => {}
     }
@@ -421,6 +425,7 @@ async fn cannot_make_huge_recpie_with_highest_profit() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn can_make_huge_recpie_with_highest_profit() {
 
+    dynamic_config::init_config();
     let client = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
     let bot = setup_bot(client.clone()).await;
     let target_block = block_num_to_info(18506572, client.clone()).await;
@@ -472,12 +477,16 @@ async fn can_make_huge_recpie_with_highest_profit() {
 
     let provider = Arc::new(Provider::new(Ws::connect(WSS_RPC).await.unwrap()));
     
-    let _ = recipe_optimal.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, false, provider.clone(), true, false, true, true).await;
+    let without_dust_tokens = vec![
+        H160::from_str("0x9506d37f70eb4c3d79c398d326c871abbf10521d").unwrap(),
+        H160::from_str("0xcb454adae2595ac182fc1807b0c59ef3f31496be").unwrap(),
+    ];
+    let _ = recipe_optimal.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, without_dust_tokens, provider.clone(), true, false, true, true).await;
 
-    let final_recipe = bot.make_huge_recpie_with_highest_profit(&optimal_recipes, &low_recipes, target_block.clone()).await;
+    let final_recipe = bot.make_huge_recipe_with_highest_profit(&optimal_recipes, &low_recipes, target_block.clone()).await;
     match final_recipe {
-        Some(recipe) => {
-            let _ = recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, false, provider.clone(), true, false, true, true).await;
+        Some((recipe, without_dust_tokens)) => {
+            let _ = recipe.to_fb_bundle(SANDO_ADDRESS.clone(), &SEARCHER_SIGNER, without_dust_tokens, provider.clone(), true, false, true, true).await;
         },
         None => {}
     }

@@ -225,13 +225,26 @@ impl<M: Middleware + 'static> SandoBot<M> {
         optimal_recipes
     }
 
-    pub async fn make_huge_recpie(
+    pub async fn find_single_recipe_without_dust_token(&self, recipe: &SandoRecipe) -> Vec<Address> {
+
+        let mut without_dust_tokens: Vec<Address> = vec![];
+        if !self.sando_state_manager.has_dust(&recipe.get_start_end_token()) {
+            without_dust_tokens.push(recipe.get_start_end_token().clone());
+        }
+        if !self.sando_state_manager.has_dust(&recipe.get_intermediary_token()) {
+            without_dust_tokens.push(recipe.get_intermediary_token().clone());
+        }
+        return without_dust_tokens;
+    }
+
+    pub async fn make_huge_recipe(
         &self,
         final_recipes: &Vec<SandoRecipe>,
         target_block: BlockInfo,
         need_recheck_revenue: bool,
-    ) -> Result<SandoRecipe> {
+    ) -> Result<(SandoRecipe, Vec<Address>)> {
 
+        let mut total_without_dust_tokens: Vec<Address> = vec![];
         let mut head_txs: Vec<Transaction> = Vec::new();
         let mut frontrun_data = Vec::new();
         let mut backrun_data = Vec::new();
@@ -242,12 +255,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
         let uuid = format!("{}", Uuid::new_v4());
         let mut log_swap_pair: Vec<String> = vec![];
         for recipe in final_recipes {
+            let without_dust_tokens = self.find_single_recipe_without_dust_token(&recipe).await;
             let max_fee_result = calculate_bribe_for_max_fee(
                 recipe.get_revenue(),
                 recipe.get_frontrun_gas_used(),
                 recipe.get_backrun_gas_used(),
                 target_block.base_fee_per_gas,
-                false
+                without_dust_tokens.clone(),
             );
 
             match max_fee_result {
@@ -255,6 +269,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     if !need_recheck_revenue || CalculateMaxFeeResult::RevenueOverBaseFee == result {
                         match recipe.get_frontrun_data() {
                             Some(data) => {
+                                total_without_dust_tokens.extend(without_dust_tokens.clone());
                                 head_txs.extend(recipe.get_head_txs().clone());
                                 frontrun_data.extend(data.clone());
                                 backrun_data.extend(recipe.get_backrun().data.clone());
@@ -275,7 +290,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                     {
                                         // add some buffer, test if REVERT occur in backrun
                                         let balance = U256::from(10000u128).checked_mul(U256::from(1e18 as u128)).unwrap_or_default();
-                                        info!("[make_huge_recpie] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
+                                        info!("[make_huge_recipe] reset other token {:?} balance {:?}", recipe.get_intermediary_token(), balance);
                                         sando_tokens_balance.insert(recipe.get_intermediary_token().clone(), balance);
         
                                     }
@@ -334,11 +349,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
             Some((target_block.number - 1).into()),
         );
 
-        info!("[make_huge_recpie] before create recipe uuid={:?} swap_pairs={:?}",
+        info!("[make_huge_recipe] before create recipe uuid={:?} swap_pairs={:?}",
             uuid, log_swap_pair.join("|")
         );
 
-        return create_recipe_huge(
+        match create_recipe_huge(
             &target_block,
             frontrun_data.into(),
             backrun_data.into(),
@@ -352,14 +367,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
             shared_backend.clone(),
             SandwichSwapType::Forward.clone(),
             uuid
-        );
+        ) {
+            Ok(huge_recipe) => {
+                return Ok((huge_recipe, total_without_dust_tokens));
+            },
+            Err(e) => {
+                return Err(anyhow!("[make_huge_recipe] failed to make recipe huge: {:?}", e));
+            }
+        }
     }
 
     /// mixed all swap types and low revenue recipes
     async fn is_sandwichable_huge_overlay(&'static self,
         recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>,
         low_revenue_recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>,
-        target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+        target_block: BlockInfo) -> Result<Vec<(SandoRecipe, Vec<Address>)>> {
+        
         let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
         let mut optimal_recipes = vec![];
         for swap_type in swap_types.iter() {
@@ -415,7 +438,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         // check many low revenue recipes are sandwichable
         if low_final_recipes.len() > 1 {
             info!("[sandwich_huge_overlay] make huge recipe with all {:?} low revenues", low_final_recipes.len());
-            let huge_recipe_result = self.make_huge_recpie(&low_final_recipes, target_block.clone(), false).await;
+            let huge_recipe_result = self.make_huge_recipe(&low_final_recipes, target_block.clone(), false).await;
             match huge_recipe_result {
                 Ok(recipe) => {
                     huge_recipes.push(recipe);
@@ -439,7 +462,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         
         if optimal_final_recipes.len() > 0 {
 
-            let huge_recipe_result = self.make_huge_recpie_with_highest_profit(
+            let huge_recipe_result = self.make_huge_recipe_with_highest_profit(
                 &optimal_final_recipes,
                 &low_final_recipes,
                 target_block.clone()).await;
@@ -457,23 +480,23 @@ impl<M: Middleware + 'static> SandoBot<M> {
         Ok(huge_recipes)
     }
 
-    pub async fn make_huge_recpie_with_highest_profit(
+    pub async fn make_huge_recipe_with_highest_profit(
         &self,
         profitable_recipes: &Vec<SandoRecipe>,
         unprofitable_recipes: &Vec<SandoRecipe>,
         target_block: BlockInfo,
-    ) -> Option<SandoRecipe> {
+    ) -> Option<(SandoRecipe, Vec<Address>)> {
 
         let mut profix_max = U256::zero();
-        let mut highest_profit_recipe: Option<SandoRecipe> = None;
+        let mut highest_profit_recipe: Option<(SandoRecipe, Vec<Address>)> = None;
         let mut total_final_recipes = profitable_recipes.clone();
-        let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone(), false).await;
+        let huge_recipe_result = self.make_huge_recipe(&total_final_recipes, target_block.clone(), false).await;
         match huge_recipe_result {
-            Ok(current_huge_recipe) => {
+            Ok((current_huge_recipe, without_dust_tokens)) => {
                 match current_huge_recipe.clone().to_fb_bundle(
                     self.sando_state_manager.get_sando_address(),
                     self.sando_state_manager.get_searcher_signer(),
-                    false,
+                    without_dust_tokens.clone(),
                     self.provider.clone(),
                     true,
                     false,
@@ -482,16 +505,17 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 ).await {
                     Ok((_, _, current_profit_max)) => {
                         profix_max = current_profit_max;
-                        highest_profit_recipe = Some(current_huge_recipe);
+                        highest_profit_recipe = Some((current_huge_recipe, without_dust_tokens.clone()));
+
                     },
                     Err(e) => {
-                        info!("[make_huge_recpie_with_highest_profit] cannot to fb bundle with optimal recipes {:?}", e);
+                        info!("[make_huge_recipe_with_highest_profit] cannot to fb bundle with optimal recipes {:?}", e);
                         return None;
                     }
                 }
             },
             Err(e) => {
-                info!("[make_huge_recpie_with_highest_profit] make huge recipe error with optimal recipes {:?}", e);
+                info!("[make_huge_recipe_with_highest_profit] make huge recipe error with optimal recipes {:?}", e);
                 return None;
             }
         }
@@ -499,13 +523,13 @@ impl<M: Middleware + 'static> SandoBot<M> {
         for recipe in unprofitable_recipes {
             let uuid = recipe.get_uuid();
             total_final_recipes.push(recipe.clone());
-            let huge_recipe_result = self.make_huge_recpie(&total_final_recipes, target_block.clone(), false).await;
+            let huge_recipe_result = self.make_huge_recipe(&total_final_recipes, target_block.clone(), false).await;
             match huge_recipe_result {
-                Ok(current_huge_recipe) => {
+                Ok((current_huge_recipe, without_dust_tokens)) => {
                     match current_huge_recipe.clone().to_fb_bundle(
                         self.sando_state_manager.get_sando_address(),
                         self.sando_state_manager.get_searcher_signer(),
-                        false,
+                        without_dust_tokens.clone(),
                         self.provider.clone(),
                         true,
                         false,
@@ -514,7 +538,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     ).await {
                         Ok((_, _, current_profit_max)) => {
                             if current_profit_max > profix_max {
-                                highest_profit_recipe = Some(current_huge_recipe);
+                                highest_profit_recipe = Some((current_huge_recipe, without_dust_tokens.clone()));
                             } else {
                                 total_final_recipes.retain(|r| r.get_uuid() != uuid);
                             }
@@ -525,7 +549,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     }
                 },
                 Err(e) => {
-                    info!("[make_huge_recpie_with_highest_profit] make huge recipe contain low revenue error: {:?}", e);
+                    info!("[make_huge_recipe_with_highest_profit] make huge recipe contain low revenue error: {:?}", e);
                     return None;
                 }
             }
@@ -534,14 +558,18 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if total_final_recipes.len() > profitable_recipes.len() {
             return highest_profit_recipe;
         } else {
-            info!("[make_huge_recpie_with_highest_profit] no low recipe can be bundle");
+            info!("[make_huge_recipe_with_highest_profit] no low recipe can be bundle");
             return None;
         }
     }
     
     /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
     /// mixed all swap types
-    async fn is_sandwichable_huge_mixed(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+    async fn is_sandwichable_huge_mixed(
+        &'static self,
+        recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>,
+        target_block: BlockInfo
+    ) -> Result<Vec<(SandoRecipe, Vec<Address>)>> {
         
         let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
         let mut optimal_recipes = vec![];
@@ -579,7 +607,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             return Ok(vec![]);
         }
 
-        let huge_recipe = self.make_huge_recpie(&optimal_final_recipes, target_block.clone(), true).await?;
+        let (huge_recipe, without_dust_tokens) = self.make_huge_recipe(&optimal_final_recipes, target_block.clone(), true).await?;
 
         /*
         let mut head_txs: Vec<Transaction> = Vec::new();
@@ -683,12 +711,16 @@ impl<M: Middleware + 'static> SandoBot<M> {
         )?;
         */
 
-        Ok(vec![huge_recipe])
+        Ok(vec![(huge_recipe, without_dust_tokens)])
     }
 
     /// recheck the pendding-recipes are sandwichable at new block and remake huge sandwich
     /// group by swap type
-    async fn is_sandwichable_huge(&'static self, recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>, target_block: BlockInfo) -> Result<Vec<SandoRecipe>> {
+    async fn is_sandwichable_huge(
+        &'static self,
+        recipes_map: &mut HashMap<Pool, Vec<SandoRecipe>>,
+        target_block: BlockInfo
+    ) -> Result<Vec<(SandoRecipe, Vec<Address>)>> {
 
         let swap_types = vec![SandwichSwapType::Forward, SandwichSwapType::Reverse];
         let mut huge_recipes = vec![];
@@ -701,7 +733,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 continue;
             }
             info!("[sandwich_huge] optimal recipes size {:?} swap type {:?}", optimal_recipes.len(), swap_type);
-            let huge_recipe = self.make_huge_recpie(&optimal_recipes, target_block.clone(), true).await?;
+            let (huge_recipe, without_dust_tokens) = self.make_huge_recipe(&optimal_recipes, target_block.clone(), true).await?;
 
             // let mut head_txs: Vec<Transaction> = Vec::new();
             // let mut frontrun_data = Vec::new();
@@ -812,7 +844,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             // )?;
 
             info!("[sandwich_huge] make sandwich huge {:?}", huge_recipe.get_uuid());
-            huge_recipes.push(huge_recipe);
+            huge_recipes.push((huge_recipe, without_dust_tokens));
         }
 
         Ok(huge_recipes)
@@ -1049,11 +1081,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                         Ok(huge_recipes) => {
         
                                             let mut bundles = vec![];
-                                            for huge in huge_recipes {
-                                                match huge.to_fb_bundle(
+                                            for (recipe, without_dust_tokens) in huge_recipes {
+                                                match recipe.to_fb_bundle(
                                                     self.sando_state_manager.get_sando_address(),
                                                     self.sando_state_manager.get_searcher_signer(),
-                                                    false,
+                                                    without_dust_tokens,
                                                     self.provider.clone(),
                                                     true,
                                                     false,
@@ -1119,11 +1151,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                         Ok(huge_recipes) => {
         
                                             let mut bundles = vec![];
-                                            for huge in huge_recipes {
-                                                match huge.to_fb_bundle(
+                                            for (recipe, without_dust_tokens) in huge_recipes {
+                                                match recipe.to_fb_bundle(
                                                     self.sando_state_manager.get_sando_address(),
                                                     self.sando_state_manager.get_searcher_signer(),
-                                                    false,
+                                                    without_dust_tokens,
                                                     self.provider.clone(),
                                                     true,
                                                     true,
@@ -1191,11 +1223,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                         Ok(huge_recipes) => {
         
                                             let mut bundles = vec![];
-                                            for huge in huge_recipes {
-                                                match huge.to_fb_bundle(
+                                            for (recipe, without_dust_tokens) in huge_recipes {
+                                                match recipe.to_fb_bundle(
                                                     self.sando_state_manager.get_sando_address(),
                                                     self.sando_state_manager.get_searcher_signer(),
-                                                    false,
+                                                    without_dust_tokens,
                                                     self.provider.clone(),
                                                     true,
                                                     false,
@@ -1585,6 +1617,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 } else {
                     token_a
                 };
+
+                let mut without_dust_tokens: Vec<Address> = vec![];
+                if !self.sando_state_manager.has_dust(&start_end_token) {
+                    without_dust_tokens.push(start_end_token.clone());
+                }
+                if !self.sando_state_manager.has_dust(&intermediary_token) {
+                    without_dust_tokens.push(intermediary_token.clone());
+                };
                 
                 let ingredients = RawIngredients::new(
                     head_txs,
@@ -1606,7 +1646,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         match s.to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
-                                false,
+                                without_dust_tokens,
                                 self.provider.clone(),
                                 false,
                                 false,
@@ -1669,6 +1709,14 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 } else {
                     token_a
                 };
+                
+                let mut without_dust_tokens: Vec<Address> = vec![];
+                if !self.sando_state_manager.has_dust(&start_end_token) {
+                    without_dust_tokens.push(start_end_token.clone());
+                }
+                if !self.sando_state_manager.has_dust(&intermediary_token) {
+                    without_dust_tokens.push(intermediary_token.clone());
+                };
 
                 let ingredients = RawIngredients::new(
                     head_txs,
@@ -1690,7 +1738,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         match s.to_fb_bundle(
                                 self.sando_state_manager.get_sando_address(),
                                 self.sando_state_manager.get_searcher_signer(),
-                                false,
+                                without_dust_tokens,
                                 self.provider.clone(),
                                 false,
                                 false,

@@ -17,7 +17,6 @@ use ethers::types::{
 use ethers_flashbots::BundleRequest;
 use foundry_evm::executor::TxEnv;
 
-use crate::constants::DUST_OVERPAY;
 use crate::helpers::access_list_to_ethers;
 use crate::helpers::sign_eip1559;
 use crate::simulator::credit::CreditHelper;
@@ -256,12 +255,19 @@ fn calculate_next_block_base_fee(block: &BlockInfo) -> U256 {
     }
 }
 
-pub fn calculate_bribe_for_max_fee(revenue: U256,
+pub fn calculate_bribe_for_max_fee(
+    revenue: U256,
     frontrun_gas_used: u64,
     backrun_gas_used: u64,
     base_fee_per_gas: U256,
-    has_dust: bool
+    mut without_dust_tokens: Vec<Address>
 ) -> Result<(CalculateMaxFeeResult, U256)> {
+
+    if without_dust_tokens.len() > 0 {
+        without_dust_tokens.sort();
+        without_dust_tokens.dedup();
+    }
+    let without_dust_token_num = without_dust_tokens.len() as u64;
 
     // calc bribe (bribes paid in backrun)
     // let revenue_minus_frontrun_tx_fee = revenue
@@ -275,15 +281,8 @@ pub fn calculate_bribe_for_max_fee(revenue: U256,
         return Ok((CalculateMaxFeeResult::RevenueBelowFrontrunBaseFee, U256::from(0)));
     }
 
-    // eat a loss (overpay) to get dust onto the sando contract (more: https://twitter.com/libevm/status/1474870661373779969)
-    /*
-    let bribe_amount = if !has_dust {
-        revenue_minus_frontrun_tx_fee + *DUST_OVERPAY
-    } else {
-        revenue_minus_frontrun_tx_fee * 999999999 / 1000000000
-    };
-    */
-    let bribe_amount = dynamic_config::calculate_runtime_bribe_amount(revenue_minus_frontrun_tx_fee)?;
+    let bribe_amount = dynamic_config::calculate_runtime_bribe_amount(
+        revenue_minus_frontrun_tx_fee, without_dust_token_num)?;
 
     let max_fee = bribe_amount / backrun_gas_used;
 
@@ -434,7 +433,7 @@ impl SandoRecipe {
         self,
         sando_address: Address,
         searcher: &LocalWallet,
-        has_dust: bool,
+        without_dust_tokens: Vec<Address>,
         provider: Arc<M>,
         is_huge: bool,
         is_mixed_strategy: bool,
@@ -452,7 +451,7 @@ impl SandoRecipe {
             self.frontrun_gas_used,
             self.backrun_gas_used,
             self.target_block.base_fee_per_gas,
-            has_dust
+            without_dust_tokens.clone(),
         );
         ensure!(
             max_fee_result.is_ok(),
@@ -582,9 +581,16 @@ impl SandoRecipe {
                 profit_max
             );
 
-            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?}",
+            let mut without_dust_tokens = without_dust_tokens.clone();
+            if without_dust_tokens.len() > 0 {
+                without_dust_tokens.sort();
+                without_dust_tokens.dedup();
+            }
+            let without_dust_token_num = without_dust_tokens.len() as u64;
+
+            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?} no_dust={:?}",
                 is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
-                revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max
+                revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max, without_dust_token_num
             );
         }
 

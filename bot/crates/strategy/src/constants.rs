@@ -63,7 +63,7 @@ pub static COINBASE: Lazy<rAddress> = Lazy::new(|| {
         .unwrap()
 });
 
-pub static DUST_OVERPAY_AMOUNT: &str = "0.0003861";
+// pub static DUST_OVERPAY_AMOUNT: &str = "0.0003861";
 
 // pub static DUST_OVERPAY: Lazy<U256> = Lazy::new(|| ethers::utils::parse_ether("0.00015").unwrap());
-pub static DUST_OVERPAY: Lazy<U256> = Lazy::new(|| ethers::utils::parse_ether(DUST_OVERPAY_AMOUNT).unwrap());
+// pub static DUST_OVERPAY: Lazy<U256> = Lazy::new(|| ethers::utils::parse_ether(DUST_OVERPAY_AMOUNT).unwrap());

@@ -13,7 +13,7 @@ use crate::{
     constants::{ERC20_TRANSFER_EVENT_SIG, WETH_ADDRESS},
     startup_info_log, types::SandwichSwapType,
 };
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 // max transaction count
 const MAX_TRANSACTION_COUNT: usize = 10000;
@@ -23,7 +23,7 @@ pub struct SandoStateManager {
     sando_inception_block: U64,
     searcher_signer: LocalWallet,
     weth_inventory: RwLock<U256>,
-    token_dust: Mutex<Vec<Address>>,
+    token_dust: Mutex<HashSet<Address>>,
     // use map for dunplicate transaction
     approve_txs: Mutex<HashMap<H256, Transaction>>,
     // use vec for sort by timestamp
@@ -76,9 +76,10 @@ impl SandoStateManager {
             .ok_or(anyhow!("Field block number does not exist on latest block"))?
             .as_u64();
 
-        let mut token_dust = vec![];
-
         let start_block = self.sando_inception_block.as_u64();
+
+        // holds erc20 and associated balance
+        let mut address_interacted_with = HashSet::new();
 
         // for each block within the range, get all transfer events asynchronously
         for from_block in (start_block..=latest_block).step_by(step) {
@@ -95,8 +96,35 @@ impl SandoStateManager {
                 )
                 .await?;
 
+            let receive_logs = provider
+                .get_logs(
+                    &Filter::new()
+                        .topic0(*ERC20_TRANSFER_EVENT_SIG)
+                        .topic2(self.sando_contract)
+                        .from_block(BlockNumber::Number(U64([from_block])))
+                        .to_block(BlockNumber::Number(U64([to_block]))),
+                )
+                .await?;
+
             for log in transfer_logs {
-                token_dust.push(log.address);
+                address_interacted_with.insert(log.address);
+            }
+            for log in receive_logs {
+                address_interacted_with.insert(log.address);
+            }
+        }
+
+        let mut token_dust = vec![];
+
+        // doing calls to remove false positives
+        for touched_addr in address_interacted_with {
+            let erc20 = Erc20::new(touched_addr, provider.clone());
+            let balance: U256 = erc20
+                .balance_of(self.sando_contract)
+                .await?;
+
+            if !balance.is_zero() {
+                token_dust.push(touched_addr);
             }
         }
 
@@ -107,10 +135,19 @@ impl SandoStateManager {
         
         let mut locked_token_dust = self.token_dust.lock().unwrap();
         for log in token_dust {
-            locked_token_dust.push(log);
+            locked_token_dust.insert(log);
         }
         
         Ok(())
+    }
+
+    pub fn add_dust(&self, token: Address) {
+        let mut dust = self.token_dust.lock().unwrap();
+        dust.insert(token);
+    }
+    
+    pub fn has_dust(&self, token: &Address) -> bool {
+        self.token_dust.lock().unwrap().contains(token)
     }
 
     pub fn get_sando_address(&self) -> Address {
