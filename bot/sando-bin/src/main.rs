@@ -38,7 +38,7 @@ async fn main() -> Result<()> {
 
     // Start sidecar server
     let addr = tcp_server::start_sidecar_server().await?;
-    info!("Start Sidecar Server At {}", addr);
+    info!("Start Sidecar Server, Listen At {}", addr);
 
     // Make config
     // lazy_static! {
