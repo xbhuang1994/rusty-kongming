@@ -27,7 +27,7 @@ use colored::Colorize;
 use uuid::Uuid;
 use runtime::dynamic_config;
 use ethers::utils::parse_units;
-use crate::constants::{ONE_ETHER_IN_WEI, SEARCHER_WETH_AMT};
+use crate::constants::SEARCHER_WETH_AMT;
 
 
 /// Core Event enum for current strategy
