@@ -1507,7 +1507,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
                         }
                         tokens.sort();
                         tokens.dedup();
-                        self.sando_state_manager.add_tokens_dust(tokens);
+                        if tokens.len() > 0 {
+                            self.sando_state_manager.add_tokens_dust(tokens);
+                        }
                     },
                     Err(_) => {}
                 }
