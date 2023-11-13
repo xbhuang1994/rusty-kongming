@@ -7,7 +7,10 @@ use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::fmt;
 
-use crate::constants::{BRIBE_AMOUNT_PER_DUST, BEIBE_RATIO_BP, RATIO_FLOAT_BP};
+use crate::constants::{
+    BRIBE_AMOUNT_PER_DUST, BEIBE_RATIO_BP,
+    RATIO_FLOAT_BP, CAN_BUNDLE_FLOOR_BALANCE
+};
 
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub enum BribeStrategy {
@@ -52,7 +55,7 @@ pub struct DynamicConfig {
     baseamount_per_dust: f32,  // use when token balance is zero
     ratio_basepoint: i64,  // Base Point, use when strategy is Ratio
     ratio_floatpoint: i64,   // Float point, use when strategy is Ratio and status is Float
-
+    bundle_floor_balance: f32,  // When searcher‘s balance is below this one, pause make bundle
 }
 
 
@@ -67,6 +70,7 @@ pub fn init_config() {
         baseamount_per_dust: BRIBE_AMOUNT_PER_DUST,
         ratio_basepoint: BEIBE_RATIO_BP,
         ratio_floatpoint: RATIO_FLOAT_BP,
+        bundle_floor_balance: CAN_BUNDLE_FLOOR_BALANCE,
     };
     let _ = DYNAMIC_CONFIG.set(Mutex::new(config));
 }
@@ -81,6 +85,7 @@ pub fn get_all_config() -> DynamicConfig {
         baseamount_per_dust: config.baseamount_per_dust.clone(),
         ratio_basepoint: config.ratio_basepoint.clone(),
         ratio_floatpoint: config.ratio_floatpoint.clone(),
+        bundle_floor_balance: config.bundle_floor_balance.clone(),
     }
 }
 
@@ -98,6 +103,8 @@ pub fn get_config(key: String) -> String {
         return config.ratio_basepoint.to_string();
     } else if "ratio_floatpoint" == key {
         return config.ratio_floatpoint.to_string();
+    } else if "bundle_floor_balance" == key {
+        return config.bundle_floor_balance.to_string();
     } else {
         return String::from("_");
     }
@@ -157,9 +164,19 @@ pub fn set_config(key: String, value: String) -> Result<()> {
     } else if "ratio_floatpoint" == key {
         let float_point = i64::from_str_radix(&value, 10).unwrap();
         config.ratio_floatpoint = float_point;
+    } else if "bundle_floor_balance" == key {
+        config.bundle_floor_balance = value.parse().unwrap();
     }
 
     Ok(())
+}
+
+
+pub fn is_searcher_balance_over_floor_required(searcher_weth_balance: U256) -> bool {
+
+    let config = get_all_config();
+    let floor_balance = parse_ether(config.bundle_floor_balance.to_string()).unwrap();
+    return searcher_weth_balance > floor_balance;
 }
 
 

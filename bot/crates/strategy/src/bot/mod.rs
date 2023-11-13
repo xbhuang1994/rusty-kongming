@@ -1712,6 +1712,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                     IngredientsBundleResult::RevenueBelowBaseFee | IngredientsBundleResult::ExpectedProfitIsNegtive => {
                                         self.sando_recipe_manager.push_low_revenue_recipe(cloned_recipe);
                                     },
+                                    _ => {},
                                 }
                             },
                             Err(e) => {
@@ -1804,6 +1805,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                     IngredientsBundleResult::RevenueBelowBaseFee | IngredientsBundleResult::ExpectedProfitIsNegtive => {
                                         self.sando_recipe_manager.push_low_revenue_recipe(cloned_recipe);
                                     },
+                                    _ => {},
                                 }
                             },
                             Err(e) => {

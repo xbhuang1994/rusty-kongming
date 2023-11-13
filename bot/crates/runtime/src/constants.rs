@@ -2,3 +2,5 @@ pub static BRIBE_AMOUNT_PER_DUST: f32 = 0.0003861f32;
 
 pub static BEIBE_RATIO_BP: i64 = 999_900_000i64;
 pub static RATIO_FLOAT_BP: i64 = 100_000i64;
+
+pub static CAN_BUNDLE_FLOOR_BALANCE: f32 = 0.05f32;

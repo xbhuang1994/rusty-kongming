@@ -62,6 +62,7 @@ pub enum IngredientsBundleResult {
     RevenueBelowBaseFee,
     ExpectedProfitIsNegtive,
     ExpectedProfitIsPositive,
+    SearcherBalanceIsLess,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -441,6 +442,15 @@ impl SandoRecipe {
         need_write_log: bool,
     ) -> Result<(IngredientsBundleResult, Option<BundleRequest>, U256)> {
         
+        let searcher_weth_balance = provider
+            .get_balance(searcher.address(), None)
+            .await
+            .map_err(|e| anyhow!("[PUASE TO CREATE BUNDLE] failed to get balance {:?}", e))?;
+        if !dynamic_config::is_searcher_balance_over_floor_required(searcher_weth_balance) {
+            info!("[CANCEL TO CREATE BUNDLE] searcher weth balance {:?} is below floor", searcher_weth_balance);
+            return Ok((IngredientsBundleResult::SearcherBalanceIsLess, None, U256::zero()));
+        }
+
         let tx_nonce = provider
             .get_transaction_count(searcher.address(), None)
             .await
