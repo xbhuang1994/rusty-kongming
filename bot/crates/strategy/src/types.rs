@@ -1,3 +1,4 @@
+use std::ops::Mul;
 use std::sync::Arc;
 use std::fmt;
 
@@ -25,8 +26,8 @@ use log::info;
 use colored::Colorize;
 use uuid::Uuid;
 use runtime::dynamic_config;
+use ethers::utils::parse_units;
 use crate::constants::{ONE_ETHER_IN_WEI, SEARCHER_WETH_AMT};
-use foundry_evm::revm::primitives::{U256 as rU256};
 
 
 /// Core Event enum for current strategy
@@ -446,11 +447,7 @@ impl SandoRecipe {
     ) -> Result<(IngredientsBundleResult, Option<BundleRequest>, U256)> {
 
         let searcher_weth_balance = if cfg!(feature = "debug") {
-            U256::from(
-                u128::from_le_bytes(
-                    rU256::from(SEARCHER_WETH_AMT).checked_mul(*ONE_ETHER_IN_WEI).unwrap().to_le_bytes()
-                )
-            )
+            parse_units(SEARCHER_WETH_AMT.to_string(), 18).unwrap().into()
         } else {
             let weth_balance = provider
                 .get_balance(searcher.address(), None)
