@@ -25,6 +25,9 @@ use log::info;
 use colored::Colorize;
 use uuid::Uuid;
 use runtime::dynamic_config;
+use crate::constants::{ONE_ETHER_IN_WEI, SEARCHER_WETH_AMT};
+use foundry_evm::revm::primitives::{U256 as rU256};
+
 
 /// Core Event enum for current strategy
 #[derive(Debug, Clone)]
@@ -441,11 +444,20 @@ impl SandoRecipe {
         is_overlay_strategy: bool,
         need_write_log: bool,
     ) -> Result<(IngredientsBundleResult, Option<BundleRequest>, U256)> {
-        
-        let searcher_weth_balance = provider
-            .get_balance(searcher.address(), None)
-            .await
-            .map_err(|e| anyhow!("[PUASE TO CREATE BUNDLE] failed to get balance {:?}", e))?;
+
+        let searcher_weth_balance = if cfg!(feature = "debug") {
+            U256::from(
+                u128::from_le_bytes(
+                    rU256::from(SEARCHER_WETH_AMT).checked_mul(*ONE_ETHER_IN_WEI).unwrap().to_le_bytes()
+                )
+            )
+        } else {
+            let weth_balance = provider
+                .get_balance(searcher.address(), None)
+                .await
+                .map_err(|e| anyhow!("[PUASE TO CREATE BUNDLE] failed to get balance {:?}", e))?;
+            weth_balance
+        };
         if !dynamic_config::is_searcher_balance_over_floor_required(searcher_weth_balance) {
             info!("[CANCEL TO CREATE BUNDLE] searcher weth balance {:?} is below floor", searcher_weth_balance);
             return Ok((IngredientsBundleResult::SearcherBalanceIsLess, None, U256::zero()));
