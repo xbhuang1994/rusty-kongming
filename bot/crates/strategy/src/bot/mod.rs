@@ -1317,7 +1317,11 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
                 // tx.from is 'zero' receive from WS, so reset it
                 match tx.recover_from_mut(){
                     Ok(_) => {
-                        list_tx.push_back(tx);
+                        if tx.from == self.sando_state_manager.get_searcher_address() {
+                            info!("skip push the tx {:?} from myself searcher", tx.from);
+                        } else {
+                            list_tx.push_back(tx);
+                        }
                     },
                     Err(e) => error!("failed to recover from victim tx: {}", e),
                 }
@@ -1476,10 +1480,45 @@ impl<M: Middleware + 'static> SandoBot<M> {
         Ok(())
     }
 
+    async fn update_token_dust_with_tx(&self, new_block: &NewBlock, block_txs: &Vec<Transaction>) {
+
+        for tx in block_txs {
+            if tx.from == self.sando_state_manager.get_searcher_address() {
+                match self.pool_manager.get_touched_sandwichable_pools(
+                    tx, new_block.number.into(), self.provider.clone()
+                ).await {
+                    Ok((forward_pools, reverse_pools)) => {
+                        let mut tokens = vec![];
+                        for pool in forward_pools {
+                            let (token_a, token_b) = match pool {
+                                UniswapV2(p) => (p.token_a, p.token_b),
+                                UniswapV3(p) => (p.token_a, p.token_b),
+                            };
+                            tokens.push(token_a);
+                            tokens.push(token_b);
+                        }
+                        for pool in reverse_pools {
+                            let (token_a, token_b) = match pool {
+                                UniswapV2(p) => (p.token_a, p.token_b),
+                                UniswapV3(p) => (p.token_a, p.token_b),
+                            };
+                            tokens.push(token_a);
+                            tokens.push(token_b);
+                        }
+                        tokens.sort();
+                        tokens.dedup();
+                        self.sando_state_manager.add_tokens_dust(tokens);
+                    },
+                    Err(_) => {}
+                }
+            }
+        }
+    }
+
     async fn update_block_info(&self, new_block: NewBlock) -> Result<()> {
 
         let new_block_number = new_block.number;
-        self.block_manager.update_block_info(new_block);
+        self.block_manager.update_block_info(new_block.clone());
         match self.provider.get_block_with_txs(new_block_number).await? {
             Some(block) =>{
                 let mut block_txs: Vec<Transaction> = Vec::new();
@@ -1495,6 +1534,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 self.sando_state_manager.update_block_info(&block_txs);
                 self.sando_recipe_manager.update_pendding_recipe(&block_txs);
                 self.sando_recipe_manager.update_low_revenue_recipe(&block_txs);
+                self.update_token_dust_with_tx(&new_block, &block_txs).await;
             },
             None =>{
                 log_error!("Block not found");

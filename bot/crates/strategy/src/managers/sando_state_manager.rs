@@ -141,9 +141,12 @@ impl SandoStateManager {
         Ok(())
     }
 
-    pub fn add_dust(&self, token: Address) {
+    pub fn add_tokens_dust(&self, tokens: Vec<Address>) {
         let mut dust = self.token_dust.lock().unwrap();
-        dust.insert(token);
+        for token in tokens {
+            dust.insert(token);
+        }
+        info!("add tokens dust, then there are {:?} tokens has dust", dust.len());
     }
     
     pub fn has_dust(&self, token: &Address) -> bool {
