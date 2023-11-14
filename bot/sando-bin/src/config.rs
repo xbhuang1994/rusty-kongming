@@ -15,6 +15,7 @@ pub struct Config {
     pub bundle_signer: LocalWallet,
     pub wss_rpc: Url,
     pub discord_webhook: String,
+    pub sidecar_listen_address: String,
 }
 
 impl Config {
@@ -47,6 +48,13 @@ impl Config {
 
         let discord_webhook = get_env("DISCORD_WEBHOOK")?;
 
+        let sidecar_listen_address = match get_env("SIDECAR_LISTEN_ADDRESS") {
+            Ok(address) => {address},
+            Err(_) => {
+                String::from("127.0.0.1:12321")
+            }
+        };
+
         Ok(Self {
             searcher_signer,
             sando_inception_block,
@@ -54,6 +62,7 @@ impl Config {
             bundle_signer,
             wss_rpc,
             discord_webhook,
+            sidecar_listen_address,
         })
     }
 }

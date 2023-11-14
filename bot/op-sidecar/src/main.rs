@@ -68,7 +68,9 @@ async fn main() {
 
     match command {
         Command::Server => {
-            tcp_server::start_sidecar_server_at_address(address).await.unwrap();
+            tcp_server::start_sidecar_server(address.clone()).await.unwrap();
+            println!("Sidecar server listen at {:?}", address);
+
             dynamic_config::init_config();
             loop {}
         },

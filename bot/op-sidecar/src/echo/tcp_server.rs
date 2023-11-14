@@ -158,27 +158,12 @@ async fn handle_stream(mut stream: TcpStream, pair_addr: SocketAddr) -> Result<(
     Ok(())
 }
 
-/// startup sidecar tcp service
-pub async fn start_sidecar_server() -> Result<String> {
-
-    let addr = String::from("127.0.0.1:12321");
-    let result = start_sidecar_server_at_address(addr.clone()).await;
-    match result {
-        Ok(_) => {
-            return Ok(addr.clone());
-        },
-        Err(e) => {
-            return Err(anyhow!("Failed To Start Sidecar: {:?}", e));
-        }
-    }
-}
 
 /// startup sidecar tcp service
-pub async fn start_sidecar_server_at_address(addr: String) -> Result<()> {
+pub async fn start_sidecar_server(addr: String) -> Result<()> {
 
     tokio::spawn(async move {
         let listener = TcpListener::bind(addr.clone()).await.unwrap();
-        println!("Sidecar server listen at {:?}", addr);
 
         loop {
             let (stream, pair_addr) = match listener.accept().await {

@@ -32,24 +32,19 @@ async fn main() -> Result<()> {
     setup_logger()?;
     print_banner();
 
+    // Make config
+    static CONFIG: OnceCell<Config> = OnceCell::new();
+    let config = Config::read_from_dotenv().await.unwrap();
+    let _ = CONFIG.set(config);
+
     // Init dynamic config
     dynamic_config::init_config();
     info!("Init Dynamic config");
 
     // Start sidecar server
-    let addr = tcp_server::start_sidecar_server().await?;
-    info!("Start Sidecar Server, Listen At {}", addr);
-
-    // Make config
-    // lazy_static! {
-    //     static ref CONFIG: AsyncOnce<Config> = AsyncOnce::new(async {
-    //         let config = Config::read_from_dotenv().await.unwrap();
-    //         config
-    //     });
-    // }
-    static CONFIG: OnceCell<Config> = OnceCell::new();
-    let config = Config::read_from_dotenv().await.unwrap();
-    let _ = CONFIG.set(config);
+    let sidecar_listen_address= CONFIG.get().unwrap().sidecar_listen_address.clone();
+    tcp_server::start_sidecar_server(sidecar_listen_address.clone()).await?;
+    info!("Start Sidecar Server, Listen At {}", sidecar_listen_address);
     
     // Setup ethers provider
     static WS: OnceCell<Ws> = OnceCell::new();
