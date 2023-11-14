@@ -11,7 +11,7 @@ pub async fn start_sidecar_client(addr: String) -> Result<()> {
     println!("\nWelcome to Sidecar-Console\n");
     loop {
         // Wait
-        print!("[op-sidecar | {}]> ", addr.clone());
+        print!("[op-sidecar@{}]> ", addr.clone());
         io::stdout().flush()?;
 
         // Send
