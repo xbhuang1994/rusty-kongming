@@ -7,11 +7,11 @@ use super::make_data_package;
 
 pub async fn start_sidecar_client(addr: String) -> Result<()> {
 
-    let mut stream = TcpStream::connect(addr).await.unwrap();
+    let mut stream = TcpStream::connect(addr.clone()).await.unwrap();
     println!("\nWelcome to Sidecar-Console\n");
     loop {
         // Wait
-        print!("[op-sidecar]> ");
+        print!("[op-sidecar | {}]> ", addr.clone());
         io::stdout().flush()?;
 
         // Send
