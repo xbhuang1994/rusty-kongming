@@ -12,7 +12,7 @@ async function main() {
 
     const unsignedTx = {
         to: process.env.SANDWICH_CONTRACT,
-        data: '0x3D',
+        data: '0x32',
         nonce,
         gasPrice,
         gasLimit

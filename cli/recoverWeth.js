@@ -17,7 +17,7 @@ async function main() {
     const payload = ethers.utils.solidityPack(
         ["uint8", "uint256"],
         [
-            66,
+            55,
             ethers.BigNumber.from(wethBalance)
         ]
     );

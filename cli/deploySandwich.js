@@ -20,7 +20,7 @@ async function main() {
         shell.echo('huffc is not installed');
         shell.exit(1);
     }
-    let bc = shell.exec('huffc --bytecode ../contract/src/sandwich.huff').stdout;
+    let bc = shell.exec('huffc --bytecode ../contract/src/sando.huff').stdout;
     const res = await contractFactory.deployMetamorphicContract(slat, "0x" + bc, "0x");
     const rep = await res.wait();
     console.log("\n");
