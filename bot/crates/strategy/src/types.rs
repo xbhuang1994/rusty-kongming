@@ -589,8 +589,8 @@ impl SandoRecipe {
             .set_block(self.target_block.number)
             .set_simulation_block(self.target_block.number - 1)
             .set_simulation_timestamp(target_timestamp)
-            .set_min_timestamp(target_timestamp).
-            set_max_timestamp(target_timestamp);
+            .set_min_timestamp(target_timestamp)
+            .set_max_timestamp(target_timestamp);
 
         if need_write_log {
             let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;
