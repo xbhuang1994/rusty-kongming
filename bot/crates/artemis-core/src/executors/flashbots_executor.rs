@@ -42,24 +42,30 @@ where
 
         for bundle in action {
 
-            if "simulate" == self.send_flag {
+            if "debug" == self.send_flag {
+
+                info!("flashbots execute block={:?},hash_0={:?}", bundle.block().unwrap_or_default(), bundle.transaction_hashes()[0]);
+            } else {
+
                 // Simulate bundle.
                 let simulated_bundle = self.fb_client.simulate_bundle(&bundle).await;
 
                 match simulated_bundle {
-                Ok(res) => info!("Simulation Result: {:?}", res),
-                Err(simulate_error) => error!("Error simulating bundle: {:?}", simulate_error),
-                }
-            } else if "online" == self.send_flag {
-                // Send bundle.
-                let pending_bundle = self.fb_client.send_bundle(&bundle).await;
+                    Ok(res) => {
+                        info!("Simulation Result: {:?}", res);
 
-                match pending_bundle {
-                    Ok(res) => info!("Flashbots Sending Result: {:?}", res.await),
-                    Err(send_error) => error!("Error sending flashbots bundle: {:?}", send_error),
+                        if "online" == self.send_flag {
+                            // Send bundle.
+                            let pending_bundle = self.fb_client.send_bundle(&bundle).await;
+
+                            match pending_bundle {
+                                Ok(res) => info!("Flashbots Sending Result: {:?}", res.await),
+                                Err(send_error) => error!("Error sending flashbots bundle: {:?}", send_error),
+                            }
+                        }
+                    },
+                    Err(simulate_error) => error!("Error simulating bundle: {:?}", simulate_error),
                 }
-            } else {
-                info!("flashbots execute block={:?},hash_0={:?}", bundle.block().unwrap_or_default(), bundle.transaction_hashes()[0]);
             }
         }
 
