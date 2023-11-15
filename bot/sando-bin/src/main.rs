@@ -100,6 +100,7 @@ async fn main() -> Result<()> {
         PROVIDER.get().unwrap().clone(),
         flashbots_signer,
         Url::parse("https://relay.flashbots.net")?,
+        CONFIG.get().unwrap().bundle_send_flag.clone(),
     ));
     let executor = ExecutorMap::new(executor, |action| match action {
         Action::SubmitToFlashbots(bundle) => Some(bundle),

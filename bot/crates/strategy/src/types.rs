@@ -1,4 +1,3 @@
-use std::ops::Mul;
 use std::sync::Arc;
 use std::fmt;
 
@@ -531,9 +530,11 @@ impl SandoRecipe {
 
         let frontrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
+            from: Some(searcher.address()),
             gas: Some((U256::from(self.frontrun_gas_used) * 10) / 7),
             value: Some(self.frontrun.value.into()),
             data: Some(self.frontrun.data.into()),
+            chain_id: Some(U64::from(1)),
             nonce: Some(tx_nonce),
             access_list: access_list_to_ethers(self.frontrun.access_list),
             max_fee_per_gas: Some(self.target_block.base_fee_per_gas.into()),
@@ -552,10 +553,12 @@ impl SandoRecipe {
 
         let backrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
+            from: Some(searcher.address()),
             gas: Some((U256::from(self.backrun_gas_used) * 10) / 7),
             value: Some(self.backrun.value.into()),
             data: Some(self.backrun.data.into()),
             nonce: Some(tx_nonce + 1),
+            chain_id: Some(U64::from(1)),
             access_list: access_list_to_ethers(self.backrun.access_list),
             max_priority_fee_per_gas: Some(max_fee),
             max_fee_per_gas: Some(max_fee),
@@ -566,10 +569,14 @@ impl SandoRecipe {
         // construct bundle
         let mut bundled_transactions: Vec<Bytes> = vec![];
         if signed_head_txs.len() > 0 {
-            bundled_transactions.append(&mut signed_head_txs.clone());
+            for head_tx in signed_head_txs.clone() {
+                bundled_transactions.push(head_tx);
+            }
         }
         bundled_transactions.push(signed_frontrun);
-        bundled_transactions.append(&mut signed_meat_txs.clone());
+        for meat_tx in signed_meat_txs.clone() {
+            bundled_transactions.push(meat_tx);
+        }
         bundled_transactions.push(signed_backrun);
 
         let mut bundle_request = BundleRequest::new();
@@ -577,10 +584,13 @@ impl SandoRecipe {
             bundle_request = bundle_request.push_transaction(tx);
         }
 
+        let target_timestamp = self.target_block.timestamp.as_u64();
         bundle_request = bundle_request
             .set_block(self.target_block.number)
             .set_simulation_block(self.target_block.number - 1)
-            .set_simulation_timestamp(self.target_block.timestamp.as_u64());
+            .set_simulation_timestamp(target_timestamp)
+            .set_min_timestamp(target_timestamp).
+            set_max_timestamp(target_timestamp);
 
         if need_write_log {
             let revenue_log = self.revenue.as_u128() as f64 / 1e18 as f64;

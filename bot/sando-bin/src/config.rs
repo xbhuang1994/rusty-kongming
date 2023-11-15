@@ -16,6 +16,7 @@ pub struct Config {
     pub wss_rpc: Url,
     pub discord_webhook: String,
     pub sidecar_listen_address: String,
+    pub bundle_send_flag: String,
 }
 
 impl Config {
@@ -55,6 +56,13 @@ impl Config {
             }
         };
 
+        let bundle_send_flag = match get_env("FLASHBOTS_SEND_FLAG") {
+            Ok(flag) => {flag},
+            Err(_) => {
+                String::from("debug")
+            }
+        };
+
         Ok(Self {
             searcher_signer,
             sando_inception_block,
@@ -63,6 +71,7 @@ impl Config {
             wss_rpc,
             discord_webhook,
             sidecar_listen_address,
+            bundle_send_flag,
         })
     }
 }

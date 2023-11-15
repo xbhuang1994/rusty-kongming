@@ -191,7 +191,7 @@ impl SandoStateManager {
                 // should get locker after call.await
                 let mut locked_map = self.token_inventory_map.lock().unwrap();
                 locked_map.insert(token.clone(), other_balance.clone());
-                startup_info_log!("get token{} inventory   : {}", token, other_balance.clone());
+                startup_info_log!("get token {:?} inventory {}", token, other_balance.clone());
                 other_balance
             }
         }
