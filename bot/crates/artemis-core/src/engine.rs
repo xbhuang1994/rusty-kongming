@@ -124,10 +124,18 @@ where
             let event_sender = event_sender.clone();
             set.spawn(async move {
                 info!("starting collector... ");
+                let mut next_send_count = 0i32;
                 let mut event_stream = collector.get_event_stream().await.unwrap();
                 while let Some(event) = event_stream.next().await {
                     match event_sender.send(event) {
-                        Ok(_) => {}
+                        Ok(_) => {
+                            if next_send_count >= 15000 {
+                                info!("get some next streams and send");
+                                next_send_count = 0;
+                            } else {
+                                next_send_count += 1;
+                            }
+                        }
                         Err(e) => error!("error sending event: {}", e),
                     }
                 }
