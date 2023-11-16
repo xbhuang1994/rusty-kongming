@@ -972,20 +972,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
             Some(rt) => {
                 for _index in 0..tx_processor_num {
                     rt.spawn(async move {
-                        let mut _count = 0;
+                        let mut no_event_turns = 0;
                         loop {
                             match self.pop_event_tx().await {
                                 Some(event) => {
-                                    // #[cfg(feature = "debug")]
-                                    // {
-                                    //     info!("bot running: event tx processor {_index} process_event");
-                                    // }
                                     match self.process_event_tx(event).await {
                                         Ok(_) => {},
-                                        Err(e) => error!("bot running event tx processor {_index} error {}", e)
+                                        Err(e) => error!("bot running event tx processor {_index} error {}", e),
                                     }
                                 },
                                 None => {
+                                    if no_event_turns == 60000 {
+                                        info!("bot running event tx processor {_index} not pop event");
+                                        no_event_turns = 0;
+                                    } else {
+                                        no_event_turns += 1;
+                                    }
                                     tokio::time::sleep(time::Duration::from_millis(10)).await;
                                 },
                             }
@@ -1312,7 +1314,6 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
                 list_block.push_back(block);
             },
             Event::NewTransaction(tx) => {
-                let mut list_tx = self.event_tx_list.lock().unwrap();
                 let mut tx = tx.clone();
                 // tx.from is 'zero' receive from WS, so reset it
                 match tx.recover_from_mut(){
@@ -1320,6 +1321,7 @@ impl<M: Middleware + 'static> Strategy<Event, Action> for SandoBot<M> {
                         if tx.from == self.sando_state_manager.get_searcher_address() {
                             info!("skip push the tx {:?} from myself searcher", tx.from);
                         } else {
+                            let mut list_tx = self.event_tx_list.lock().unwrap();
                             list_tx.push_back(tx);
                         }
                     },

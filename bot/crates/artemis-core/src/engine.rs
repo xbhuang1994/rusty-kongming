@@ -122,6 +122,7 @@ where
                         Err(e) => error!("error sending event: {}", e),
                     }
                 }
+                info!("stoping collector... ");
             });
         }
 

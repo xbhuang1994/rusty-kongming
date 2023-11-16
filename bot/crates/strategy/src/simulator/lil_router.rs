@@ -72,6 +72,10 @@ pub async fn find_optimal_input(
             Some(range) => range,
             None => return true,
         };
+        // too small bound is not necessary
+        if upper_bound < base {
+            return true;
+        }
         // produces negative result
         if lower_bound > upper_bound {
             return true;
@@ -147,7 +151,7 @@ pub async fn find_optimal_input(
             }
             upper_bound = intervals[intervals.len() / 3]
                 .checked_sub(1.into())
-                .ok_or(anyhow!("intervals[intervals.len()/3] - 1 underflowed"))?;
+                .ok_or(anyhow!("forward intervals[intervals.len()/3] - 1 underflowed"))?;
             continue;
         }
 
