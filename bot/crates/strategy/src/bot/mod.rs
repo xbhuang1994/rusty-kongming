@@ -85,7 +85,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.sando_inception_block,
             ),
             sando_recipe_manager: SandoRecipeManager::new(),
-            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(32).enable_all().build().unwrap())} else {None},
+            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
             event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
             event_tx_sender: Arc::new(Mutex::new(None)),
             event_block_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
@@ -964,37 +964,36 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
 
-    pub async fn start_auto_process(&'static self, tx_processor_num: i32, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
+    pub async fn start_auto_process(&'static self, _tx_processor_num: i32, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
 
         match &self.event_tx_runtime {
             Some(rt) => {
-                for _index in 0..tx_processor_num {
-                    rt.spawn(async move {
-                        let mut no_event_turns = 0;
-                        loop {
-                            match self.pop_event_tx().await {
-                                Some(event) => {
-                                    match self.process_event_tx(event, _index).await {
+                rt.spawn(async move {
+                    let mut no_event_turns = 0i32;
+                    loop {
+                        match self.pop_event_tx().await {
+                            Some(event) => {
+                                tokio::runtime::Runtime::new().unwrap().spawn(async move {
+                                    match self.process_event_tx(event).await {
                                         Ok(_) => {
-                                            continue;
                                         },
-                                        Err(e) => error!("bot running event tx processor {_index} error {}", e),
+                                        Err(e) => error!("bot running event tx processor error {}", e),
                                     }
-                                },
-                                None => {
-                                    if no_event_turns == 60000 {
-                                        info!("bot running event tx processor {_index} not pop event");
-                                        no_event_turns = 0;
-                                    } else {
-                                        no_event_turns += 1;
-                                    }
-                                    tokio::time::sleep(time::Duration::from_millis(10)).await;
-                                },
-                            }
+                                });
+                            },
+                            None => {
+                                if no_event_turns == 60000 {
+                                    info!("bot running event tx processor not pop event");
+                                    no_event_turns = 0;
+                                } else {
+                                    no_event_turns += 1;
+                                }
+                                tokio::time::sleep(time::Duration::from_millis(10)).await;
+                            },
                         }
-                    });
-                }
-                info!("start {:?} event tx auto processors", tx_processor_num);
+                    }
+                });
+                info!("start event tx auto processors");
             },
             None => {
                 return Err(anyhow!("event tx runtime is none"));
@@ -1344,9 +1343,9 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
     /// Process incoming events of transaction
-    async fn process_event_tx(&self, event: Transaction, thread_number: i32) -> Result<()> {
+    async fn process_event_tx(&self, event: Transaction) -> Result<()> {
         // info!("proc tx {:?}", event.hash);
-        if let Some(action) = self.process_new_tx(event, thread_number).await {
+        if let Some(action) = self.process_new_tx(event).await {
            self.push_action(action).await?;
         }
 
@@ -1593,7 +1592,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
     /// Process new txs as they come in
     #[allow(unused_mut)]
-    async fn process_new_tx(& self, victim_tx: Transaction, thread_number: i32) -> Option<Action> {
+    async fn process_new_tx(& self, victim_tx: Transaction) -> Option<Action> {
         // setup variables for processing tx
         let next_block = self.block_manager.get_next_block();
         let latest_block = self.block_manager.get_latest_block();
@@ -1643,7 +1642,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools.is_empty() {
             for pool in touched_pools {
                 let (head_hashs, head_txs) = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Forward);
-                log_info_cyan!("thread-{:?} process sandwich {:?} from {:?} nonce {:?} pool {:?} head_txs {:?}", thread_number, victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
+                log_info_cyan!("process sandwich {:?} from {:?} nonce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
                 
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
@@ -1736,7 +1735,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if !touched_pools_reverse.is_empty() {
             for pool in touched_pools_reverse {
                 let (head_hashs, head_txs) = self.sando_state_manager.get_head_txs(&victim_tx.from, pool.address(), SandwichSwapType::Reverse);
-                log_info_cyan!("thread-{:?} process reverse sandwich {:?} from {:?} nonce {:?} pool {:?} head_txs {:?}", thread_number, victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
+                log_info_cyan!("process reverse sandwich {:?} from {:?} nonce {:?} pool {:?} head_txs {:?}", victim_tx.hash, victim_tx.from, victim_tx.nonce, pool.address(), head_hashs.join(","));
                 
                 let (token_a, token_b) = match pool {
                     UniswapV2(p) => (p.token_a, p.token_b),
