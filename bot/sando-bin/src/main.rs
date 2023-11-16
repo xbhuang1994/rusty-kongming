@@ -83,17 +83,17 @@ async fn main() -> Result<()> {
 
     // static STRATEGY: Lazy<SandoBot<Provider<Ws>>> = Lazy::new(|| SandoBot::new(provider.clone(), configs));
     // STRATEGY.start_auto_process(8, 1);
+    // get cpu core number
+    let cpu_num = num_cpus::get() as usize;
     static STRATEGY: OnceCell<SandoBot<Provider<Ws>>> = OnceCell::new();
-    let strategy = SandoBot::new(PROVIDER.get().unwrap().clone(), CONFIGS.get().unwrap(), true);
+    let strategy = SandoBot::new(PROVIDER.get().unwrap().clone(), CONFIGS.get().unwrap(), true, cpu_num * 2);
     let _ = STRATEGY.set(strategy);
     // let tt: &dyn Strategy<Event, Action> = STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>;
     // engine.add_strategy(Box::new((STRATEGY.get().unwrap() as &dyn Strategy<Event, Action>)));
     // let p = **Box::new(STRATEGY.get().unwrap());
     engine.add_strategy(Arc::new(STRATEGY.get().unwrap()));
 
-    // get cpu core number
-    let cpu_num = num_cpus::get() as i32;
-    let _ = STRATEGY.get().unwrap().start_auto_process(cpu_num, 2, 4, 2).await?;
+    let _ = STRATEGY.get().unwrap().start_auto_process(2, 4, 2).await?;
 
     // Setup flashbots executor
     let executor = Box::new(FlashbotsExecutor::new(

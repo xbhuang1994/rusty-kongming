@@ -74,7 +74,7 @@ pub struct SandoBot<M> {
 
 impl<M: Middleware + 'static> SandoBot<M> {
     /// Create a new instance
-    pub fn new(client: Arc<M>, config: &StratConfig, need_runtime: bool) -> Self {
+    pub fn new(client: Arc<M>, config: &StratConfig, need_runtime: bool, event_worker_threads: usize) -> Self {
         Self {
             pool_manager: PoolManager::new(client.clone()),
             provider: client,
@@ -85,7 +85,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.sando_inception_block,
             ),
             sando_recipe_manager: SandoRecipeManager::new(),
-            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(32).enable_all().build().unwrap())} else {None},
+            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(event_worker_threads).enable_all().build().unwrap())} else {None},
             event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
             event_tx_sender: Arc::new(Mutex::new(None)),
             event_block_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
@@ -964,30 +964,29 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
 
-    pub async fn start_auto_process(&'static self, _tx_processor_num: i32, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
+    pub async fn start_auto_process(&'static self, block_process_num: i32, action_process_num: i32, huge_process_num: i32) -> Result<()> {
 
         match &self.event_tx_runtime {
             Some(rt) => {
                 rt.spawn(async move {
-                    let mut no_event_turns = 0i32;
+                    let mut pop_count = 0i32;
                     loop {
                         match self.pop_event_tx().await {
                             Some(event) => {
                                 rt.spawn(async move {
                                     match self.process_event_tx(event).await {
-                                        Ok(_) => {
-                                        },
+                                        Ok(_) => {},
                                         Err(e) => error!("bot running event tx processor error {}", e),
                                     }
                                 });
+                                if pop_count >= 1000 {
+                                    info!("pop and process some events");
+                                    pop_count = 0;
+                                } else {
+                                    pop_count += 1;
+                                }
                             },
                             None => {
-                                if no_event_turns == 60000 {
-                                    info!("bot running event tx processor not pop event");
-                                    no_event_turns = 0;
-                                } else {
-                                    no_event_turns += 1;
-                                }
                                 tokio::time::sleep(time::Duration::from_millis(10)).await;
                             },
                         }
@@ -1552,6 +1551,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             Some(sender) => {
                 let low_txs = self.sando_state_manager.get_low_txs(base_fee_per_gas);
                 if !low_txs.is_empty() {
+                    let size = low_txs.len();
                     for tx in low_txs {
                         let hash = tx.hash;
                         match sender.send(Event::NewTransaction(tx)) {
@@ -1559,6 +1559,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                             Err(e) => error!("error resending low tx {:?}: {}", hash, e),
                         }
                     }
+                    info!("resent all low txs of size {:?}", size);
                 }
             },
             None => {}
