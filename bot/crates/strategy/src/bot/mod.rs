@@ -1445,15 +1445,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
     }
 
     async fn pop_event_tx(&self) -> Option<Transaction> {
-        match self.event_tx_list.try_lock() {
-            Ok(mut list_tx) => {
-                if !list_tx.is_empty() {
-                    return list_tx.pop_front();
-                }
-            },
-            Err(_) => {}
+        let mut list_tx = self.event_tx_list.lock().unwrap();
+        if !list_tx.is_empty() {
+            list_tx.pop_front()
+        } else {
+            None
         }
-        None
     }
 
     async fn pop_event_block(&self) -> Option<NewBlock> {
