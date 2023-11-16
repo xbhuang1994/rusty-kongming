@@ -101,16 +101,16 @@ where
 
             set.spawn(async move {
                 info!("starting strategy... ");
-                let mut push_count = 0i32;
+                let mut receive_push_count = 0i32;
                 loop {
                     match event_receiver.recv().await {
                         Ok(event) => {
                             strategy.push_event(event).await.unwrap();
-                            if push_count >= 10000 {
+                            if receive_push_count >= 15000 {
                                 info!("recive some events and push into list");
-                                push_count = 0;
+                                receive_push_count = 0;
                             } else {
-                                push_count += 1;
+                                receive_push_count += 1;
                             }
                         },
                         Err(e) => error!("error receiving event: {}", e),

@@ -969,7 +969,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
         match &self.event_tx_runtime {
             Some(rt) => {
                 rt.spawn(async move {
-                    let mut pop_count = 0i32;
+                    let mut pop_process_count = 0i32;
                     loop {
                         match self.pop_event_tx().await {
                             Some(event) => {
@@ -979,11 +979,11 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                         Err(e) => error!("bot running event tx processor error {}", e),
                                     }
                                 });
-                                if pop_count >= 10000 {
+                                if pop_process_count >= 15000 {
                                     info!("pop and process some events");
-                                    pop_count = 0;
+                                    pop_process_count = 0;
                                 } else {
-                                    pop_count += 1;
+                                    pop_process_count += 1;
                                 }
                             },
                             None => {
