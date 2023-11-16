@@ -85,7 +85,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                 config.sando_inception_block,
             ),
             sando_recipe_manager: SandoRecipeManager::new(),
-            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
+            event_tx_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(32).enable_all().build().unwrap())} else {None},
             event_tx_list: Arc::new(Mutex::new(LinkedList::new())),
             event_tx_sender: Arc::new(Mutex::new(None)),
             event_block_runtime: if need_runtime {Some(runtime::Builder::new_multi_thread().worker_threads(4).enable_all().build().unwrap())} else {None},
@@ -973,7 +973,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                     loop {
                         match self.pop_event_tx().await {
                             Some(event) => {
-                                tokio::runtime::Runtime::new().unwrap().spawn(async move {
+                                rt.spawn(async move {
                                     match self.process_event_tx(event).await {
                                         Ok(_) => {
                                         },
