@@ -979,7 +979,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
                                         Err(e) => error!("bot running event tx processor error {}", e),
                                     }
                                 });
-                                if pop_count >= 1000 {
+                                if pop_count >= 10000 {
                                     info!("pop and process some events");
                                     pop_count = 0;
                                 } else {

@@ -106,7 +106,7 @@ where
                     match event_receiver.recv().await {
                         Ok(event) => {
                             strategy.push_event(event).await.unwrap();
-                            if push_count >= 1000 {
+                            if push_count >= 10000 {
                                 info!("recive some events and push into list");
                                 push_count = 0;
                             } else {
