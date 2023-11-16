@@ -107,7 +107,7 @@ where
                         Ok(event) => {
                             strategy.push_event(event).await.unwrap();
                             if receive_push_count >= 15000 {
-                                info!("recive some events and push into list");
+                                info!("receive some events and push into list");
                                 receive_push_count = 0;
                             } else {
                                 receive_push_count += 1;
