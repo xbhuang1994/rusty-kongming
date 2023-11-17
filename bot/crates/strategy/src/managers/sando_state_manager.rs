@@ -293,7 +293,7 @@ impl SandoStateManager {
         }
     }
     
-    pub fn get_low_txs(&self,base_fee_per_gas:U256) -> Vec<Transaction> {
+    pub fn get_low_txs(&self, base_fee_per_gas:U256) -> Vec<Transaction> {
         //get low txs by max_fee_per_gas > base_fee_per_gas
         let mut map_low_txs = self.low_txs.lock().unwrap();
         let mut list_low_txs = self.low_txs_vec.lock().unwrap();
