@@ -123,12 +123,31 @@ pub async fn find_optimal_input(
             revenues.push(sim);
         }
 
-        let revenues = futures::future::join_all(revenues).await;
+        let revenues_result = futures::future::join_all(revenues).await;
 
-        let revenues = revenues
-            .into_iter()
-            .map(|r| r.unwrap().unwrap_or_default())
-            .collect::<Vec<_>>();
+        let mut revenues: Vec<U256> = vec![];
+        for revenue in revenues_result.into_iter() {
+            match revenue {
+                Ok(ro) => {
+                    match ro {
+                        Ok(ri) => {
+                            revenues.push(ri);
+                        },
+                        Err(_) => {
+                            revenues.push(U256::zero());
+                        }
+                    }
+                },
+                Err(_) => {
+                    revenues.push(U256::zero());
+                }
+            }
+        }
+
+        // let revenues = revenues
+        //     .into_iter()
+        //     .map(|r| r.unwrap().unwrap_or_default())
+        //     .collect::<Vec<_>>();
 
         // find interval that produces highest revenue
         let (highest_revenue_index, _highest_revenue) = revenues
