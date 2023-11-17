@@ -596,9 +596,9 @@ impl SandoRecipe {
             }
             let without_dust_token_num = without_dust_tokens.len() as u64;
 
-            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} bfee={:?} mfee={:?} profit={:?}~{:?} no_dust={:?}",
+            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} rlog={:?} revenue={:?} fgas={:?} bgas={:?} bfee={:?} mfee={:?} profit={:?}~{:?} no_dust={:?}",
                 is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
-                revenue_log, self.frontrun_gas_used, self.backrun_gas_used, self.target_block.base_fee_per_gas, max_fee, profit_min, profit_max, without_dust_token_num
+                revenue_log, self.revenue, self.frontrun_gas_used, self.backrun_gas_used, self.target_block.base_fee_per_gas, max_fee, profit_min, profit_max, without_dust_token_num
             );
         }
 
