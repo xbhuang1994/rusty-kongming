@@ -247,8 +247,8 @@ impl SandoStateManager {
             
             map_low_txs.insert(tx.hash.clone(), tx.clone());
             list_low_txs.push(tx.hash.clone());
-        } else {
-            // info!("exists {:?} map size {:?} vec size {:?}", tx.hash, map_low_txs.len(), list_low_txs.len());
+
+            info!("append low tx {:?} while map size {:?} vec size {:?}", tx.hash, map_low_txs.len(), list_low_txs.len());
         }
     }
 
