@@ -273,12 +273,6 @@ pub fn calculate_bribe_for_max_fee(
     }
     let without_dust_token_num = without_dust_tokens.len() as u64;
 
-    // calc bribe (bribes paid in backrun)
-    // let revenue_minus_frontrun_tx_fee = revenue
-    //     .checked_sub(U256::from(frontrun_gas_used) * base_fee_per_gas)
-    //     .ok_or_else(|| {
-    //     anyhow!("[FAILED TO CREATE BUNDLE] revenue doesn't cover frontrun basefee")
-    // })?;
     let revenue_minus_frontrun_tx_fee = revenue
         .checked_sub(U256::from(frontrun_gas_used) * base_fee_per_gas).unwrap_or_default();
     if revenue_minus_frontrun_tx_fee.is_zero() {
@@ -290,20 +284,9 @@ pub fn calculate_bribe_for_max_fee(
 
     let max_fee = bribe_amount / backrun_gas_used;
 
-    // ensure!(
-    //     max_fee >= base_fee_per_gas,
-    //     format!("[FAILED TO CREATE BUNDLE] backrun maxfee {:?} less than basefee {:?}", max_fee, base_fee_per_gas)
-    // );
     if max_fee < base_fee_per_gas {
         return Ok((CalculateMaxFeeResult::RevenueBelowBackrunBaseFee, max_fee));
     }
-
-    // let effective_miner_tip = max_fee.checked_sub(base_fee_per_gas);
-
-    // ensure!(
-    //     !effective_miner_tip.is_none(),
-    //     "[FAILED TO CREATE BUNDLE] negative miner tip"
-    // );
 
     Ok((CalculateMaxFeeResult::RevenueOverBaseFee, max_fee))
 }
@@ -508,17 +491,12 @@ impl SandoRecipe {
             )
             .unwrap_or_default();
 
-        // ensure!(
-        //     !profit_max.is_zero(),
-        //     "[FAILED TO CREATE BUNDLE] profit max is not positive"
-        // );
         if profit_max.is_zero() {
             info!("[FAILED TO CREATE BUNDLE] profit max is negative");
             bundle_result = IngredientsBundleResult::ExpectedProfitIsNegtive;
             return Ok((bundle_result, None, U256::zero()));   
         }
 
-        // info!("bundle nonce start from {:?}", tx_nonce);
         let mut head_hashs: Vec<String> = vec![];
         let mut signed_head_txs: Vec<Bytes> = vec![];
         self.head_txs.into_iter().for_each(|head| {
@@ -526,7 +504,6 @@ impl SandoRecipe {
                 signed_head_txs.push(head.rlp());
             }
         );
-        // let signed_head_txs: Vec<Bytes> = self.head_txs.into_iter().map(|head| head.rlp()).collect();
 
         let frontrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
@@ -606,6 +583,7 @@ impl SandoRecipe {
                 revenue_log,
                 self.frontrun_gas_used,
                 self.backrun_gas_used,
+                max_fee,
                 profit_min,
                 profit_max
             );
@@ -617,9 +595,9 @@ impl SandoRecipe {
             }
             let without_dust_token_num = without_dust_tokens.len() as u64;
 
-            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} profit={:?}~{:?} no_dust={:?}",
+            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} revenue={:?} fgas={:?} bgas={:?} mfee={:?}, profit={:?}~{:?} no_dust={:?}",
                 is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
-                revenue_log, self.frontrun_gas_used, self.backrun_gas_used, profit_min, profit_max, without_dust_token_num
+                revenue_log, self.frontrun_gas_used, self.backrun_gas_used, max_fee, profit_min, profit_max, without_dust_token_num
             );
         }
 
