@@ -1602,9 +1602,22 @@ impl<M: Middleware + 'static> SandoBot<M> {
         if max_fee_per_gas.is_zero() {
             return None;
         }
+
         if max_fee_per_gas < next_block.base_fee_per_gas || max_fee_per_gas < latest_block.base_fee_per_gas {
-            // log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
-            self.sando_state_manager.append_low_tx(&victim_tx);
+            
+            let lbase_append_limit = latest_block.base_fee_per_gas * 9 / 10;
+            let nbase_append_limit = next_block.base_fee_per_gas * 9 / 10;
+
+            // info!("{:?} mfee={:?} lbase={:?} lbase_limit={:?} nbase={:?} nbase_limit={:?}",
+            //     victim_tx.hash, max_fee_per_gas, latest_block.base_fee_per_gas, lbase_append_limit,
+            //     next_block.base_fee_per_gas, nbase_append_limit
+            // );
+            
+            if max_fee_per_gas >= lbase_append_limit && max_fee_per_gas >= nbase_append_limit {
+                // log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
+                self.sando_state_manager.append_low_tx(&victim_tx);
+            }
+
             return None;
         }
 
