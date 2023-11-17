@@ -127,7 +127,7 @@ macro_rules! log_not_sandwichable {
 
 #[macro_export]
 macro_rules! log_bundle {
-    ($is_huge:expr, $is_mixed:expr, $is_overlay:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $block_number:expr, $revenue:expr, $frontrun_gas_used:expr, $backrun_gas_used:expr, $max_fee:expr, $profit_min:expr, $profit_max:expr) => {
+    ($is_huge:expr, $is_mixed:expr, $is_overlay:expr, $uuid:expr, $swap_type:expr, $head_txs:expr, $meats:expr, $block_number:expr, $revenue:expr, $frontrun_gas_used:expr, $backrun_gas_used:expr, $base_fee:expr, $max_fee:expr, $profit_min:expr, $profit_max:expr) => {
         info!("{}", format!("[BUILT BUNDLE]"));
         info!(
             "{}",
@@ -181,7 +181,8 @@ macro_rules! log_bundle {
         info!(
             "{}",
             format!(
-                "max_fee: {} ",
+                "base_fee: {}, max_fee: {} ",
+                $base_fee.to_string(),
                 $max_fee.to_string()
             )
         );
