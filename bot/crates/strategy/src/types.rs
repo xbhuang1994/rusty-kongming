@@ -539,7 +539,7 @@ impl SandoRecipe {
             chain_id: Some(U64::from(1)),
             access_list: access_list_to_ethers(self.backrun.access_list),
             max_fee_per_gas: Some(max_fee),
-            max_priority_fee_per_gas: Some(max_priority_fee),
+            max_priority_fee_per_gas: Some(max_fee),
             ..Default::default()
         };
         let signed_backrun = sign_eip1559(backrun_tx, &searcher).await?;
