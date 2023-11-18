@@ -29,7 +29,12 @@ use crate::{
         Action, BlockInfo, Event, RawIngredients, SandoRecipe, StratConfig, SandwichSwapType,
         calculate_bribe_for_max_fee
     },
-    helpers::{calculate_inventory_for_debug, get_start_token_info, calculate_token_decimals}
+    helpers::{
+        calculate_inventory_for_debug,
+        get_start_token_info,
+        calculate_token_decimals,
+        tx_logic_max_fee_per_gas
+    }
 };
 use uuid::Uuid;
 
@@ -1597,13 +1602,12 @@ impl<M: Middleware + 'static> SandoBot<M> {
 
         // ignore txs that we can't include in next block
         // enhancement: simulate all txs regardless, store result, and use result when tx can included
-        let max_fee_per_gas = victim_tx.max_fee_per_gas.unwrap_or_default();
-        // almost all valid txs have positive max_fee_per_gas, so check max_fee_per_gas is enough
-        if max_fee_per_gas.is_zero() {
+        let logic_max_fee_per_gas = tx_logic_max_fee_per_gas(&victim_tx);
+        if logic_max_fee_per_gas.is_zero() {
             return None;
         }
 
-        if max_fee_per_gas < next_block.base_fee_per_gas || max_fee_per_gas < latest_block.base_fee_per_gas {
+        if logic_max_fee_per_gas < next_block.base_fee_per_gas || logic_max_fee_per_gas < latest_block.base_fee_per_gas {
             
             let lbase_append_limit = latest_block.base_fee_per_gas * 9 / 10;
             let nbase_append_limit = next_block.base_fee_per_gas * 9 / 10;
@@ -1613,7 +1617,7 @@ impl<M: Middleware + 'static> SandoBot<M> {
             //     next_block.base_fee_per_gas, nbase_append_limit
             // );
             
-            if max_fee_per_gas >= lbase_append_limit && max_fee_per_gas >= nbase_append_limit {
+            if logic_max_fee_per_gas >= lbase_append_limit && logic_max_fee_per_gas >= nbase_append_limit {
                 // log_info_cyan!("{:?} mf<nbf", victim_tx.hash);
                 self.sando_state_manager.append_low_tx(&victim_tx);
             }

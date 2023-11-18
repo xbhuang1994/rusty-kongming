@@ -12,6 +12,7 @@ use crate::{
     abi::Erc20,
     constants::{ERC20_TRANSFER_EVENT_SIG, WETH_ADDRESS},
     startup_info_log, types::SandwichSwapType,
+    helpers::tx_logic_max_fee_per_gas,
 };
 use std::collections::{HashMap, HashSet};
 
@@ -297,7 +298,7 @@ impl SandoStateManager {
         //get low txs by max_fee_per_gas > base_fee_per_gas
         let mut map_low_txs = self.low_txs.lock().unwrap();
         let mut list_low_txs = self.low_txs_vec.lock().unwrap();
-        let result: Vec<Transaction> = map_low_txs.iter().filter(|(_, tx)| tx.max_fee_per_gas.unwrap_or_default() > base_fee_per_gas).map(|(_, tx)| tx).cloned().collect();
+        let result: Vec<Transaction> = map_low_txs.iter().filter(|(_, tx)| tx_logic_max_fee_per_gas(tx) > base_fee_per_gas).map(|(_, tx)| tx).cloned().collect();
         
         // info!("before low map size={:?}, low vec size={:?}, result size={:?}", map_low_txs.len(), list_low_txs.len(), result.len());
         if result.len() > 0 {

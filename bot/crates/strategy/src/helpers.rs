@@ -6,6 +6,7 @@ use ethers::{
             eip2718::TypedTransaction,
             eip2930::{AccessList, AccessListItem},
         },
+        Transaction,
         BigEndianHash, Bytes, Eip1559TransactionRequest, H256,
         U256,
     },
@@ -16,6 +17,24 @@ use foundry_evm::{
 };
 use crate::types::RawIngredients;
 use crate::constants::{WETH_ADDRESS, FUND_OTHER_AMT_BASE};
+
+pub fn tx_logic_max_fee_per_gas(victim_tx: &Transaction) -> U256 {
+
+    let max_fee_per_gas = victim_tx.max_fee_per_gas.unwrap_or_default();
+    let max_priority_fee_per_gas = victim_tx.max_priority_fee_per_gas.unwrap_or_default();
+    let gas_price = victim_tx.gas_price.unwrap_or_default();
+
+    let mut max_fee = U256::zero();
+    if !max_fee_per_gas.is_zero() {
+        max_fee = max_fee_per_gas;
+    } else if !max_priority_fee_per_gas.is_zero() {
+        max_fee = max_priority_fee_per_gas;
+    } else if !gas_price.is_zero() {
+        max_fee = gas_price;
+    }
+
+    max_fee
+}
 
 /// Sign eip1559 transactions
 pub async fn sign_eip1559(

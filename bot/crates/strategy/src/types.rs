@@ -528,6 +528,7 @@ impl SandoRecipe {
         );
         // let signed_meat_txs: Vec<Bytes> = self.meats.into_iter().map(|meat| meat.rlp()).collect();
 
+        let max_priority_fee = max_fee.checked_sub(self.target_block.base_fee_per_gas).unwrap_or_default();
         let backrun_tx = Eip1559TransactionRequest {
             to: Some(sando_address.into()),
             from: Some(searcher.address()),
@@ -537,8 +538,8 @@ impl SandoRecipe {
             nonce: Some(tx_nonce + 1),
             chain_id: Some(U64::from(1)),
             access_list: access_list_to_ethers(self.backrun.access_list),
-            max_priority_fee_per_gas: Some(max_fee),
             max_fee_per_gas: Some(max_fee),
+            max_priority_fee_per_gas: Some(max_priority_fee),
             ..Default::default()
         };
         let signed_backrun = sign_eip1559(backrun_tx, &searcher).await?;
@@ -596,9 +597,10 @@ impl SandoRecipe {
             }
             let without_dust_token_num = without_dust_tokens.len() as u64;
 
-            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} rlog={:?} revenue={:?} fgas={:?} bgas={:?} bfee={:?} mfee={:?} profit={:?}~{:?} no_dust={:?}",
-                is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","), self.target_block.number,
-                revenue_log, self.revenue, self.frontrun_gas_used, self.backrun_gas_used, self.target_block.base_fee_per_gas, max_fee, profit_min, profit_max, without_dust_token_num
+            info!("build bundle: huge={:?} mixed={:?} overlay={:?} uuid={:?} swap={:?} head={:?} meats={:?} block={:?} rlog={:?} revenue={:?} fgas={:?} bgas={:?} bfee={:?} mfee={:?} mpfee={:?} profit={:?}~{:?} no_dust={:?}",
+                is_huge, is_mixed_strategy, is_overlay_strategy, self.uuid, self.swap_type, head_hashs.join(","), meat_hashs.join(","),
+                self.target_block.number, revenue_log, self.revenue, self.frontrun_gas_used, self.backrun_gas_used,
+                self.target_block.base_fee_per_gas, max_fee, max_priority_fee, profit_min, profit_max, without_dust_token_num
             );
         }
 
