@@ -2,8 +2,9 @@
 
 p1=$1
 p2=$2
-if [[ -z $p1 || -z $p2 ]]; then
+if [[ -z $p1 ]]; then
     echo "Usage Sample: ./sando.sh test or use start-debug.sh / start-online.sh"
+    echo "Tips: add parameter 'daemon' for run sando in background."
     exit 0;
 fi
 
