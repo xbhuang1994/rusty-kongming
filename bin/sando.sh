@@ -36,12 +36,12 @@ fi
 # goto bot folder
 cd ${PROJECT_ROOT}/bot;
 
-if [[ $p1 = "test" ]]; then
+if [[ $p1 = "debug" ]]; then
     flag=" --features debug "
 elif [[ $p1 = "online" ]]; then
     flag=""
 else
-    echo "Only 'test' or 'online' is allown."
+    echo "Only 'debug' or 'online' is allown."
     exit 0;
 fi
 
