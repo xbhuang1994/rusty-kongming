@@ -25,7 +25,7 @@ if [[ -n ${PID} ]]; then
     EXISTS_PID=$(ps -ax | grep sando | grep ${PID} | grep -v grep | awk '{print $1}')
 
     if [[ -n ${EXISTS_PID} && ${EXISTS_PID} = ${PID} ]]; then
-        echo "Sando is running."
+        echo "Sando is already running."
         exit 0;
     else
         # remove invalid pid file
@@ -49,7 +49,7 @@ if [[ $p2 = "daemon" ]]; then
     nohup cargo run --release --bin rusty-sando ${flag} > /dev/null 2>&1 &
     pid=$!
     echo ${pid} > ${PID_FILE}
-    echo ”Sando started.“;
+    echo "Sando started.";
 else
     pid=$$
     echo ${pid} > ${PID_FILE}
