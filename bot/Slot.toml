@@ -6234,8 +6234,8 @@ symbol = "WHACKD"
 
 [0xcf4c68db4c2fa0bf58df07b14f45ce7709a716ac]
 index = 0
-decimals = Shirudo
-symbol = "Dejitaru"
+decimals = 18
+symbol = "DejitaruShirudo"
 
 [0xcf3c8be2e2c42331da80ef210e9b1b307c03d36a]
 index = 0
