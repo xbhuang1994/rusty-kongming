@@ -10,3 +10,4 @@ run-*.json
 *.cfmms-checkpoint.json
 _log_archived
 node_modules/
+*.log.*

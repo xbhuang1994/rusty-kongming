@@ -1,0 +1,11 @@
+# 从合约提取 ETH 到钱包
+node ./recoverEth.js
+
+# 从合约提取 WETH 到钱包
+node ./recoverWeth.js
+
+# 销毁合约
+node ./seppuku.js
+
+# 创建合约
+node ./deploySandwich.js
